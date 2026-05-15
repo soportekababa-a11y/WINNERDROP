@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className={`${geist.variable} h-full dark`}>
-      <body className="min-h-full bg-zinc-950 text-zinc-100 antialiased">
+      <body className="min-h-full bg-[#07071A] text-slate-100 antialiased">
         <ReactQueryProvider>{children}</ReactQueryProvider>
       </body>
     </html>

@@ -7,6 +7,8 @@ import { User } from './users/user.entity';
 import { ProductsModule } from './products/products.module';
 import { ScraperModule } from './scraper/scraper.module';
 import { ScraperService } from './scraper/scraper.service';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -27,12 +29,14 @@ import { ScraperService } from './scraper/scraper.service';
     }),
     ProductsModule,
     ScraperModule,
+    AuthModule,
+    UsersModule,
   ],
 })
 export class AppModule implements OnModuleInit {
   constructor(private scraperService: ScraperService) {}
 
-  async onModuleInit() {
-    await this.scraperService.start();
+  onModuleInit() {
+    this.scraperService.start();
   }
 }

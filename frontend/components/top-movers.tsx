@@ -20,14 +20,14 @@ export function TopMovers() {
   if (!isLoading && (!movers || movers.length === 0)) return null;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
+    <div className="bg-violet-950/30 border border-violet-800/40 rounded-2xl p-5 space-y-4">
       <div className="flex items-center gap-2">
-        <Flame size={14} className="text-orange-400" />
-        <h2 className="text-sm font-semibold text-white">Mayor crecimiento hoy</h2>
+        <Flame size={14} className="text-fuchsia-400" />
+        <h2 className="text-sm font-bold text-white">Mayor crecimiento hoy</h2>
       </div>
       <div className="space-y-2">
         {isLoading
-          ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 bg-zinc-800 rounded-lg" />)
+          ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 bg-violet-900/30 rounded-lg" />)
           : movers?.map((p) => {
               const growth = p.salesYesterday > 0
                 ? Math.round(((p.salesToday - p.salesYesterday) / p.salesYesterday) * 100)
@@ -36,19 +36,21 @@ export function TopMovers() {
                 <Link
                   key={p.id}
                   href={`/products/${p.id}`}
-                  className="flex items-center gap-3 py-1.5 hover:opacity-80 transition-opacity"
+                  className="flex items-center gap-3 py-1.5 hover:opacity-80 transition-opacity group"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-zinc-800 flex-shrink-0 overflow-hidden relative">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-950 flex-shrink-0 overflow-hidden relative border border-indigo-900/50">
                     {p.imageUrl
                       ? <Image src={p.imageUrl} alt={p.name} fill className="object-cover" unoptimized />
-                      : <div className="w-full h-full bg-zinc-700" />
+                      : <div className="w-full h-full bg-indigo-900/40" />
                     }
                   </div>
-                  <p className="flex-1 text-xs text-zinc-300 truncate">{p.name}</p>
+                  <p className="flex-1 text-xs text-slate-300 truncate group-hover:text-white transition-colors">{p.name}</p>
                   {growth !== null && (
                     <span className={cn(
-                      "text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0",
-                      growth >= 0 ? "text-emerald-400" : "text-red-400"
+                      "text-xs font-bold px-1.5 py-0.5 rounded-lg flex-shrink-0",
+                      growth >= 0
+                        ? "bg-emerald-950 text-emerald-400 ring-1 ring-emerald-800/50"
+                        : "bg-rose-950 text-rose-400"
                     )}>
                       {growth >= 0 ? '+' : ''}{growth}%
                     </span>

@@ -1,7 +1,10 @@
 'use client';
 
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { fetchProduct, fetchProductHistory } from "@/lib/api";
+import { isAuthenticated } from "@/lib/auth";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Package, TrendingUp, DollarSign, BarChart2 } from "lucide-react";
@@ -12,16 +15,28 @@ import { use } from "react";
 
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
+  const [authed, setAuthed] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace('/login');
+    } else {
+      setAuthed(true);
+    }
+  }, [router]);
 
   const { data: product, isLoading: pLoading } = useQuery({
     queryKey: ['product', id],
     queryFn: () => fetchProduct(id),
     refetchInterval: 30_000,
+    enabled: authed,
   });
 
   const { data: history, isLoading: hLoading } = useQuery({
     queryKey: ['product-history', id],
     queryFn: () => fetchProductHistory(id, 30),
+    enabled: authed,
   });
 
   const growth = product?.salesYesterday

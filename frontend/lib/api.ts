@@ -1,6 +1,47 @@
 import axios from 'axios';
+import { getToken, saveAuth, clearAuth, AuthUser } from './auth';
 
-const api = axios.create({ baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001' });
+const baseURL = typeof window !== 'undefined'
+  ? '/api/proxy'
+  : (process.env.BACKEND_URL ?? 'http://localhost:3001');
+
+const api = axios.create({ baseURL });
+
+// Attach JWT token to every request
+api.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+// Redirect to login on 401
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401 && typeof window !== 'undefined') {
+      clearAuth();
+      window.location.href = '/login';
+    }
+    return Promise.reject(err);
+  }
+);
+
+// Auth API (no interceptors needed — public endpoints)
+const authApi = axios.create({
+  baseURL: typeof window !== 'undefined' ? '/api/proxy' : (process.env.BACKEND_URL ?? 'http://localhost:3001'),
+});
+
+export async function authLogin(email: string, password: string) {
+  const res = await authApi.post<{ token: string; user: AuthUser }>('/auth/login', { email, password });
+  saveAuth(res.data.token, res.data.user);
+  return res.data;
+}
+
+export async function authRegister(email: string, password: string, name?: string) {
+  const res = await authApi.post<{ token: string; user: AuthUser }>('/auth/register', { email, password, name });
+  saveAuth(res.data.token, res.data.user);
+  return res.data;
+}
 
 export interface Product {
   id: string;
