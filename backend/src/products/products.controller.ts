@@ -1,0 +1,50 @@
+import { Controller, Get, Param, Query } from '@nestjs/common';
+import { ProductsService } from './products.service';
+
+@Controller('products')
+export class ProductsController {
+  constructor(private readonly productsService: ProductsService) {}
+
+  @Get('categories')
+  getCategories() {
+    return this.productsService.getCategories();
+  }
+
+  @Get()
+  getTopProducts(
+    @Query('limit') limit?: string,
+    @Query('sort') sort?: string,
+    @Query('search') search?: string,
+    @Query('category') category?: string,
+  ) {
+    if (search) return this.productsService.searchProducts(search, limit ? parseInt(limit) : 30);
+    return this.productsService.getTopProducts(
+      limit ? parseInt(limit) : 50,
+      (sort as any) ?? 'today',
+      category,
+    );
+  }
+
+  @Get('dashboard')
+  getDashboardStats() {
+    return this.productsService.getDashboardStats();
+  }
+
+  @Get(':id/daily')
+  getDailyHistory(
+    @Param('id') id: string,
+    @Query('days') days?: string,
+  ) {
+    return this.productsService.getProductDailyHistory(id, days ? parseInt(days) : 30);
+  }
+
+  @Get(':id/today')
+  getTodaySales(@Param('id') id: string) {
+    return this.productsService.getProductTodaySales(id);
+  }
+
+  @Get(':id')
+  getProduct(@Param('id') id: string) {
+    return this.productsService.getProductById(id);
+  }
+}
