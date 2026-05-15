@@ -7,6 +7,8 @@ async function handler(req: NextRequest, { params }: { params: Promise<{ path: s
   const url = `${BACKEND}/${path.join('/')}${req.nextUrl.search}`;
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const auth = req.headers.get('Authorization');
+  if (auth) headers['Authorization'] = auth;
 
   const body = req.method !== 'GET' && req.method !== 'HEAD'
     ? await req.text()
