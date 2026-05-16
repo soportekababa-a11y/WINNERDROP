@@ -102,11 +102,21 @@ export class ProductsService {
     category?: string,
     search?: string,
     offset = 0,
+    hot = false,
   ) {
     // 1. Get products
     const qb = this.productRepo.createQueryBuilder('p').where('p.isActive = true');
     if (category) qb.andWhere('p.category = :category', { category });
     if (search) qb.andWhere('LOWER(p.name) LIKE LOWER(:q) OR LOWER(p.category) LIKE LOWER(:q) OR LOWER(p.provider) LIKE LOWER(:q)', { q: `%${search}%` });
+
+    if (hot) {
+      // "Más vendidos": al menos 7 ventas en el día de hoy o ayer,
+      // O un acumulado semanal significativo (salesYesterday+salesToday >= 10)
+      qb.andWhere(
+        '(p.salesToday >= 7 OR p.salesYesterday >= 7 OR (p.salesToday + p.salesYesterday) >= 10)',
+      );
+    }
+
     if (sortBy === 'growth') {
       qb.orderBy('CASE WHEN p.salesYesterday > 0 THEN (p.salesToday - p.salesYesterday)::float / p.salesYesterday ELSE p.salesToday END', 'DESC');
     } else if (sortBy === 'total') {

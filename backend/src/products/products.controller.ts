@@ -35,6 +35,7 @@ export class ProductsController {
     @Query('category') category?: string,
     @Query('search') search?: string,
     @Query('offset') offset?: string,
+    @Query('hot') hot?: string,
   ) {
     return this.productsService.getProductsWithDailyGrid(
       limit ? parseInt(limit) : 40,
@@ -43,6 +44,7 @@ export class ProductsController {
       category,
       search,
       offset ? parseInt(offset) : 0,
+      hot === 'true',
     );
   }
 

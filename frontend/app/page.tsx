@@ -8,11 +8,10 @@ import { isAuthenticated, getUser, clearAuth } from "@/lib/auth";
 import { StatCard } from "@/components/stat-card";
 import { ProductCard } from "@/components/product-card";
 import { ScraperStatus } from "@/components/scraper-status";
-import { TopMovers } from "@/components/top-movers";
 import { CategoryBreakdown } from "@/components/category-breakdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/lib/use-debounce";
-import { ShoppingBag, TrendingUp, Package, Search, Zap, LogOut, Loader2 } from "lucide-react";
+import { ShoppingBag, TrendingUp, Package, Search, Zap, LogOut, Loader2, Flame, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const SORTS = [
@@ -24,8 +23,11 @@ const SORTS = [
 const DAY_OPTIONS = [7, 14, 21, 30];
 const PAGE_SIZE = 40;
 
+type Tab = 'hot' | 'all';
+
 export default function Dashboard() {
   const router = useRouter();
+  const [tab, setTab] = useState<Tab>('hot');
   const [sort, setSort] = useState<'today' | 'total' | 'growth'>('today');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
@@ -52,7 +54,7 @@ export default function Dashboard() {
     fetchNextPage,
     hasNextPage,
   } = useInfiniteQuery({
-    queryKey: ['products-grid', sort, debouncedSearch, category, days],
+    queryKey: ['products-grid', tab, sort, debouncedSearch, category, days],
     queryFn: ({ pageParam = 0 }) =>
       fetchProductsGrid({
         limit: PAGE_SIZE,
@@ -61,6 +63,7 @@ export default function Dashboard() {
         search: debouncedSearch || undefined,
         category: category || undefined,
         offset: pageParam as number,
+        hot: tab === 'hot',
       }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
@@ -74,7 +77,6 @@ export default function Dashboard() {
   const hasFilter = !!(debouncedSearch || category);
   const user = getUser();
 
-  // Infinite scroll — observe sentinel div
   const onIntersect = useCallback((entries: IntersectionObserverEntry[]) => {
     if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
@@ -135,16 +137,46 @@ export default function Dashboard() {
           ) : null}
         </div>
 
-        {/* Top movers + Categories */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-1"><TopMovers /></div>
-          <div className="md:col-span-2 flex flex-col justify-center">
-            <CategoryBreakdown selected={category} onSelect={setCategory} />
-          </div>
+        {/* Categories */}
+        <CategoryBreakdown selected={category} onSelect={setCategory} />
+
+        {/* Tabs */}
+        <div className="flex items-center gap-2 border-b border-gray-200 pb-0">
+          <button
+            onClick={() => { setTab('hot'); setSort('today'); }}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors",
+              tab === 'hot'
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-gray-500 hover:text-gray-800"
+            )}
+          >
+            <Flame size={14} />
+            Más vendidos
+          </button>
+          <button
+            onClick={() => { setTab('all'); setSort('today'); }}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors",
+              tab === 'all'
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-gray-500 hover:text-gray-800"
+            )}
+          >
+            <LayoutGrid size={14} />
+            Todos los productos
+          </button>
         </div>
 
+        {/* Tab description */}
+        {tab === 'hot' && (
+          <p className="text-xs text-gray-400 -mt-4">
+            Productos con 7+ ventas diarias — los que realmente se mueven
+          </p>
+        )}
+
         {/* Filters */}
-        <div className="space-y-3">
+        <div className="space-y-3 -mt-2">
           <div className="relative">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input type="text" placeholder="Buscar producto, categoría, proveedor..." value={search}
@@ -184,9 +216,11 @@ export default function Dashboard() {
             )}
           </div>
 
-          <p className="text-xs text-gray-400">
-            {!productsLoading && `${products.length} productos cargados · últimos ${days} días`}
-          </p>
+          {!productsLoading && products.length > 0 && (
+            <p className="text-xs text-gray-400">
+              {products.length} productos cargados · últimos {days} días
+            </p>
+          )}
         </div>
 
         {/* Product grid */}
@@ -199,25 +233,26 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {products.map((p, i) => <ProductCard key={p.id} product={p} rank={i + 1} />)}
             </div>
-
-            {/* Sentinel — triggers next page load */}
             <div ref={sentinelRef} className="flex justify-center py-6">
               {isFetchingNextPage && (
                 <div className="flex items-center gap-2 text-sm text-gray-400">
                   <Loader2 size={16} className="animate-spin" />
-                  Cargando más productos...
+                  Cargando más...
                 </div>
               )}
-              {!hasNextPage && products.length > 0 && (
+              {!hasNextPage && (
                 <p className="text-xs text-gray-300">— {products.length} productos en total —</p>
               )}
             </div>
           </>
         ) : (
           <div className="text-center py-24 space-y-3">
-            <p className="text-5xl">🔍</p>
+            <p className="text-5xl">{tab === 'hot' ? '🔥' : '🔍'}</p>
             <p className="text-gray-400 text-sm">
-              {hasFilter ? 'Sin resultados para estos filtros' : 'El scraper está cargando productos...'}
+              {tab === 'hot'
+                ? 'No hay productos con suficientes ventas aún — el scraper sigue recopilando datos'
+                : hasFilter ? 'Sin resultados para estos filtros' : 'El scraper está cargando productos...'
+              }
             </p>
           </div>
         )}
