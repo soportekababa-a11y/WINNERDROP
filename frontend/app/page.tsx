@@ -61,29 +61,27 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#07071A]">
-      {/* Sticky header */}
-      <header className="border-b border-violet-900/30 px-4 py-3.5 sticky top-0 bg-[#07071A]/90 backdrop-blur-sm z-10">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 px-4 py-3.5 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-violet-900/50">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm">
               <Zap size={14} className="text-white" />
             </div>
-            <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-violet-300 to-fuchsia-300">
-              WinnerDrop
-            </span>
-            <span className="text-indigo-800 hidden sm:inline">·</span>
-            <span className="text-indigo-600 text-sm hidden sm:inline">Effi RD</span>
+            <span className="font-bold text-gray-900">WinnerDrop</span>
+            <span className="text-gray-300 hidden sm:inline">·</span>
+            <span className="text-gray-400 text-sm hidden sm:inline">Effi RD</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <ScraperStatus />
             {user && (
-              <div className="flex items-center gap-2 pl-3 border-l border-violet-900/40">
-                <span className="text-xs text-indigo-500 hidden sm:inline">{user.email}</span>
+              <div className="flex items-center gap-2 pl-4 border-l border-gray-200">
+                <span className="text-xs text-gray-500 hidden sm:inline">{user.email}</span>
                 <button
                   onClick={handleLogout}
                   title="Cerrar sesión"
-                  className="p-1.5 rounded-lg text-indigo-600 hover:text-violet-400 hover:bg-violet-900/20 transition-colors"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                 >
                   <LogOut size={14} />
                 </button>
@@ -93,13 +91,13 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-10">
+      <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {statsLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-2xl bg-indigo-950/40" />
+              <Skeleton key={i} className="h-32 rounded-2xl" />
             ))
           ) : stats ? (
             <>
@@ -115,6 +113,7 @@ export default function Dashboard() {
                 label="Ventas ayer"
                 value={stats.totalSalesYesterday.toLocaleString()}
                 icon={<TrendingUp size={16} />}
+                color="violet"
               />
               <StatCard
                 label="Crecimiento"
@@ -134,12 +133,12 @@ export default function Dashboard() {
           ) : null}
         </div>
 
-        {/* Two-column: Top Movers + Categories */}
+        {/* Top movers + Categories */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-1">
             <TopMovers />
           </div>
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 flex flex-col justify-center">
             <CategoryBreakdown selected={category} onSelect={setCategory} />
           </div>
         </div>
@@ -147,24 +146,24 @@ export default function Dashboard() {
         {/* Search + Sort */}
         <div className="space-y-3">
           <div className="relative">
-            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-violet-600 pointer-events-none" />
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input
               type="text"
               placeholder="Buscar producto, categoría, proveedor..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-9 py-2.5 bg-indigo-950/40 border border-indigo-900/60 rounded-xl text-sm text-white placeholder-indigo-700 focus:outline-none focus:border-violet-600/70 transition-colors"
+              className="w-full pl-9 pr-9 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
             />
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-violet-600 hover:text-violet-400 text-xl leading-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl leading-none"
               >×</button>
             )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex gap-1 bg-indigo-950/40 border border-indigo-900/50 rounded-xl p-1">
+            <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
               {SORTS.map(s => (
                 <button
                   key={s.key}
@@ -172,8 +171,8 @@ export default function Dashboard() {
                   className={cn(
                     "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap",
                     sort === s.key
-                      ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-900/50"
-                      : "text-indigo-500 hover:text-indigo-300"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-gray-500 hover:text-gray-800"
                   )}
                 >
                   {s.label}
@@ -184,21 +183,21 @@ export default function Dashboard() {
             {hasFilter && (
               <button
                 onClick={() => { setSearch(''); setCategory(''); }}
-                className="px-3 py-1.5 rounded-xl text-xs text-indigo-500 hover:text-violet-300 border border-indigo-900/50 hover:border-violet-700/50 transition-colors"
+                className="px-3 py-1.5 rounded-xl text-xs text-gray-500 hover:text-gray-800 border border-gray-200 bg-white hover:bg-gray-50 transition-colors shadow-sm"
               >
                 Limpiar ×
               </button>
             )}
 
             {(isFetching && !productsLoading) && (
-              <span className="text-xs text-violet-700 animate-pulse ml-auto">actualizando...</span>
+              <span className="text-xs text-indigo-500 animate-pulse ml-auto">actualizando...</span>
             )}
           </div>
         </div>
 
         {/* Results header */}
         <div className="-mt-4">
-          <p className="text-xs text-indigo-600">
+          <p className="text-xs text-gray-400">
             {debouncedSearch
               ? `Resultados para "${debouncedSearch}"`
               : category
@@ -212,23 +211,23 @@ export default function Dashboard() {
         </div>
 
         {/* Product list */}
-        <div className="space-y-1.5 -mt-6">
+        <div className="space-y-1.5 -mt-4">
           {productsLoading ? (
             Array.from({ length: 12 }).map((_, i) => (
-              <Skeleton key={i} className="h-[60px] rounded-xl bg-indigo-950/30" />
+              <Skeleton key={i} className="h-[60px] rounded-xl" />
             ))
           ) : products && products.length > 0 ? (
             products.map((p, i) => <ProductRow key={p.id} product={p} rank={i + 1} />)
           ) : (
             <div className="text-center py-24 space-y-3">
               <p className="text-5xl">🔍</p>
-              <p className="text-indigo-600 text-sm">
+              <p className="text-gray-400 text-sm">
                 {hasFilter ? 'Sin resultados para estos filtros' : 'El scraper está cargando productos...'}
               </p>
               {hasFilter && (
                 <button
                   onClick={() => { setSearch(''); setCategory(''); }}
-                  className="text-xs text-violet-500 hover:text-violet-400 underline underline-offset-2"
+                  className="text-xs text-indigo-500 hover:text-indigo-600 underline underline-offset-2"
                 >
                   Limpiar filtros
                 </button>

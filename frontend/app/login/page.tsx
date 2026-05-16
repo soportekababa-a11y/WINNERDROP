@@ -39,21 +39,28 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#07071A] flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+
       {/* Logo */}
-      <div className="flex items-center gap-2.5 mb-10">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-violet-900/50">
-          <Zap size={16} className="text-white" />
+      <div className="flex items-center gap-2.5 mb-8">
+        <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md">
+          <Zap size={18} className="text-white" />
         </div>
-        <span className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-violet-300 to-fuchsia-300">
-          WinnerDrop
-        </span>
+        <span className="text-2xl font-bold text-gray-900">WinnerDrop</span>
       </div>
 
       {/* Card */}
-      <div className="w-full max-w-sm bg-indigo-950/40 border border-indigo-900/60 rounded-2xl p-6 shadow-2xl shadow-violet-950/30">
+      <div className="w-full max-w-sm bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+
+        <h1 className="text-lg font-bold text-gray-900 mb-1">
+          {tab === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+        </h1>
+        <p className="text-sm text-gray-400 mb-6">
+          {tab === 'login' ? 'Accede a tu dashboard de productos' : 'Empieza a encontrar productos ganadores'}
+        </p>
+
         {/* Tabs */}
-        <div className="flex gap-1 bg-[#07071A]/60 border border-indigo-900/50 rounded-xl p-1 mb-6">
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6">
           {(['login', 'register'] as Tab[]).map((t) => (
             <button
               key={t}
@@ -62,46 +69,46 @@ export default function LoginPage() {
               className={cn(
                 'flex-1 py-2 rounded-lg text-sm font-semibold transition-all',
                 tab === t
-                  ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-900/50'
-                  : 'text-indigo-500 hover:text-indigo-300'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-600'
               )}
             >
-              {t === 'login' ? 'Iniciar sesión' : 'Registrarse'}
+              {t === 'login' ? 'Entrar' : 'Registrarse'}
             </button>
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           {/* Name (register only) */}
           {tab === 'register' && (
             <div className="relative">
-              <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-violet-600 pointer-events-none" />
+              <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Nombre (opcional)"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-[#07071A]/60 border border-indigo-900/60 rounded-xl text-sm text-white placeholder-indigo-700 focus:outline-none focus:border-violet-600/70 transition-colors"
+                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
               />
             </div>
           )}
 
           {/* Email */}
           <div className="relative">
-            <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-violet-600 pointer-events-none" />
+            <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input
               type="email"
               placeholder="Email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-[#07071A]/60 border border-indigo-900/60 rounded-xl text-sm text-white placeholder-indigo-700 focus:outline-none focus:border-violet-600/70 transition-colors"
+              className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
             />
           </div>
 
           {/* Password */}
           <div className="relative">
-            <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-violet-600 pointer-events-none" />
+            <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input
               type="password"
               placeholder="Contraseña"
@@ -109,13 +116,13 @@ export default function LoginPage() {
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-[#07071A]/60 border border-indigo-900/60 rounded-xl text-sm text-white placeholder-indigo-700 focus:outline-none focus:border-violet-600/70 transition-colors"
+              className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
             />
           </div>
 
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 bg-red-950/40 border border-red-800/50 rounded-xl px-3 py-2.5 text-sm text-red-400">
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-sm text-red-600">
               <AlertCircle size={14} className="shrink-0" />
               {error}
             </div>
@@ -125,7 +132,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-semibold hover:from-violet-500 hover:to-fuchsia-500 transition-all shadow-lg shadow-violet-900/40 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-1"
           >
             {loading && <Loader2 size={14} className="animate-spin" />}
             {tab === 'login' ? 'Entrar' : 'Crear cuenta'}
@@ -133,7 +140,7 @@ export default function LoginPage() {
         </form>
       </div>
 
-      <p className="mt-6 text-xs text-indigo-800">
+      <p className="mt-6 text-xs text-gray-400">
         Productos ganadores para dropshipping en República Dominicana
       </p>
     </div>

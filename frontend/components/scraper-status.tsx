@@ -23,16 +23,16 @@ export function ScraperStatus() {
   if (data.isRunning && prog) {
     return (
       <div className="flex flex-col items-end gap-1 min-w-36">
-        <div className="flex items-center gap-1.5 text-xs text-violet-400">
+        <div className="flex items-center gap-1.5 text-xs text-emerald-600">
           <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-violet-500" />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
           </span>
           Pág {prog.currentPage}/{prog.totalPages} · {prog.accumulated.toLocaleString()} prods
         </div>
-        <div className="w-36 h-1 bg-indigo-950 rounded-full overflow-hidden">
+        <div className="w-36 h-1 bg-gray-200 rounded-full overflow-hidden">
           <div
-            className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-violet-600 to-fuchsia-500"
+            className="h-full rounded-full transition-all duration-500 bg-emerald-500"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -42,10 +42,10 @@ export function ScraperStatus() {
 
   if (data.isRunning) {
     return (
-      <div className="flex items-center gap-1.5 text-xs text-violet-400">
+      <div className="flex items-center gap-1.5 text-xs text-emerald-600">
         <span className="relative flex h-1.5 w-1.5">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-violet-500" />
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
         </span>
         Actualizando catálogo...
       </div>
@@ -53,8 +53,8 @@ export function ScraperStatus() {
   }
 
   return (
-    <div className="flex items-center gap-1.5 text-xs text-indigo-700">
-      <span className="w-1.5 h-1.5 rounded-full bg-indigo-900" />
+    <div className="flex items-center gap-1.5 text-xs text-gray-400">
+      <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
       {lastRun
         ? `Actualizado ${lastRun} · ${data.total.toLocaleString()} prods`
         : 'Sin datos aún'
