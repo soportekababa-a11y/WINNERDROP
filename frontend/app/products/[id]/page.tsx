@@ -7,17 +7,18 @@ import { fetchProduct, fetchProductHistory } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Package, TrendingUp, DollarSign, BarChart2 } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import Link from "next/link";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { use } from "react";
 
-function formatLabel(dateStr: string, index: number, total: number) {
+function shortLabel(dateStr: string, index: number, total: number) {
   const i = total - 1 - index;
   if (i === 0) return 'Hoy';
   if (i === 1) return 'Ayer';
   const d = new Date(dateStr + 'T12:00:00');
-  return `${d.getDate()} ${d.toLocaleString('es', { month: 'short' })}`;
+  return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -188,9 +189,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               </div>
             )}
 
-            {/* Horizontal bar chart */}
+            {/* Wave area chart */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-semibold text-gray-900">Ventas diarias — últimos 30 días</h2>
                 <div className="flex gap-4 text-xs text-gray-400">
                   {totalPeriod > 0 && <span>Total: <span className="font-semibold text-gray-600">{totalPeriod}</span></span>}
@@ -199,48 +200,51 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               </div>
 
               {hLoading ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-6 rounded-lg" />)}
-                </div>
+                <Skeleton className="h-52 rounded-xl mt-4" />
               ) : history && history.length > 0 ? (
-                <div className="space-y-1.5">
-                  {history.map((d, i) => {
-                    const isToday = i === history.length - 1;
-                    const isYesterday = i === history.length - 2;
-                    const pct = maxSales > 0 ? (d.sales / maxSales) * 100 : 0;
-                    const lbl = formatLabel(d.date, i, history.length);
-                    return (
-                      <div key={d.date} className="flex items-center gap-3 group">
-                        <span className={cn(
-                          "text-xs w-10 text-right shrink-0 font-medium",
-                          isToday ? "text-indigo-600" : "text-gray-400"
-                        )}>
-                          {lbl}
-                        </span>
-                        <div className="flex-1 h-6 bg-gray-100 rounded-lg overflow-hidden">
-                          {d.sales > 0 && (
-                            <div
-                              className={cn(
-                                "h-full rounded-lg transition-all",
-                                isToday     ? "bg-indigo-500" :
-                                isYesterday ? "bg-indigo-400" :
-                                              "bg-indigo-200"
-                              )}
-                              style={{ width: `${Math.max(pct, 4)}%` }}
-                            />
-                          )}
-                        </div>
-                        <span className={cn(
-                          "text-xs w-8 shrink-0 font-semibold",
-                          d.sales === 0 ? "text-gray-300" :
-                          isToday ? "text-indigo-600" : "text-gray-500"
-                        )}>
-                          {d.sales > 0 ? d.sales : '—'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                <ResponsiveContainer width="100%" height={240}>
+                  <AreaChart
+                    data={history.map((d, i) => ({ ...d, label: shortLabel(d.date, i, history.length) }))}
+                    margin={{ top: 0, right: 8, left: -28, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.3} />
+                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      orientation="top"
+                      tick={{ fill: '#9ca3af', fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis
+                      tick={{ fill: '#9ca3af', fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                      labelStyle={{ color: '#6b7280', marginBottom: 4, fontWeight: 600 }}
+                      itemStyle={{ color: '#6366f1' }}
+                      formatter={(v) => [Number(v ?? 0).toLocaleString(), 'Ventas']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="sales"
+                      stroke="#6366f1"
+                      strokeWidth={2.5}
+                      fill="url(#salesGrad)"
+                      dot={false}
+                      activeDot={{ r: 5, fill: '#6366f1', stroke: '#fff', strokeWidth: 2 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               ) : (
                 <p className="text-gray-400 text-sm text-center py-10">Sin historial aún — vuelve después del primer ciclo</p>
               )}
