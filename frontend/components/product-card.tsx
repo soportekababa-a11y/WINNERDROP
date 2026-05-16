@@ -31,11 +31,7 @@ export function ProductCard({ product: p, rank, highlightDay }: Props) {
   const maxSales = Math.max(...grid.map(d => d.sales), 1);
   const margin = p.price > 0 && p.cost > 0 ? Math.round(((p.price - p.cost) / p.price) * 100) : null;
   const todayEntry = grid[grid.length - 1];
-  const yesterdayEntry = grid[grid.length - 2];
-  const growth = todayEntry && yesterdayEntry && yesterdayEntry.sales > 0
-    ? Math.round(((todayEntry.sales - yesterdayEntry.sales) / yesterdayEntry.sales) * 100)
-    : null;
-  const trending = (todayEntry?.sales ?? 0) >= 10 || (growth !== null && growth >= 20);
+  const trending = (todayEntry?.sales ?? 0) >= 10;
   const badge = rankBadge(rank);
 
   return (
@@ -84,26 +80,10 @@ export function ProductCard({ product: p, rank, highlightDay }: Props) {
           )}
         </div>
 
-        {/* Today + growth */}
-        <div className="flex items-center gap-2">
-          <div className="flex-1">
-            <p className="text-2xl font-bold text-indigo-600">{(todayEntry?.sales ?? p.salesToday).toLocaleString()}</p>
-            <p className="text-xs text-gray-400">ventas hoy</p>
-          </div>
-          {growth !== null && (
-            <span className={cn(
-              "text-xs font-bold px-2.5 py-1 rounded-xl",
-              growth >= 20 ? "bg-emerald-100 text-emerald-700" :
-              growth >= 0  ? "bg-gray-100 text-gray-600" :
-                             "bg-red-50 text-red-500"
-            )}>
-              {growth >= 0 ? '+' : ''}{growth}%
-            </span>
-          )}
-          <div className="text-right">
-            <p className="text-sm font-semibold text-gray-500">{(yesterdayEntry?.sales ?? p.salesYesterday).toLocaleString()}</p>
-            <p className="text-xs text-gray-400">ayer</p>
-          </div>
+        {/* Today sales */}
+        <div>
+          <p className="text-2xl font-bold text-indigo-600">{(todayEntry?.sales ?? p.salesToday).toLocaleString()}</p>
+          <p className="text-xs text-gray-400">ventas hoy</p>
         </div>
 
         {/* Mini bar chart */}
@@ -157,6 +137,13 @@ export function ProductCard({ product: p, rank, highlightDay }: Props) {
         {p.stock < 10 && p.stock > 0 && (
           <p className="text-xs text-red-500 font-semibold">⚠ Solo {p.stock} unidades</p>
         )}
+
+        {/* CTA */}
+        <div className="pt-1">
+          <span className="block w-full text-center text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl py-2 transition-colors">
+            Ver últimos 7 días →
+          </span>
+        </div>
       </div>
     </Link>
   );
