@@ -4,14 +4,14 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { fetchDashboard, fetchProductsGrid } from "@/lib/api";
-import { isAuthenticated, getUser, clearAuth } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
 import { StatCard } from "@/components/stat-card";
 import { ProductCard } from "@/components/product-card";
-import { ScraperStatus } from "@/components/scraper-status";
 import { CategoryBreakdown } from "@/components/category-breakdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/lib/use-debounce";
-import { ShoppingBag, TrendingUp, Package, Search, Zap, LogOut, Loader2, Flame, LayoutGrid } from "lucide-react";
+import { ShoppingBag, TrendingUp, Package, Search, Loader2, Flame, LayoutGrid } from "lucide-react";
+import { Sidebar } from "@/components/sidebar";
 import { cn } from "@/lib/utils";
 
 const SORTS = [
@@ -75,7 +75,6 @@ export default function Dashboard() {
 
   const products = data?.pages.flat() ?? [];
   const hasFilter = !!(debouncedSearch || category);
-  const user = getUser();
 
   const onIntersect = useCallback((entries: IntersectionObserverEntry[]) => {
     if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
@@ -94,34 +93,11 @@ export default function Dashboard() {
   if (!authed) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3.5 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm">
-              <Zap size={14} className="text-white" />
-            </div>
-            <span className="font-bold text-gray-900">WinnerDrop</span>
-            <span className="text-gray-300 hidden sm:inline">·</span>
-            <span className="text-gray-400 text-sm hidden sm:inline">Effi RD</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <ScraperStatus />
-            {user && (
-              <div className="flex items-center gap-2 pl-4 border-l border-gray-200">
-                <span className="text-xs text-gray-500 hidden sm:inline">{user.email}</span>
-                <button onClick={() => { clearAuth(); router.replace('/login'); }} title="Cerrar sesión"
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
-                  <LogOut size={14} />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gray-50 flex">
+      <Sidebar />
 
-      <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+      <div className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-8 space-y-8">
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -258,6 +234,7 @@ export default function Dashboard() {
         )}
 
       </main>
+      </div>
     </div>
   );
 }
