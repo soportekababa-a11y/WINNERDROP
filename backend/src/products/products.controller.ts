@@ -34,13 +34,15 @@ export class ProductsController {
     @Query('days') days?: string,
     @Query('category') category?: string,
     @Query('search') search?: string,
+    @Query('offset') offset?: string,
   ) {
     return this.productsService.getProductsWithDailyGrid(
-      limit ? parseInt(limit) : 50,
+      limit ? parseInt(limit) : 40,
       (sort as any) ?? 'today',
       days ? parseInt(days) : 14,
       category,
       search,
+      offset ? parseInt(offset) : 0,
     );
   }
 

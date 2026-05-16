@@ -96,11 +96,12 @@ export class ProductsService {
   }
 
   async getProductsWithDailyGrid(
-    limit = 50,
+    limit = 40,
     sortBy: 'today' | 'total' | 'growth' = 'today',
     days = 14,
     category?: string,
     search?: string,
+    offset = 0,
   ) {
     // 1. Get products
     const qb = this.productRepo.createQueryBuilder('p').where('p.isActive = true');
@@ -113,7 +114,7 @@ export class ProductsService {
     } else {
       qb.orderBy('p.salesToday', 'DESC');
     }
-    const products = await qb.take(limit).getMany();
+    const products = await qb.skip(offset).take(limit).getMany();
     if (!products.length) return [];
 
     // 2. Bulk daily history for all products in one query
