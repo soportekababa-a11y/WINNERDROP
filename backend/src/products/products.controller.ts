@@ -27,6 +27,23 @@ export class ProductsController {
     );
   }
 
+  @Get('grid')
+  getProductsGrid(
+    @Query('limit') limit?: string,
+    @Query('sort') sort?: string,
+    @Query('days') days?: string,
+    @Query('category') category?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.productsService.getProductsWithDailyGrid(
+      limit ? parseInt(limit) : 50,
+      (sort as any) ?? 'today',
+      days ? parseInt(days) : 14,
+      category,
+      search,
+    );
+  }
+
   @Get('dashboard')
   getDashboardStats() {
     return this.productsService.getDashboardStats();

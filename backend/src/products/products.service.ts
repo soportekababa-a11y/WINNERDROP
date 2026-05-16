@@ -95,6 +95,57 @@ export class ProductsService {
     };
   }
 
+  async getProductsWithDailyGrid(
+    limit = 50,
+    sortBy: 'today' | 'total' | 'growth' = 'today',
+    days = 14,
+    category?: string,
+    search?: string,
+  ) {
+    // 1. Get products
+    const qb = this.productRepo.createQueryBuilder('p').where('p.isActive = true');
+    if (category) qb.andWhere('p.category = :category', { category });
+    if (search) qb.andWhere('LOWER(p.name) LIKE LOWER(:q) OR LOWER(p.category) LIKE LOWER(:q) OR LOWER(p.provider) LIKE LOWER(:q)', { q: `%${search}%` });
+    if (sortBy === 'growth') {
+      qb.orderBy('CASE WHEN p.salesYesterday > 0 THEN (p.salesToday - p.salesYesterday)::float / p.salesYesterday ELSE p.salesToday END', 'DESC');
+    } else if (sortBy === 'total') {
+      qb.orderBy('p.totalSalesAccum', 'DESC');
+    } else {
+      qb.orderBy('p.salesToday', 'DESC');
+    }
+    const products = await qb.take(limit).getMany();
+    if (!products.length) return [];
+
+    // 2. Bulk daily history for all products in one query
+    const from = new Date();
+    from.setDate(from.getDate() - days);
+    from.setHours(0, 0, 0, 0);
+
+    const ids = products.map(p => p.id);
+    const rows = await this.snapshotRepo
+      .createQueryBuilder('s')
+      .select('s.productId', 'productId')
+      .addSelect("DATE(s.capturedAt AT TIME ZONE 'America/Santo_Domingo')", 'day')
+      .addSelect('MAX(s.salesAccum) - MIN(s.salesAccum)', 'sales')
+      .where('s.productId IN (:...ids)', { ids })
+      .andWhere('s.capturedAt >= :from', { from })
+      .groupBy("s.productId, DATE(s.capturedAt AT TIME ZONE 'America/Santo_Domingo')")
+      .orderBy('day', 'ASC')
+      .getRawMany();
+
+    // 3. Build map productId -> day -> sales
+    const histMap = new Map<string, { date: string; sales: number }[]>();
+    for (const r of rows) {
+      if (!histMap.has(r.productId)) histMap.set(r.productId, []);
+      histMap.get(r.productId)!.push({ date: r.day, sales: Math.max(0, parseInt(r.sales) || 0) });
+    }
+
+    return products.map(p => ({
+      ...p,
+      dailyGrid: histMap.get(p.id) ?? [],
+    }));
+  }
+
   async getCategories(): Promise<string[]> {
     const rows = await this.productRepo
       .createQueryBuilder('p')

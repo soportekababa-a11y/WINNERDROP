@@ -84,6 +84,13 @@ export interface ScraperStats {
   progress: { currentPage: number; totalPages: number; accumulated: number } | null;
 }
 
+export interface ProductWithGrid extends Product {
+  dailyGrid: { date: string; sales: number }[];
+}
+
+export const fetchProductsGrid = (params?: { limit?: number; sort?: string; days?: number; search?: string; category?: string }) =>
+  api.get<ProductWithGrid[]>('/products/grid', { params }).then(r => r.data);
+
 export const fetchDashboard = () => api.get<DashboardStats>('/products/dashboard').then(r => r.data);
 
 export const fetchProducts = (params?: { limit?: number; sort?: string; search?: string; category?: string }) =>

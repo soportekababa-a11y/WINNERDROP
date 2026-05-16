@@ -3,10 +3,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { fetchDashboard, fetchProducts } from "@/lib/api";
+import { fetchDashboard, fetchProductsGrid } from "@/lib/api";
 import { isAuthenticated, getUser, clearAuth } from "@/lib/auth";
 import { StatCard } from "@/components/stat-card";
-import { ProductRow } from "@/components/product-row";
+import { ProductCard } from "@/components/product-card";
 import { ScraperStatus } from "@/components/scraper-status";
 import { TopMovers } from "@/components/top-movers";
 import { CategoryBreakdown } from "@/components/category-breakdown";
@@ -21,11 +21,14 @@ const SORTS = [
   { key: 'growth', label: 'Crecimiento' },
 ] as const;
 
+const DAY_OPTIONS = [7, 14, 21, 30];
+
 export default function Dashboard() {
   const router = useRouter();
   const [sort, setSort] = useState<'today' | 'total' | 'growth'>('today');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [days, setDays] = useState(14);
   const [authed, setAuthed] = useState(false);
   const debouncedSearch = useDebounce(search, 400);
 
@@ -44,12 +47,11 @@ export default function Dashboard() {
   });
 
   const { data: products, isLoading: productsLoading, isFetching } = useQuery({
-    queryKey: ['products', sort, debouncedSearch, category],
-    queryFn: () => fetchProducts({ limit: 80, sort, search: debouncedSearch || undefined, category: category || undefined }),
+    queryKey: ['products-grid', sort, debouncedSearch, category, days],
+    queryFn: () => fetchProductsGrid({ limit: 60, sort, days, search: debouncedSearch || undefined, category: category || undefined }),
     refetchInterval: 60_000,
   });
 
-  const activeSort = SORTS.find(s => s.key === sort)!;
   const hasFilter = !!(debouncedSearch || category);
   const user = getUser();
 
@@ -64,7 +66,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3.5 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm">
               <Zap size={14} className="text-white" />
@@ -78,11 +80,7 @@ export default function Dashboard() {
             {user && (
               <div className="flex items-center gap-2 pl-4 border-l border-gray-200">
                 <span className="text-xs text-gray-500 hidden sm:inline">{user.email}</span>
-                <button
-                  onClick={handleLogout}
-                  title="Cerrar sesión"
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                >
+                <button onClick={handleLogout} title="Cerrar sesión" className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
                   <LogOut size={14} />
                 </button>
               </div>
@@ -91,60 +89,33 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+      <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {statsLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-2xl" />
-            ))
+            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)
           ) : stats ? (
             <>
-              <StatCard
-                label="Ventas hoy"
-                value={stats.totalSalesToday.toLocaleString()}
-                trend={stats.growthPercent}
-                icon={<ShoppingBag size={16} />}
-                highlight={true}
-                color="fuchsia"
-              />
-              <StatCard
-                label="Ventas ayer"
-                value={stats.totalSalesYesterday.toLocaleString()}
-                icon={<TrendingUp size={16} />}
-                color="violet"
-              />
-              <StatCard
-                label="Crecimiento"
-                value={`${stats.growthPercent > 0 ? '+' : ''}${stats.growthPercent}%`}
-                sub="vs ayer"
-                highlight={stats.growthPercent > 0}
-                color="emerald"
-              />
-              <StatCard
-                label="Productos activos"
-                value={stats.activeProducts.toLocaleString()}
-                icon={<Package size={16} />}
-                highlight={true}
-                color="amber"
-              />
+              <StatCard label="Ventas hoy" value={stats.totalSalesToday.toLocaleString()} trend={stats.growthPercent} icon={<ShoppingBag size={16} />} highlight color="fuchsia" />
+              <StatCard label="Ventas ayer" value={stats.totalSalesYesterday.toLocaleString()} icon={<TrendingUp size={16} />} color="violet" />
+              <StatCard label="Crecimiento" value={`${stats.growthPercent > 0 ? '+' : ''}${stats.growthPercent}%`} sub="vs ayer" highlight={stats.growthPercent > 0} color="emerald" />
+              <StatCard label="Productos activos" value={stats.activeProducts.toLocaleString()} icon={<Package size={16} />} highlight color="amber" />
             </>
           ) : null}
         </div>
 
         {/* Top movers + Categories */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-1">
-            <TopMovers />
-          </div>
+          <div className="md:col-span-1"><TopMovers /></div>
           <div className="md:col-span-2 flex flex-col justify-center">
             <CategoryBreakdown selected={category} onSelect={setCategory} />
           </div>
         </div>
 
-        {/* Search + Sort */}
+        {/* Filters bar */}
         <div className="space-y-3">
+          {/* Search */}
           <div className="relative">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input
@@ -155,86 +126,69 @@ export default function Dashboard() {
               className="w-full pl-9 pr-9 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
             />
             {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl leading-none"
-              >×</button>
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             )}
           </div>
 
+          {/* Sort + Days + Clear */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Sort */}
             <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
               {SORTS.map(s => (
-                <button
-                  key={s.key}
-                  onClick={() => setSort(s.key)}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap",
-                    sort === s.key
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-gray-500 hover:text-gray-800"
-                  )}
-                >
+                <button key={s.key} onClick={() => setSort(s.key)}
+                  className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap",
+                    sort === s.key ? "bg-indigo-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-800")}>
                   {s.label}
                 </button>
               ))}
             </div>
 
+            {/* Days filter */}
+            <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+              {DAY_OPTIONS.map(d => (
+                <button key={d} onClick={() => setDays(d)}
+                  className={cn("px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                    days === d ? "bg-gray-900 text-white shadow-sm" : "text-gray-500 hover:text-gray-800")}>
+                  {d}d
+                </button>
+              ))}
+            </div>
+
             {hasFilter && (
-              <button
-                onClick={() => { setSearch(''); setCategory(''); }}
-                className="px-3 py-1.5 rounded-xl text-xs text-gray-500 hover:text-gray-800 border border-gray-200 bg-white hover:bg-gray-50 transition-colors shadow-sm"
-              >
+              <button onClick={() => { setSearch(''); setCategory(''); }}
+                className="px-3 py-1.5 rounded-xl text-xs text-gray-500 hover:text-gray-800 border border-gray-200 bg-white shadow-sm transition-colors">
                 Limpiar ×
               </button>
             )}
 
-            {(isFetching && !productsLoading) && (
+            {isFetching && !productsLoading && (
               <span className="text-xs text-indigo-500 animate-pulse ml-auto">actualizando...</span>
             )}
           </div>
-        </div>
 
-        {/* Results header */}
-        <div className="-mt-4">
+          {/* Results count */}
           <p className="text-xs text-gray-400">
-            {debouncedSearch
-              ? `Resultados para "${debouncedSearch}"`
-              : category
-                ? `${activeSort.label} en ${category}`
-                : activeSort.label
-            }
-            {products && !productsLoading && (
-              <span className="ml-1">· {products.length} productos</span>
-            )}
+            {products && !productsLoading && `${products.length} productos · últimos ${days} días`}
           </p>
         </div>
 
-        {/* Product list */}
-        <div className="space-y-1.5 -mt-4">
-          {productsLoading ? (
-            Array.from({ length: 12 }).map((_, i) => (
-              <Skeleton key={i} className="h-[60px] rounded-xl" />
-            ))
-          ) : products && products.length > 0 ? (
-            products.map((p, i) => <ProductRow key={p.id} product={p} rank={i + 1} />)
-          ) : (
-            <div className="text-center py-24 space-y-3">
-              <p className="text-5xl">🔍</p>
-              <p className="text-gray-400 text-sm">
-                {hasFilter ? 'Sin resultados para estos filtros' : 'El scraper está cargando productos...'}
-              </p>
-              {hasFilter && (
-                <button
-                  onClick={() => { setSearch(''); setCategory(''); }}
-                  className="text-xs text-indigo-500 hover:text-indigo-600 underline underline-offset-2"
-                >
-                  Limpiar filtros
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        {/* Product grid */}
+        {productsLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 12 }).map((_, i) => <Skeleton key={i} className="h-72 rounded-2xl" />)}
+          </div>
+        ) : products && products.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {products.map((p, i) => <ProductCard key={p.id} product={p} rank={i + 1} />)}
+          </div>
+        ) : (
+          <div className="text-center py-24 space-y-3">
+            <p className="text-5xl">🔍</p>
+            <p className="text-gray-400 text-sm">
+              {hasFilter ? 'Sin resultados para estos filtros' : 'El scraper está cargando productos...'}
+            </p>
+          </div>
+        )}
 
       </main>
     </div>
