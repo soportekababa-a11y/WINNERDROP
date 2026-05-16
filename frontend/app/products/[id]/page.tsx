@@ -51,14 +51,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     ? Math.round(((product.salesToday - product.salesYesterday) / product.salesYesterday) * 100)
     : null;
 
-  const margin = product && product.price > 0 && product.cost > 0
-    ? Math.round(((product.price - product.cost) / product.price) * 100)
-    : null;
-
-  const profit = product && product.price > 0 && product.cost > 0
-    ? product.price - product.cost
-    : null;
-
   const maxSales = history ? Math.max(...history.map(d => d.sales), 1) : 1;
   const peakDay = history?.reduce((best, d) => d.sales > (best?.sales ?? 0) ? d : best, history[0]);
   const totalPeriod = history?.reduce((s, d) => s + d.sales, 0) ?? 0;
@@ -168,29 +160,39 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               ))}
             </div>
 
-            {/* Profit */}
-            {profit !== null && margin !== null && (
-              <div className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-wrap gap-6 shadow-sm">
-                <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wider">Ganancia por venta</p>
-                  <p className="text-2xl font-bold text-emerald-600 mt-1">RD${profit.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wider">Margen</p>
-                  <p className={cn("text-2xl font-bold mt-1", margin >= 40 ? "text-emerald-600" : margin >= 20 ? "text-amber-500" : "text-red-500")}>
-                    {margin}%
-                  </p>
-                </div>
-                {product.salesToday > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">Ganancia estimada hoy</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">
-                      RD${(profit * product.salesToday).toLocaleString()}
-                    </p>
+            {/* Pricing */}
+            {product.cost > 0 && (() => {
+              const suggestedPrice = product.cost + 1450;
+              return (
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                  <div className="flex flex-wrap gap-6">
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-wider">Costo del producto</p>
+                      <p className="text-2xl font-bold text-gray-900 mt-1">RD${product.cost.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-wider">Precio sugerido de venta</p>
+                      <p className="text-2xl font-bold text-indigo-600 mt-1">RD${suggestedPrice.toLocaleString()}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">+RD$1,450 sobre el costo</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-wider">Ganancia estimada</p>
+                      <p className="text-2xl font-bold text-emerald-600 mt-1">RD$500 – RD$550</p>
+                      <p className="text-xs text-gray-400 mt-0.5">después de publicidad y envío</p>
+                    </div>
+                    {product.salesToday > 0 && (
+                      <div>
+                        <p className="text-xs text-gray-400 uppercase tracking-wider">Ganancia estimada hoy</p>
+                        <p className="text-2xl font-bold text-emerald-700 mt-1">
+                          RD${(525 * product.salesToday).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">{product.salesToday} ventas × RD$525 aprox.</p>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              );
+            })()}
 
             {/* Wave area chart */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
