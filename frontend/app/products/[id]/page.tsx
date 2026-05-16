@@ -177,18 +177,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                     </div>
                     <div>
                       <p className="text-xs text-gray-400 uppercase tracking-wider">Ganancia estimada</p>
-                      <p className="text-2xl font-bold text-emerald-600 mt-1">RD$500 – RD$550</p>
-                      <p className="text-xs text-gray-400 mt-0.5">después de publicidad y envío</p>
+                      <p className="text-2xl font-bold text-emerald-600 mt-1">RD$500 – RD$700</p>
+                      <p className="text-xs text-gray-400 mt-0.5">dependiendo el costo por compra</p>
                     </div>
-                    {product.salesToday > 0 && (
-                      <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wider">Ganancia estimada hoy</p>
-                        <p className="text-2xl font-bold text-emerald-700 mt-1">
-                          RD${(525 * product.salesToday).toLocaleString()}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-0.5">{product.salesToday} ventas × RD$525 aprox.</p>
-                      </div>
-                    )}
                   </div>
                 </div>
               );
