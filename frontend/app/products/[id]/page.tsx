@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { fetchProduct, fetchProductHistory } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Package, TrendingUp, DollarSign, BarChart2 } from "lucide-react";
+import { ArrowLeft, Package, TrendingUp, BarChart2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import Link from "next/link";
 import Image from "next/image";
@@ -126,12 +126,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                   label: "Total acumulado",
                   value: product.totalSalesAccum.toLocaleString(),
                   sub: peakDay ? `Pico: ${peakDay.sales} el ${peakDay.date}` : undefined,
-                },
-                {
-                  icon: <DollarSign size={16} />,
-                  label: "Precio sugerido",
-                  value: `RD$${product.price.toLocaleString()}`,
-                  sub: product.cost > 0 ? `Costo: RD$${product.cost.toLocaleString()}` : undefined,
                 },
                 {
                   icon: <Package size={16} />,
