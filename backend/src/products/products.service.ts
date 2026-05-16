@@ -110,10 +110,17 @@ export class ProductsService {
     if (search) qb.andWhere('LOWER(p.name) LIKE LOWER(:q) OR LOWER(p.category) LIKE LOWER(:q) OR LOWER(p.provider) LIKE LOWER(:q)', { q: `%${search}%` });
 
     if (hot) {
-      // "Más vendidos": al menos 7 ventas en el día de hoy o ayer,
-      // O un acumulado semanal significativo (salesYesterday+salesToday >= 10)
+      // Filter using actual snapshot deltas — never relies on stale cached fields
       qb.andWhere(
-        '(p.salesToday >= 7 OR p.salesYesterday >= 7 OR (p.salesToday + p.salesYesterday) >= 10)',
+        `EXISTS (
+          SELECT 1 FROM (
+            SELECT MAX(s."salesAccum") - MIN(s."salesAccum") AS daily_sales
+            FROM snapshots s
+            WHERE s."productId" = p.id
+              AND s."capturedAt" >= NOW() - INTERVAL '2 days'
+            GROUP BY DATE(s."capturedAt" AT TIME ZONE 'America/Santo_Domingo')
+          ) sub WHERE sub.daily_sales >= 7
+        )`,
       );
     }
 
