@@ -19,7 +19,6 @@ function rankBadge(rank: number) {
 
 export function ProductCard({ product: p, rank }: Props) {
   const grid = p.dailyGrid ?? [];
-  const margin = p.price > 0 && p.cost > 0 ? Math.round(((p.price - p.cost) / p.price) * 100) : null;
   const todayEntry = grid[grid.length - 1];
   const trending = (todayEntry?.sales ?? 0) >= 10;
   const badge = rankBadge(rank);
@@ -58,16 +57,6 @@ export function ProductCard({ product: p, rank }: Props) {
         <div>
           <p className="font-semibold text-sm text-gray-900 line-clamp-2 leading-snug group-hover:text-indigo-600 transition-colors">{p.name}</p>
           <p className="text-xs text-gray-400 mt-0.5 truncate">{[p.category, p.provider].filter(Boolean).join(' · ')}</p>
-        </div>
-
-        {/* Price + margin */}
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-bold text-gray-900">RD${p.price.toLocaleString()}</span>
-          {margin !== null && (
-            <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-lg", margin >= 40 ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500")}>
-              {margin}% margen
-            </span>
-          )}
         </div>
 
         {/* Today sales */}
