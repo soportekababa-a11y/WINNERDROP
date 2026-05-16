@@ -154,31 +154,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               ))}
             </div>
 
-            {/* Pricing */}
-            {product.cost > 0 && (() => {
-              const suggestedPrice = product.cost + 1450;
-              return (
-                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-                  <div className="flex flex-wrap gap-6">
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider">Costo del producto</p>
-                      <p className="text-2xl font-bold text-gray-900 mt-1">RD${product.cost.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider">Precio sugerido de venta</p>
-                      <p className="text-2xl font-bold text-indigo-600 mt-1">RD${suggestedPrice.toLocaleString()}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">+RD$1,450 sobre el costo</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wider">Ganancia estimada</p>
-                      <p className="text-2xl font-bold text-emerald-600 mt-1">RD$500 – RD$700</p>
-                      <p className="text-xs text-gray-400 mt-0.5">dependiendo el costo por compra</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
             {/* Wave area chart */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
