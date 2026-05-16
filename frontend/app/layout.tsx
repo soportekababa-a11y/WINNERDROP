@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { ReactQueryProvider } from "@/lib/query-client";
 
-const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "WinnerDrop — Productos Ganadores RD",
@@ -12,8 +12,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${geist.variable} h-full dark`}>
-      <body className="min-h-full bg-[#07071A] text-slate-100 antialiased">
+    <html lang="es" className={`${inter.variable} h-full`}>
+      <body className={`${inter.className} min-h-full bg-gray-50 text-gray-900 antialiased`}>
         <ReactQueryProvider>{children}</ReactQueryProvider>
       </body>
     </html>
