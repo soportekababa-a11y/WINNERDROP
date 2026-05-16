@@ -21,10 +21,13 @@ function shortLabel(dateStr: string, index: number, total: number) {
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
+const DAY_OPTIONS = [7, 30, 60] as const;
+
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [authed, setAuthed] = useState(false);
+  const [chartDays, setChartDays] = useState<7 | 30 | 60>(7);
 
   useEffect(() => {
     if (!isAuthenticated()) router.replace('/login');
@@ -39,8 +42,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   });
 
   const { data: history, isLoading: hLoading } = useQuery({
-    queryKey: ['product-history', id],
-    queryFn: () => fetchProductHistory(id, 30),
+    queryKey: ['product-history', id, chartDays],
+    queryFn: () => fetchProductHistory(id, chartDays),
     enabled: authed,
   });
 
@@ -191,61 +194,96 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
             {/* Wave area chart */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-semibold text-gray-900">Ventas diarias — últimos 30 días</h2>
-                <div className="flex gap-4 text-xs text-gray-400">
-                  {totalPeriod > 0 && <span>Total: <span className="font-semibold text-gray-600">{totalPeriod}</span></span>}
-                  {peakDay && <span>Pico: <span className="font-semibold text-gray-600">{peakDay.sales}</span></span>}
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-gray-900">Ventas diarias</h2>
+                <div className="flex items-center gap-3">
+                  {totalPeriod > 0 && (
+                    <span className="text-xs text-gray-400">
+                      Total: <span className="font-semibold text-gray-600">{totalPeriod}</span>
+                      {peakDay && <> · Pico: <span className="font-semibold text-gray-600">{peakDay.sales}</span></>}
+                    </span>
+                  )}
+                  <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+                    {DAY_OPTIONS.map(d => (
+                      <button
+                        key={d}
+                        onClick={() => setChartDays(d)}
+                        className={cn(
+                          "px-2.5 py-1 rounded-md text-xs font-semibold transition-all",
+                          chartDays === d ? "bg-white text-indigo-600 shadow-sm" : "text-gray-400 hover:text-gray-700"
+                        )}
+                      >
+                        {d}d
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {hLoading ? (
-                <Skeleton className="h-52 rounded-xl mt-4" />
-              ) : history && history.length > 0 ? (
-                <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart
-                    data={history.map((d, i) => ({ ...d, label: shortLabel(d.date, i, history.length) }))}
-                    margin={{ top: 0, right: 8, left: -28, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                    <XAxis
-                      dataKey="label"
-                      orientation="top"
-                      tick={{ fill: '#9ca3af', fontSize: 10 }}
-                      tickLine={false}
-                      axisLine={false}
-                      interval="preserveStartEnd"
-                    />
-                    <YAxis
-                      tick={{ fill: '#9ca3af', fontSize: 10 }}
-                      tickLine={false}
-                      axisLine={false}
-                      allowDecimals={false}
-                    />
-                    <Tooltip
-                      contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-                      labelStyle={{ color: '#6b7280', marginBottom: 4, fontWeight: 600 }}
-                      itemStyle={{ color: '#6366f1' }}
-                      formatter={(v) => [Number(v ?? 0).toLocaleString(), 'Ventas']}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="sales"
-                      stroke="#6366f1"
-                      strokeWidth={2.5}
-                      fill="url(#salesGrad)"
-                      dot={false}
-                      activeDot={{ r: 5, fill: '#6366f1', stroke: '#fff', strokeWidth: 2 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
+                <Skeleton className="h-56 rounded-xl" />
+              ) : history && history.length > 0 ? (() => {
+                const chartData = history.map((d, i) => ({ ...d, label: shortLabel(d.date, i, history.length) }));
+                const yMax = Math.max(...chartData.map(d => d.sales), 1);
+                const tickInterval = chartDays <= 7 ? 0 : chartDays <= 30 ? 4 : 9;
+
+                const renderTick = (props: any) => {
+                  const { x, y, payload } = props;
+                  const entry = chartData.find(d => d.label === payload.value);
+                  const sales = entry?.sales ?? 0;
+                  return (
+                    <g transform={`translate(${x},${y})`}>
+                      <text x={0} y={-18} textAnchor="middle" fill="#9ca3af" fontSize={10}>{payload.value}</text>
+                      <text x={0} y={-5} textAnchor="middle" fill={sales > 0 ? '#6366f1' : '#d1d5db'} fontSize={9} fontWeight={sales > 0 ? 700 : 400}>{sales}</text>
+                    </g>
+                  );
+                };
+
+                return (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <AreaChart data={chartData} margin={{ top: 36, right: 8, left: -28, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.25} />
+                          <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        orientation="top"
+                        tick={renderTick}
+                        tickLine={false}
+                        axisLine={false}
+                        interval={tickInterval}
+                        height={36}
+                      />
+                      <YAxis
+                        tick={{ fill: '#9ca3af', fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={false}
+                        allowDecimals={false}
+                        domain={[0, (dataMax: number) => Math.max(Math.ceil(dataMax * 1.35), 10)]}
+                      />
+                      <Tooltip
+                        contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                        labelStyle={{ color: '#6b7280', marginBottom: 4, fontWeight: 600 }}
+                        itemStyle={{ color: '#6366f1' }}
+                        formatter={(v) => [Number(v ?? 0).toLocaleString(), 'Ventas']}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="sales"
+                        stroke="#6366f1"
+                        strokeWidth={2.5}
+                        fill="url(#salesGrad)"
+                        dot={false}
+                        activeDot={{ r: 5, fill: '#6366f1', stroke: '#fff', strokeWidth: 2 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                );
+              })() : (
                 <p className="text-gray-400 text-sm text-center py-10">Sin historial aún — vuelve después del primer ciclo</p>
               )}
             </div>
