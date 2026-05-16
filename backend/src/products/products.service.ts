@@ -69,10 +69,21 @@ export class ProductsService {
       .orderBy('day', 'ASC')
       .getRawMany();
 
-    return rows.map((r, i) => ({
-      date: r.day,
-      sales: Math.max(0, parseInt(r.maxAccum) - parseInt(r.minAccum)),
-    }));
+    // Build a full date range so days with 0 sales are included
+    const salesMap = new Map<string, number>();
+    for (const r of rows) {
+      const key = typeof r.day === 'string' ? r.day.slice(0, 10) : new Date(r.day).toISOString().slice(0, 10);
+      salesMap.set(key, Math.max(0, parseInt(r.maxAccum) - parseInt(r.minAccum)));
+    }
+
+    const result: { date: string; sales: number }[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+      result.push({ date: dateStr, sales: salesMap.get(dateStr) ?? 0 });
+    }
+    return result;
   }
 
   // Ventas de hoy en tiempo real para un producto

@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchProduct, fetchProductHistory } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Package, TrendingUp, DollarSign, BarChart2 } from "lucide-react";
 import Link from "next/link";
@@ -13,17 +12,22 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { use } from "react";
 
+function formatLabel(dateStr: string, index: number, total: number) {
+  const i = total - 1 - index;
+  if (i === 0) return 'Hoy';
+  if (i === 1) return 'Ayer';
+  const d = new Date(dateStr + 'T12:00:00');
+  return `${d.getDate()} ${d.toLocaleString('es', { month: 'short' })}`;
+}
+
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated()) {
-      router.replace('/login');
-    } else {
-      setAuthed(true);
-    }
+    if (!isAuthenticated()) router.replace('/login');
+    else setAuthed(true);
   }, [router]);
 
   const { data: product, isLoading: pLoading } = useQuery({
@@ -51,33 +55,34 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     ? product.price - product.cost
     : null;
 
+  const maxSales = history ? Math.max(...history.map(d => d.sales), 1) : 1;
   const peakDay = history?.reduce((best, d) => d.sales > (best?.sales ?? 0) ? d : best, history[0]);
+  const totalPeriod = history?.reduce((s, d) => s + d.sales, 0) ?? 0;
 
   return (
-    <div className="min-h-screen bg-zinc-950">
-      {/* Top nav */}
-      <header className="border-b border-zinc-900 px-4 py-4 sticky top-0 bg-zinc-950/90 backdrop-blur-sm z-10">
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b border-gray-200 px-4 py-3.5 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-1.5 text-zinc-500 hover:text-white transition-colors text-sm">
+          <Link href="/" className="flex items-center gap-1.5 text-gray-400 hover:text-gray-700 transition-colors text-sm">
             <ArrowLeft size={14} />
             <span>Dashboard</span>
           </Link>
-          <span className="text-zinc-800">/</span>
-          {product && <span className="text-zinc-400 text-sm truncate max-w-xs">{product.name}</span>}
+          <span className="text-gray-200">/</span>
+          {product && <span className="text-gray-500 text-sm truncate max-w-xs">{product.name}</span>}
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
         {pLoading ? (
           <div className="space-y-4">
-            <Skeleton className="h-8 w-72 bg-zinc-900 rounded-lg" />
-            <Skeleton className="h-40 bg-zinc-900 rounded-2xl" />
+            <Skeleton className="h-8 w-72 rounded-lg" />
+            <Skeleton className="h-40 rounded-2xl" />
           </div>
         ) : product ? (
           <>
-            {/* Product hero */}
+            {/* Hero */}
             <div className="flex gap-5 items-start">
-              <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl bg-zinc-900 border border-zinc-800 flex-shrink-0 overflow-hidden relative">
+              <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl bg-gray-100 border border-gray-200 flex-shrink-0 overflow-hidden relative shadow-sm">
                 {product.imageUrl ? (
                   <Image src={product.imageUrl} alt={product.name} fill className="object-cover" unoptimized />
                 ) : (
@@ -85,24 +90,24 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                 )}
               </div>
               <div className="flex-1 min-w-0 pt-1">
-                <h1 className="text-xl md:text-2xl font-bold text-white leading-snug">{product.name}</h1>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-900 leading-snug">{product.name}</h1>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {product.category && (
-                    <span className="px-2 py-0.5 rounded-lg bg-zinc-800 text-zinc-400 text-xs">{product.category}</span>
+                    <span className="px-2 py-0.5 rounded-lg bg-gray-100 text-gray-500 text-xs">{product.category}</span>
                   )}
                   {product.subcategory && (
-                    <span className="px-2 py-0.5 rounded-lg bg-zinc-800 text-zinc-500 text-xs">{product.subcategory}</span>
+                    <span className="px-2 py-0.5 rounded-lg bg-gray-100 text-gray-400 text-xs">{product.subcategory}</span>
                   )}
                   {product.provider && (
-                    <span className="px-2 py-0.5 rounded-lg bg-zinc-800 text-zinc-500 text-xs">🏭 {product.provider}</span>
+                    <span className="px-2 py-0.5 rounded-lg bg-gray-100 text-gray-400 text-xs">🏭 {product.provider}</span>
                   )}
                 </div>
                 {growth !== null && (
                   <div className={cn(
-                    "inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-lg text-sm font-medium",
-                    growth >= 20 ? "bg-emerald-950 text-emerald-400" :
-                    growth >= 0  ? "bg-zinc-800 text-zinc-300" :
-                                   "bg-red-950 text-red-400"
+                    "inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-lg text-sm font-semibold",
+                    growth >= 20 ? "bg-emerald-100 text-emerald-700" :
+                    growth >= 0  ? "bg-gray-100 text-gray-600" :
+                                   "bg-red-50 text-red-500"
                   )}>
                     {growth >= 0 ? '▲' : '▼'} {Math.abs(growth)}% vs ayer
                   </div>
@@ -110,7 +115,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               </div>
             </div>
 
-            {/* Stats grid */}
+            {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 {
@@ -124,7 +129,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                   icon: <TrendingUp size={16} />,
                   label: "Total acumulado",
                   value: product.totalSalesAccum.toLocaleString(),
-                  sub: peakDay ? `Pico: ${peakDay.sales} (${peakDay.date})` : undefined,
+                  sub: peakDay ? `Pico: ${peakDay.sales} el ${peakDay.date}` : undefined,
                 },
                 {
                   icon: <DollarSign size={16} />,
@@ -143,39 +148,39 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                 <div
                   key={s.label}
                   className={cn(
-                    "rounded-2xl border p-4 space-y-2",
-                    s.hi ? "bg-emerald-950/30 border-emerald-900/50" :
-                    s.warn ? "bg-red-950/20 border-red-900/40" :
-                    "bg-zinc-900 border-zinc-800"
+                    "rounded-2xl border p-4 space-y-2 bg-white shadow-sm",
+                    s.hi ? "border-emerald-200" :
+                    s.warn ? "border-red-200" :
+                    "border-gray-200"
                   )}
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-zinc-500 uppercase tracking-wider">{s.label}</p>
-                    <span className={cn("opacity-40", s.hi ? "text-emerald-400" : s.warn ? "text-red-400" : "text-zinc-500")}>{s.icon}</span>
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">{s.label}</p>
+                    <span className={cn("opacity-50", s.hi ? "text-emerald-500" : s.warn ? "text-red-400" : "text-gray-400")}>{s.icon}</span>
                   </div>
-                  <p className="text-2xl font-bold text-white">{s.value}</p>
-                  {s.sub && <p className={cn("text-xs", s.warn ? "text-red-400" : "text-zinc-600")}>{s.sub}</p>}
+                  <p className={cn("text-2xl font-bold", s.hi ? "text-emerald-600" : s.warn ? "text-red-500" : "text-gray-900")}>{s.value}</p>
+                  {s.sub && <p className={cn("text-xs", s.warn ? "text-red-400" : "text-gray-400")}>{s.sub}</p>}
                 </div>
               ))}
             </div>
 
-            {/* Profit calc */}
+            {/* Profit */}
             {profit !== null && margin !== null && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex flex-wrap gap-6">
+              <div className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-wrap gap-6 shadow-sm">
                 <div>
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider">Ganancia por venta</p>
-                  <p className="text-2xl font-bold text-emerald-400 mt-1">RD${profit.toLocaleString()}</p>
+                  <p className="text-xs text-gray-400 uppercase tracking-wider">Ganancia por venta</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">RD${profit.toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider">Margen de ganancia</p>
-                  <p className={cn("text-2xl font-bold mt-1", margin >= 40 ? "text-emerald-400" : margin >= 20 ? "text-yellow-400" : "text-red-400")}>
+                  <p className="text-xs text-gray-400 uppercase tracking-wider">Margen</p>
+                  <p className={cn("text-2xl font-bold mt-1", margin >= 40 ? "text-emerald-600" : margin >= 20 ? "text-amber-500" : "text-red-500")}>
                     {margin}%
                   </p>
                 </div>
                 {product.salesToday > 0 && (
                   <div>
-                    <p className="text-xs text-zinc-500 uppercase tracking-wider">Ganancia estimada hoy</p>
-                    <p className="text-2xl font-bold text-white mt-1">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Ganancia estimada hoy</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">
                       RD${(profit * product.salesToday).toLocaleString()}
                     </p>
                   </div>
@@ -183,61 +188,67 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
               </div>
             )}
 
-            {/* Chart */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-sm font-medium text-white">Ventas diarias — últimos 30 días</h2>
-                {peakDay && (
-                  <span className="text-xs text-zinc-600">Pico: <span className="text-zinc-400">{peakDay.sales} el {peakDay.date}</span></span>
-                )}
-              </div>
-              {hLoading ? (
-                <Skeleton className="h-52 bg-zinc-800 rounded-xl" />
-              ) : history && history.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={history} margin={{ top: 4, right: 0, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fill: '#52525b', fontSize: 10 }}
-                      tickLine={false}
-                      axisLine={false}
-                      interval="preserveStartEnd"
-                    />
-                    <YAxis tick={{ fill: '#52525b', fontSize: 10 }} tickLine={false} axisLine={false} />
-                    <Tooltip
-                      contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 10, fontSize: 12 }}
-                      labelStyle={{ color: '#a1a1aa', marginBottom: 4 }}
-                      itemStyle={{ color: '#10b981' }}
-                      formatter={(v) => [Number(v ?? 0).toLocaleString(), 'Ventas']}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="sales"
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      fill="url(#grad)"
-                      dot={false}
-                      activeDot={{ r: 4, fill: '#10b981', strokeWidth: 0 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-52 flex items-center justify-center">
-                  <p className="text-zinc-600 text-sm">Sin historial suficiente aún — vuelve después del primer ciclo completo</p>
+            {/* Horizontal bar chart */}
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-sm font-semibold text-gray-900">Ventas diarias — últimos 30 días</h2>
+                <div className="flex gap-4 text-xs text-gray-400">
+                  {totalPeriod > 0 && <span>Total: <span className="font-semibold text-gray-600">{totalPeriod}</span></span>}
+                  {peakDay && <span>Pico: <span className="font-semibold text-gray-600">{peakDay.sales}</span></span>}
                 </div>
+              </div>
+
+              {hLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-6 rounded-lg" />)}
+                </div>
+              ) : history && history.length > 0 ? (
+                <div className="space-y-1.5">
+                  {history.map((d, i) => {
+                    const isToday = i === history.length - 1;
+                    const isYesterday = i === history.length - 2;
+                    const pct = maxSales > 0 ? (d.sales / maxSales) * 100 : 0;
+                    const lbl = formatLabel(d.date, i, history.length);
+                    return (
+                      <div key={d.date} className="flex items-center gap-3 group">
+                        <span className={cn(
+                          "text-xs w-10 text-right shrink-0 font-medium",
+                          isToday ? "text-indigo-600" : "text-gray-400"
+                        )}>
+                          {lbl}
+                        </span>
+                        <div className="flex-1 h-6 bg-gray-100 rounded-lg overflow-hidden">
+                          {d.sales > 0 && (
+                            <div
+                              className={cn(
+                                "h-full rounded-lg transition-all",
+                                isToday     ? "bg-indigo-500" :
+                                isYesterday ? "bg-indigo-400" :
+                                              "bg-indigo-200"
+                              )}
+                              style={{ width: `${Math.max(pct, 4)}%` }}
+                            />
+                          )}
+                        </div>
+                        <span className={cn(
+                          "text-xs w-8 shrink-0 font-semibold",
+                          d.sales === 0 ? "text-gray-300" :
+                          isToday ? "text-indigo-600" : "text-gray-500"
+                        )}>
+                          {d.sales > 0 ? d.sales : '—'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-gray-400 text-sm text-center py-10">Sin historial aún — vuelve después del primer ciclo</p>
               )}
             </div>
           </>
         ) : (
           <div className="text-center py-24">
-            <p className="text-zinc-600">Producto no encontrado</p>
+            <p className="text-gray-400">Producto no encontrado</p>
           </div>
         )}
       </main>
