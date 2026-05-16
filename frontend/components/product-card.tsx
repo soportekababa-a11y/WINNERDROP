@@ -8,15 +8,6 @@ import { cn } from "@/lib/utils";
 interface Props {
   product: ProductWithGrid;
   rank: number;
-  highlightDay?: string; // ISO date to highlight
-}
-
-function label(date: string, index: number, total: number) {
-  const i = total - 1 - index; // i=0 = today
-  if (i === 0) return 'Hoy';
-  if (i === 1) return 'Ayer';
-  const d = new Date(date + 'T12:00:00');
-  return `${d.getDate()} ${d.toLocaleString('es', { month: 'short' })}`;
 }
 
 function rankBadge(rank: number) {
@@ -26,9 +17,8 @@ function rankBadge(rank: number) {
   return null;
 }
 
-export function ProductCard({ product: p, rank, highlightDay }: Props) {
+export function ProductCard({ product: p, rank }: Props) {
   const grid = p.dailyGrid ?? [];
-  const maxSales = Math.max(...grid.map(d => d.sales), 1);
   const margin = p.price > 0 && p.cost > 0 ? Math.round(((p.price - p.cost) / p.price) * 100) : null;
   const todayEntry = grid[grid.length - 1];
   const trending = (todayEntry?.sales ?? 0) >= 10;
@@ -86,52 +76,6 @@ export function ProductCard({ product: p, rank, highlightDay }: Props) {
           <p className="text-xs text-gray-400">ventas hoy</p>
         </div>
 
-        {/* Mini bar chart */}
-        {grid.length > 0 && (
-          <div className="mt-1">
-            <div className="flex items-end gap-0.5 h-10">
-              {grid.map((d, i) => {
-                const pct = maxSales > 0 ? (d.sales / maxSales) * 100 : 0;
-                const isHighlight = highlightDay === d.date;
-                const isToday = i === grid.length - 1;
-                const isYesterday = i === grid.length - 2;
-                return (
-                  <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5 group/bar" title={`${label(d.date, i, grid.length)}: ${d.sales}`}>
-                    <div className="w-full relative flex items-end" style={{ height: '32px' }}>
-                      <div
-                        className={cn(
-                          "w-full rounded-t transition-all",
-                          isHighlight ? "bg-indigo-600" :
-                          isToday     ? "bg-indigo-400" :
-                          isYesterday ? "bg-indigo-300" :
-                                        "bg-gray-200 group-hover/bar:bg-indigo-200"
-                        )}
-                        style={{ height: `${Math.max(pct, pct > 0 ? 8 : 0)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {/* Day labels — show only today, yesterday, and every 3rd */}
-            <div className="flex gap-0.5 mt-1">
-              {grid.map((d, i) => {
-                const isToday = i === grid.length - 1;
-                const isYesterday = i === grid.length - 2;
-                const show = isToday || isYesterday || i % 3 === 0;
-                return (
-                  <div key={d.date} className="flex-1 text-center">
-                    {show && (
-                      <span className={cn("text-[9px] leading-none", isToday ? "text-indigo-500 font-bold" : "text-gray-300")}>
-                        {isToday ? 'Hoy' : isYesterday ? 'Ayer' : new Date(d.date + 'T12:00:00').getDate()}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Stock */}
         {p.stock < 10 && p.stock > 0 && (
