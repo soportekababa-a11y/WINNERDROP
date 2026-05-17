@@ -162,17 +162,29 @@ export class ProductsService {
       .orderBy('day', 'ASC')
       .getRawMany();
 
-    // 3. Build map productId -> day -> sales
-    const histMap = new Map<string, { date: string; sales: number }[]>();
+    // 3. Build map productId -> dateStr -> sales
+    const histMap = new Map<string, Map<string, number>>();
     for (const r of rows) {
-      if (!histMap.has(r.productId)) histMap.set(r.productId, []);
-      histMap.get(r.productId)!.push({ date: r.day, sales: Math.max(0, parseInt(r.sales) || 0) });
+      const dateKey = typeof r.day === 'string' ? r.day.slice(0, 10) : new Date(r.day).toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' });
+      if (!histMap.has(r.productId)) histMap.set(r.productId, new Map());
+      histMap.get(r.productId)!.set(dateKey, Math.max(0, parseInt(r.sales) || 0));
     }
 
-    return products.map(p => ({
-      ...p,
-      dailyGrid: histMap.get(p.id) ?? [],
-    }));
+    // 4. Full date range in RD timezone so grid[last] is always today
+    const fullRange: string[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      fullRange.push(d.toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' }));
+    }
+
+    return products.map(p => {
+      const dayMap = histMap.get(p.id) ?? new Map<string, number>();
+      return {
+        ...p,
+        dailyGrid: fullRange.map(date => ({ date, sales: dayMap.get(date) ?? 0 })),
+      };
+    });
   }
 
   async getCategories(): Promise<string[]> {
