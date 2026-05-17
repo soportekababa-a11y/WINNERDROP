@@ -210,15 +210,10 @@ export class ProductsService {
 
   // Recalcula salesToday y salesYesterday desde snapshots (se llama cada ciclo)
   async refreshDailyCache() {
-    // Midnight in RD timezone (UTC-4)
-    const nowRD = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Santo_Domingo' }));
-    nowRD.setHours(0, 0, 0, 0);
-    // Convert back to UTC for DB comparison
-    const offset = 4 * 60 * 60 * 1000; // UTC-4
-    const todayStart = new Date(nowRD.getTime() + offset);
-
-    const yesterdayStart = new Date(todayStart);
-    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+    // RD is always UTC-4 (no DST). Midnight RD = 04:00 UTC.
+    const rdDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' }); // YYYY-MM-DD
+    const todayStart = new Date(rdDateStr + 'T04:00:00.000Z');
+    const yesterdayStart = new Date(todayStart.getTime() - 86_400_000);
 
     // Calcular ventas de hoy por producto
     const todayRows: { productId: string; sales: string }[] = await this.snapshotRepo
