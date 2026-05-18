@@ -97,7 +97,8 @@ export class ScraperService implements OnModuleDestroy {
   }
 
   private async launchBrowser() {
-    this.browser = await chromium.launch({ headless: true });
+    const executablePath = process.env.CHROMIUM_PATH || undefined;
+    this.browser = await chromium.launch({ headless: true, executablePath });
     this.context = await this.browser.newContext({ userAgent: this.userAgent() });
   }
 

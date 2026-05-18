@@ -37,7 +37,9 @@ npm run build
 
 echo ">>> Instalando Chromium para Playwright..."
 cd /opt/winnerdrop/backend
-npx playwright install chromium --with-deps
+apt-get install -y chromium
+PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 npx playwright install chromium || true
+echo "Chromium sistema: $(which chromium)"
 
 echo ">>> Construyendo frontend..."
 cd /opt/winnerdrop/frontend
@@ -67,6 +69,7 @@ module.exports = {
         EFFI_PASSWORD: 'Davdem.Online',
         JWT_SECRET: 'winnerdrop_jwt_secret_2026_change_in_prod',
         PORT: '3001',
+        CHROMIUM_PATH: '/usr/bin/chromium',
       },
       autorestart: true,
       restart_delay: 5000,
