@@ -46,9 +46,26 @@ export class ScraperService implements OnModuleDestroy {
     this.isRunning = true;
     this.logger.log('Scraper iniciado');
 
-    await this.launchBrowser();
-    await this.login();
-    await this.runCycle();
+    this.startWithRetry();
+  }
+
+  private async startWithRetry() {
+    const RETRY_DELAY_MS = 60 * 1000;
+    while (true) {
+      try {
+        await this.launchBrowser();
+        await this.login();
+        await this.runCycle();
+        break;
+      } catch (err) {
+        this.logger.error(`Error en arranque inicial, reintentando en ${RETRY_DELAY_MS / 1000}s...`, err);
+        await this.context?.close().catch(() => {});
+        await this.browser?.close().catch(() => {});
+        this.browser = null;
+        this.context = null;
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      }
+    }
 
     this.intervalHandle = setInterval(async () => {
       try {
