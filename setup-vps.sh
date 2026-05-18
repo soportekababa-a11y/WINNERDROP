@@ -14,7 +14,7 @@ apt-get install -y postgresql postgresql-contrib
 
 echo ">>> Configurando PostgreSQL..."
 sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'winnerdrop2026';"
-sudo -u postgres psql -c "SELECT 'CREATE DATABASE winnerdrop' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'winnerdrop')\\gexec"
+sudo -u postgres createdb winnerdrop 2>/dev/null || echo "DB ya existe, continuando..."
 
 echo ">>> Instalando PM2..."
 npm install -g pm2
