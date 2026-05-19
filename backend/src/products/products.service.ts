@@ -60,12 +60,12 @@ export class ProductsService {
     // Para cada día: ventas = MAX(salesAccum) del día - MIN(salesAccum) del día
     const rows = await this.snapshotRepo
       .createQueryBuilder('s')
-      .select("DATE(s.capturedAt AT TIME ZONE 'America/Santo_Domingo')", 'day')
+      .select("DATE(s.capturedAt - INTERVAL '4 hours')", 'day')
       .addSelect('MAX(s.salesAccum)', 'maxAccum')
       .addSelect('MIN(s.salesAccum)', 'minAccum')
       .where('s.productId = :id', { id })
       .andWhere('s.capturedAt >= :from', { from })
-      .groupBy("DATE(s.capturedAt AT TIME ZONE 'America/Santo_Domingo')")
+      .groupBy("DATE(s.capturedAt - INTERVAL '4 hours')")
       .orderBy('day', 'ASC')
       .getRawMany();
 
@@ -131,11 +131,11 @@ export class ProductsService {
             SUM(daily.day_sales) as total_week
           FROM (
             SELECT s."productId",
-              DATE(s."capturedAt" AT TIME ZONE 'America/Santo_Domingo') as day,
+              DATE(s."capturedAt" - INTERVAL '4 hours') as day,
               MAX(s."salesAccum") - MIN(s."salesAccum") as day_sales
             FROM snapshots s
             WHERE s."capturedAt" >= NOW() - INTERVAL '7 days'
-            GROUP BY s."productId", DATE(s."capturedAt" AT TIME ZONE 'America/Santo_Domingo')
+            GROUP BY s."productId", DATE(s."capturedAt" - INTERVAL '4 hours')
           ) daily
           GROUP BY daily."productId"
           HAVING SUM(CASE WHEN daily.day_sales > 0 THEN 1 ELSE 0 END) >= 2
@@ -153,7 +153,7 @@ export class ProductsService {
             FROM snapshots s
             WHERE s."productId" = p.id
               AND s."capturedAt" >= NOW() - INTERVAL '2 days'
-            GROUP BY DATE(s."capturedAt" AT TIME ZONE 'America/Santo_Domingo')
+            GROUP BY DATE(s."capturedAt" - INTERVAL '4 hours')
           ) sub WHERE sub.daily_sales >= 7
         )`,
       );
@@ -177,11 +177,11 @@ export class ProductsService {
     const rows = await this.snapshotRepo
       .createQueryBuilder('s')
       .select('s.productId', 'productId')
-      .addSelect("DATE(s.capturedAt AT TIME ZONE 'America/Santo_Domingo')", 'day')
+      .addSelect("DATE(s.capturedAt - INTERVAL '4 hours')", 'day')
       .addSelect('MAX(s.salesAccum) - MIN(s.salesAccum)', 'sales')
       .where('s.productId IN (:...ids)', { ids })
       .andWhere('s.capturedAt >= :from', { from })
-      .groupBy("s.productId, DATE(s.capturedAt AT TIME ZONE 'America/Santo_Domingo')")
+      .groupBy("s.productId, DATE(s.capturedAt - INTERVAL '4 hours')")
       .orderBy('day', 'ASC')
       .getRawMany();
 
