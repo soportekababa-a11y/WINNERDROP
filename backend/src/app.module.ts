@@ -23,7 +23,7 @@ import { UsersModule } from './users/users.module';
         password: config.get('DB_PASSWORD'),
         database: config.get('DB_DATABASE', 'winnerdrop'),
         entities: [Product, Snapshot, User],
-        synchronize: config.get('NODE_ENV') !== 'production',
+        synchronize: true,
         logging: false,
       }),
     }),
