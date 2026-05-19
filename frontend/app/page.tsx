@@ -8,8 +8,7 @@ import { isAuthenticated } from "@/lib/auth";
 import { StatCard } from "@/components/stat-card";
 import { ProductCard } from "@/components/product-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDebounce } from "@/lib/use-debounce";
-import { ShoppingBag, TrendingUp, Search, Loader2, ChevronDown } from "lucide-react";
+import { ShoppingBag, TrendingUp, Loader2, ChevronDown } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -34,9 +33,7 @@ export default function Dashboard() {
   const [productoFilter, setProductoFilter] = useState<ProductoFilter>('todos');
   const [provider, setProvider] = useState('');
   const [category, setCategory] = useState('');
-  const [search, setSearch] = useState('');
   const [authed, setAuthed] = useState(false);
-  const debouncedSearch = useDebounce(search, 400);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,13 +68,12 @@ export default function Dashboard() {
     fetchNextPage,
     hasNextPage,
   } = useInfiniteQuery({
-    queryKey: ['products-grid', productoFilter, sort, debouncedSearch, category, provider],
+    queryKey: ['products-grid', productoFilter, sort, category, provider],
     queryFn: ({ pageParam = 0 }) =>
       fetchProductsGrid({
         limit: PAGE_SIZE,
         sort,
         days: 14,
-        search: debouncedSearch || undefined,
         category: category || undefined,
         provider: provider || undefined,
         offset: pageParam as number,
@@ -92,7 +88,7 @@ export default function Dashboard() {
   });
 
   const products = data?.pages.flat() ?? [];
-  const hasFilter = !!(debouncedSearch || category || provider);
+  const hasFilter = !!(category || provider);
 
   const onIntersect = useCallback((entries: IntersectionObserverEntry[]) => {
     if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
@@ -188,21 +184,9 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Búsqueda */}
-          <div className="relative">
-            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            <input type="text" placeholder="Buscar producto, categoría, proveedor..." value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-9 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all" />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-            )}
-          </div>
-
           {hasFilter && (
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-400">{products.length} productos cargados</p>
-              <button onClick={() => { setSearch(''); setCategory(''); setProvider(''); }}
+            <div className="flex justify-end">
+              <button onClick={() => { setCategory(''); setProvider(''); }}
                 className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
                 Limpiar filtros ×
               </button>
