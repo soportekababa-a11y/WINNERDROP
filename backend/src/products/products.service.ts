@@ -39,8 +39,8 @@ export class ProductsService {
       .getRawOne();
 
     const today = parseInt(result.totalToday) || 0;
-    const yesterday = parseInt(result.totalYesterday) || 1;
-    const growth = Math.round(((today - yesterday) / yesterday) * 100 * 10) / 10;
+    const yesterday = parseInt(result.totalYesterday) || 0;
+    const growth = yesterday > 0 ? Math.round(((today - yesterday) / yesterday) * 100 * 10) / 10 : 0;
 
     const topProducts = await this.getTopProducts(10, 'today');
 
@@ -80,7 +80,7 @@ export class ProductsService {
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' });
       result.push({ date: dateStr, sales: salesMap.get(dateStr) ?? 0 });
     }
     return result;
@@ -88,8 +88,8 @@ export class ProductsService {
 
   // Ventas de hoy en tiempo real para un producto
   async getProductTodaySales(id: string) {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    const rdDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' });
+    const startOfDay = new Date(rdDateStr + 'T04:00:00.000Z');
 
     const rows = await this.snapshotRepo
       .createQueryBuilder('s')
