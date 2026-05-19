@@ -22,10 +22,10 @@ const PRODUCTO_OPTIONS: { value: ProductoFilter; label: string }[] = [
   { value: 'winners', label: 'Winners' },
 ];
 
-function filterToParams(f: ProductoFilter): { hot: boolean; sort: 'today' | 'total' | 'growth' } {
-  if (f === 'hoy')     return { hot: true,  sort: 'today' };
-  if (f === 'winners') return { hot: false, sort: 'total' };
-  return                      { hot: false, sort: 'today' };
+function filterToParams(f: ProductoFilter): { hot: boolean; sort: 'today' | 'total' | 'growth'; limit: number } {
+  if (f === 'hoy')     return { hot: false, sort: 'today', limit: 20 };
+  if (f === 'winners') return { hot: false, sort: 'total', limit: PAGE_SIZE };
+  return                      { hot: false, sort: 'today', limit: PAGE_SIZE };
 }
 
 export default function Dashboard() {
@@ -59,7 +59,7 @@ export default function Dashboard() {
     staleTime: 5 * 60_000,
   });
 
-  const { hot, sort } = filterToParams(productoFilter);
+  const { hot, sort, limit } = filterToParams(productoFilter);
 
   const {
     data,
@@ -71,7 +71,7 @@ export default function Dashboard() {
     queryKey: ['products-grid', productoFilter, sort, category, provider],
     queryFn: ({ pageParam = 0 }) =>
       fetchProductsGrid({
-        limit: PAGE_SIZE,
+        limit,
         sort,
         days: 14,
         category: category || undefined,
