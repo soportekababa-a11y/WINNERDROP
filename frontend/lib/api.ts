@@ -88,7 +88,7 @@ export interface ProductWithGrid extends Product {
   dailyGrid: { date: string; sales: number }[];
 }
 
-export const fetchProductsGrid = (params?: { limit?: number; sort?: string; days?: number; search?: string; category?: string; offset?: number; hot?: boolean }) =>
+export const fetchProductsGrid = (params?: { limit?: number; sort?: string; days?: number; search?: string; category?: string; provider?: string; offset?: number; hot?: boolean }) =>
   api.get<ProductWithGrid[]>('/products/grid', { params }).then(r => r.data);
 
 export const fetchDashboard = () => api.get<DashboardStats>('/products/dashboard').then(r => r.data);
@@ -97,6 +97,8 @@ export const fetchProducts = (params?: { limit?: number; sort?: string; search?:
   api.get<Product[]>('/products', { params }).then(r => r.data);
 
 export const fetchCategories = () => api.get<string[]>('/products/categories').then(r => r.data);
+
+export const fetchProviders = () => api.get<string[]>('/products/providers').then(r => r.data);
 
 export const fetchProduct = (id: string) => api.get<Product>(`/products/${id}`).then(r => r.data);
 

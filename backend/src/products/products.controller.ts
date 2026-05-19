@@ -12,6 +12,11 @@ export class ProductsController {
     return this.productsService.getCategories();
   }
 
+  @Get('providers')
+  getProviders() {
+    return this.productsService.getProviders();
+  }
+
   @Get()
   getTopProducts(
     @Query('limit') limit?: string,
@@ -36,6 +41,7 @@ export class ProductsController {
     @Query('search') search?: string,
     @Query('offset') offset?: string,
     @Query('hot') hot?: string,
+    @Query('provider') provider?: string,
   ) {
     return this.productsService.getProductsWithDailyGrid(
       limit ? parseInt(limit) : 40,
@@ -45,6 +51,7 @@ export class ProductsController {
       search,
       offset ? parseInt(offset) : 0,
       hot === 'true',
+      provider,
     );
   }
 

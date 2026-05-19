@@ -114,10 +114,12 @@ export class ProductsService {
     search?: string,
     offset = 0,
     hot = false,
+    provider?: string,
   ) {
     // 1. Get products
     const qb = this.productRepo.createQueryBuilder('p').where('p.isActive = true');
     if (category) qb.andWhere('p.category = :category', { category });
+    if (provider) qb.andWhere('p.provider = :provider', { provider });
     if (search) qb.andWhere('LOWER(p.name) LIKE LOWER(:q) OR LOWER(p.category) LIKE LOWER(:q) OR LOWER(p.provider) LIKE LOWER(:q)', { q: `%${search}%` });
 
     if (hot) {
@@ -195,6 +197,16 @@ export class ProductsService {
       .orderBy('p.category', 'ASC')
       .getRawMany();
     return rows.map(r => r.category).filter(Boolean);
+  }
+
+  async getProviders(): Promise<string[]> {
+    const rows = await this.productRepo
+      .createQueryBuilder('p')
+      .select('DISTINCT p.provider', 'provider')
+      .where('p.isActive = true AND p.provider IS NOT NULL AND p.provider != :empty', { empty: '' })
+      .orderBy('p.provider', 'ASC')
+      .getRawMany();
+    return rows.map(r => r.provider).filter(Boolean);
   }
 
   async searchProducts(query: string, limit = 30) {

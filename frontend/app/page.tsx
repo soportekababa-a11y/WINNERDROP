@@ -3,35 +3,38 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { fetchDashboard, fetchProductsGrid } from "@/lib/api";
+import { fetchDashboard, fetchProductsGrid, fetchCategories, fetchProviders } from "@/lib/api";
 import { isAuthenticated } from "@/lib/auth";
 import { StatCard } from "@/components/stat-card";
 import { ProductCard } from "@/components/product-card";
-import { CategoryBreakdown } from "@/components/category-breakdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/lib/use-debounce";
-import { ShoppingBag, TrendingUp, Search, Loader2, Flame, LayoutGrid } from "lucide-react";
+import { ShoppingBag, TrendingUp, Search, Loader2, ChevronDown } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
 import { cn } from "@/lib/utils";
 
-const SORTS = [
-  { key: 'today', label: 'Más vendidos hoy' },
-  { key: 'total', label: 'Histórico' },
-  { key: 'growth', label: 'Crecimiento' },
-] as const;
-
-const DAY_OPTIONS = [7, 14, 21, 30];
 const PAGE_SIZE = 40;
 
-type Tab = 'hot' | 'all';
+type ProductoFilter = 'todos' | 'hoy' | 'winners';
+
+const PRODUCTO_OPTIONS: { value: ProductoFilter; label: string }[] = [
+  { value: 'todos',   label: 'Todos' },
+  { value: 'hoy',     label: 'Más vendidos hoy' },
+  { value: 'winners', label: 'Winners' },
+];
+
+function filterToParams(f: ProductoFilter): { hot: boolean; sort: 'today' | 'total' | 'growth' } {
+  if (f === 'hoy')     return { hot: true,  sort: 'today' };
+  if (f === 'winners') return { hot: false, sort: 'total' };
+  return                      { hot: false, sort: 'today' };
+}
 
 export default function Dashboard() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>('hot');
-  const [sort, setSort] = useState<'today' | 'total' | 'growth'>('today');
-  const [search, setSearch] = useState('');
+  const [productoFilter, setProductoFilter] = useState<ProductoFilter>('todos');
+  const [provider, setProvider] = useState('');
   const [category, setCategory] = useState('');
-  const [days, setDays] = useState(14);
+  const [search, setSearch] = useState('');
   const [authed, setAuthed] = useState(false);
   const debouncedSearch = useDebounce(search, 400);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -47,6 +50,20 @@ export default function Dashboard() {
     refetchInterval: 60_000,
   });
 
+  const { data: categories } = useQuery({
+    queryKey: ['categories'],
+    queryFn: fetchCategories,
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: providers } = useQuery({
+    queryKey: ['providers'],
+    queryFn: fetchProviders,
+    staleTime: 5 * 60_000,
+  });
+
+  const { hot, sort } = filterToParams(productoFilter);
+
   const {
     data,
     isLoading: productsLoading,
@@ -54,16 +71,17 @@ export default function Dashboard() {
     fetchNextPage,
     hasNextPage,
   } = useInfiniteQuery({
-    queryKey: ['products-grid', tab, sort, debouncedSearch, category, days],
+    queryKey: ['products-grid', productoFilter, sort, debouncedSearch, category, provider],
     queryFn: ({ pageParam = 0 }) =>
       fetchProductsGrid({
         limit: PAGE_SIZE,
         sort,
-        days,
+        days: 14,
         search: debouncedSearch || undefined,
         category: category || undefined,
+        provider: provider || undefined,
         offset: pageParam as number,
-        hot: tab === 'hot',
+        hot,
       }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
@@ -74,7 +92,7 @@ export default function Dashboard() {
   });
 
   const products = data?.pages.flat() ?? [];
-  const hasFilter = !!(debouncedSearch || category);
+  const hasFilter = !!(debouncedSearch || category || provider);
 
   const onIntersect = useCallback((entries: IntersectionObserverEntry[]) => {
     if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
@@ -100,9 +118,9 @@ export default function Dashboard() {
       <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-8 space-y-8">
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {statsLoading ? (
-            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)
+            Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)
           ) : stats ? (
             <>
               <StatCard label="Ventas hoy" value={stats.totalSalesToday.toLocaleString()} trend={stats.growthPercent} icon={<ShoppingBag size={16} />} highlight color="fuchsia" />
@@ -112,89 +130,83 @@ export default function Dashboard() {
           ) : null}
         </div>
 
-        {/* Categories */}
-        <CategoryBreakdown selected={category} onSelect={setCategory} />
+        {/* Mini panel de filtros */}
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 space-y-4">
+          {/* Dropdowns */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Productos */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Productos</label>
+              <div className="relative">
+                <select
+                  value={productoFilter}
+                  onChange={e => setProductoFilter(e.target.value as ProductoFilter)}
+                  className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 pr-8 text-sm text-gray-800 font-medium focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 cursor-pointer transition-all"
+                >
+                  {PRODUCTO_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-2 border-b border-gray-200 pb-0">
-          <button
-            onClick={() => { setTab('hot'); setSort('today'); }}
-            className={cn(
-              "flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors",
-              tab === 'hot'
-                ? "border-indigo-600 text-indigo-600"
-                : "border-transparent text-gray-500 hover:text-gray-800"
-            )}
-          >
-            <Flame size={14} />
-            Más vendidos
-          </button>
-          <button
-            onClick={() => { setTab('all'); setSort('today'); }}
-            className={cn(
-              "flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors",
-              tab === 'all'
-                ? "border-indigo-600 text-indigo-600"
-                : "border-transparent text-gray-500 hover:text-gray-800"
-            )}
-          >
-            <LayoutGrid size={14} />
-            Todos los productos
-          </button>
-        </div>
+            {/* Proveedor */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Proveedor</label>
+              <div className="relative">
+                <select
+                  value={provider}
+                  onChange={e => setProvider(e.target.value)}
+                  className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 pr-8 text-sm text-gray-800 font-medium focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 cursor-pointer transition-all"
+                >
+                  <option value="">Todos los proveedores</option>
+                  {providers?.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
 
-        {/* Tab description */}
-        {tab === 'hot' && (
-          <p className="text-xs text-gray-400 -mt-4">
-            Productos con 7+ ventas diarias — los que realmente se mueven
-          </p>
-        )}
+            {/* Categoría */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Categoría</label>
+              <div className="relative">
+                <select
+                  value={category}
+                  onChange={e => setCategory(e.target.value)}
+                  className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 pr-8 text-sm text-gray-800 font-medium focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 cursor-pointer transition-all"
+                >
+                  <option value="">Todas las categorías</option>
+                  {categories?.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
+          </div>
 
-        {/* Filters */}
-        <div className="space-y-3 -mt-2">
+          {/* Búsqueda */}
           <div className="relative">
             <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input type="text" placeholder="Buscar producto, categoría, proveedor..." value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-9 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm" />
+              className="w-full pl-9 pr-9 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all" />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
             )}
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
-              {SORTS.map(s => (
-                <button key={s.key} onClick={() => setSort(s.key)}
-                  className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap",
-                    sort === s.key ? "bg-indigo-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-800")}>
-                  {s.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
-              {DAY_OPTIONS.map(d => (
-                <button key={d} onClick={() => setDays(d)}
-                  className={cn("px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                    days === d ? "bg-gray-900 text-white shadow-sm" : "text-gray-500 hover:text-gray-800")}>
-                  {d}d
-                </button>
-              ))}
-            </div>
-
-            {hasFilter && (
-              <button onClick={() => { setSearch(''); setCategory(''); }}
-                className="px-3 py-1.5 rounded-xl text-xs text-gray-500 hover:text-gray-800 border border-gray-200 bg-white shadow-sm">
-                Limpiar ×
+          {hasFilter && (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-400">{products.length} productos cargados</p>
+              <button onClick={() => { setSearch(''); setCategory(''); setProvider(''); }}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                Limpiar filtros ×
               </button>
-            )}
-          </div>
-
-          {!productsLoading && products.length > 0 && (
-            <p className="text-xs text-gray-400">
-              {products.length} productos cargados · últimos {days} días
-            </p>
+            </div>
           )}
         </div>
 
@@ -222,9 +234,9 @@ export default function Dashboard() {
           </>
         ) : (
           <div className="text-center py-24 space-y-3">
-            <p className="text-5xl">{tab === 'hot' ? '🔥' : '🔍'}</p>
+            <p className="text-5xl">{productoFilter === 'hoy' ? '🔥' : '🔍'}</p>
             <p className="text-gray-400 text-sm">
-              {tab === 'hot'
+              {productoFilter === 'hoy'
                 ? 'No hay productos con suficientes ventas aún — el scraper sigue recopilando datos'
                 : hasFilter ? 'Sin resultados para estos filtros' : 'El scraper está cargando productos...'
               }
