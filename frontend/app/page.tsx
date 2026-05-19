@@ -10,7 +10,7 @@ import { ProductCard } from "@/components/product-card";
 import { CategoryBreakdown } from "@/components/category-breakdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/lib/use-debounce";
-import { ShoppingBag, TrendingUp, Package, Search, Loader2, Flame, LayoutGrid } from "lucide-react";
+import { ShoppingBag, TrendingUp, Search, Loader2, Flame, LayoutGrid } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -108,7 +108,6 @@ export default function Dashboard() {
               <StatCard label="Ventas hoy" value={stats.totalSalesToday.toLocaleString()} trend={stats.growthPercent} icon={<ShoppingBag size={16} />} highlight color="fuchsia" />
               <StatCard label="Ventas ayer" value={stats.totalSalesYesterday.toLocaleString()} icon={<TrendingUp size={16} />} color="violet" />
               <StatCard label="Crecimiento" value={`${stats.growthPercent > 0 ? '+' : ''}${stats.growthPercent}%`} sub="vs ayer" highlight={stats.growthPercent > 0} color="emerald" />
-              <StatCard label="Productos activos" value={stats.activeProducts.toLocaleString()} icon={<Package size={16} />} highlight color="amber" />
             </>
           ) : null}
         </div>
