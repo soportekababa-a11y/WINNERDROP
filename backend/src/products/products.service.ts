@@ -108,7 +108,7 @@ export class ProductsService {
 
   async getProductsWithDailyGrid(
     limit = 40,
-    sortBy: 'today' | 'total' | 'growth' = 'today',
+    sortBy: 'today' | 'total' | 'growth' | 'winners' = 'today',
     days = 14,
     category?: string,
     search?: string,
@@ -122,8 +122,30 @@ export class ProductsService {
     if (provider) qb.andWhere('p.provider = :provider', { provider });
     if (search) qb.andWhere('LOWER(p.name) LIKE LOWER(:q) OR LOWER(p.category) LIKE LOWER(:q) OR LOWER(p.provider) LIKE LOWER(:q)', { q: `%${search}%` });
 
-    if (hot) {
-      // Filter using actual snapshot deltas — never relies on stale cached fields
+    if (sortBy === 'winners') {
+      // Winners: products with actual sales on 2+ different days in last 7 days
+      qb.innerJoin(
+        `(
+          SELECT daily."productId" as pid,
+            SUM(CASE WHEN daily.day_sales > 0 THEN 1 ELSE 0 END) as days_active,
+            SUM(daily.day_sales) as total_week
+          FROM (
+            SELECT s."productId",
+              DATE(s."capturedAt" AT TIME ZONE 'America/Santo_Domingo') as day,
+              MAX(s."salesAccum") - MIN(s."salesAccum") as day_sales
+            FROM snapshots s
+            WHERE s."capturedAt" >= NOW() - INTERVAL '7 days'
+            GROUP BY s."productId", DATE(s."capturedAt" AT TIME ZONE 'America/Santo_Domingo')
+          ) daily
+          GROUP BY daily."productId"
+          HAVING SUM(CASE WHEN daily.day_sales > 0 THEN 1 ELSE 0 END) >= 2
+        )`,
+        'w',
+        'w.pid::uuid = p.id',
+      )
+      .orderBy('w.days_active', 'DESC')
+      .addOrderBy('w.total_week', 'DESC');
+    } else if (hot) {
       qb.andWhere(
         `EXISTS (
           SELECT 1 FROM (
@@ -135,9 +157,8 @@ export class ProductsService {
           ) sub WHERE sub.daily_sales >= 7
         )`,
       );
-    }
-
-    if (sortBy === 'growth') {
+      qb.orderBy('p.salesToday', 'DESC');
+    } else if (sortBy === 'growth') {
       qb.orderBy('CASE WHEN p.salesYesterday > 0 THEN (p.salesToday - p.salesYesterday)::float / p.salesYesterday ELSE p.salesToday END', 'DESC');
     } else if (sortBy === 'total') {
       qb.orderBy('p.totalSalesAccum', 'DESC');

@@ -88,7 +88,7 @@ export interface ProductWithGrid extends Product {
   dailyGrid: { date: string; sales: number }[];
 }
 
-export const fetchProductsGrid = (params?: { limit?: number; sort?: string; days?: number; search?: string; category?: string; provider?: string; offset?: number; hot?: boolean }) =>
+export const fetchProductsGrid = (params?: { limit?: number; sort?: 'today' | 'total' | 'growth' | 'winners'; days?: number; search?: string; category?: string; provider?: string; offset?: number; hot?: boolean }) =>
   api.get<ProductWithGrid[]>('/products/grid', { params }).then(r => r.data);
 
 export const fetchDashboard = () => api.get<DashboardStats>('/products/dashboard').then(r => r.data);

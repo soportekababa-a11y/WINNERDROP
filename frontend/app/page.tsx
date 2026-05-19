@@ -22,10 +22,10 @@ const PRODUCTO_OPTIONS: { value: ProductoFilter; label: string }[] = [
   { value: 'winners', label: 'Winners' },
 ];
 
-function filterToParams(f: ProductoFilter): { hot: boolean; sort: 'today' | 'total' | 'growth'; limit: number } {
-  if (f === 'hoy')     return { hot: false, sort: 'today', limit: 20 };
-  if (f === 'winners') return { hot: false, sort: 'total', limit: PAGE_SIZE };
-  return                      { hot: false, sort: 'today', limit: PAGE_SIZE };
+function filterToParams(f: ProductoFilter): { hot: boolean; sort: 'today' | 'total' | 'growth' | 'winners'; limit: number } {
+  if (f === 'hoy')     return { hot: false, sort: 'today',   limit: 5 };
+  if (f === 'winners') return { hot: false, sort: 'winners', limit: PAGE_SIZE };
+  return                      { hot: false, sort: 'today',   limit: PAGE_SIZE };
 }
 
 export default function Dashboard() {
@@ -218,10 +218,14 @@ export default function Dashboard() {
           </>
         ) : (
           <div className="text-center py-24 space-y-3">
-            <p className="text-5xl">{productoFilter === 'hoy' ? '🔥' : '🔍'}</p>
+            <p className="text-5xl">
+              {productoFilter === 'hoy' ? '🔥' : productoFilter === 'winners' ? '🏆' : '📦'}
+            </p>
             <p className="text-gray-400 text-sm">
               {productoFilter === 'hoy'
-                ? 'No hay productos con suficientes ventas aún — el scraper sigue recopilando datos'
+                ? 'Sin ventas registradas hoy aún — el scraper actualiza cada hora'
+                : productoFilter === 'winners'
+                ? 'Aún no hay winners — se necesitan 2+ días de datos para detectar productos con movimiento constante'
                 : hasFilter ? 'Sin resultados para estos filtros' : 'El scraper está cargando productos...'
               }
             </p>

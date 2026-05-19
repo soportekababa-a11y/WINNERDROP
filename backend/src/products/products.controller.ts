@@ -45,7 +45,7 @@ export class ProductsController {
   ) {
     return this.productsService.getProductsWithDailyGrid(
       limit ? parseInt(limit) : 40,
-      (sort as any) ?? 'today',
+      (sort as 'today' | 'total' | 'growth' | 'winners') ?? 'today',
       days ? parseInt(days) : 14,
       category,
       search,
