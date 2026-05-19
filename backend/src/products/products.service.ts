@@ -188,7 +188,7 @@ export class ProductsService {
     // 3. Build map productId -> dateStr -> sales
     const histMap = new Map<string, Map<string, number>>();
     for (const r of rows) {
-      const dateKey = typeof r.day === 'string' ? r.day.slice(0, 10) : new Date(r.day).toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' });
+      const dateKey = typeof r.day === 'string' ? r.day.slice(0, 10) : new Date(r.day).toISOString().slice(0, 10);
       if (!histMap.has(r.productId)) histMap.set(r.productId, new Map());
       histMap.get(r.productId)!.set(dateKey, Math.max(0, parseInt(r.sales) || 0));
     }
