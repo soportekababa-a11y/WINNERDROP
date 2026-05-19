@@ -9,7 +9,7 @@ import { ProductsService } from '../products/products.service';
 
 const EFFI_LOGIN_URL = 'https://effi.com.co/ingreso';
 const EFFI_CATALOG_URL = 'https://effi.com.co/app/articulo_dropshipping';
-const SCRAPE_INTERVAL_MS = 20 * 60 * 1000; // 20 minutos
+const SCRAPE_INTERVAL_MS = 60 * 60 * 1000; // 60 minutos
 const PRODUCTS_PER_PAGE = 40;
 
 @Injectable()
