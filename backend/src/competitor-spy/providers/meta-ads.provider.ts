@@ -132,59 +132,94 @@ export class MetaAdsProvider {
     return { advertiserName: name, pageUrl, format, platforms, startDateRaw, daysActive, adCopy };
   }
 
-  private async scrapeHtml(page: any, keyword: string): Promise<RawAd[]> {
+  private async scrapeHtml(page: any, _keyword: string): Promise<RawAd[]> {
     return page.evaluate(() => {
+      const bodyText = document.body.innerText;
+
+      // Split body into individual ad sections by "Active\nLibrary ID:" pattern
+      const rawSections = bodyText.split(/(?=\nActive\nLibrary ID:|\nActive\r?\nLibrary ID:)/);
+
       const ads: any[] = [];
 
-      // Find all advertiser links (Facebook page links in the ads library)
+      for (const section of rawSections) {
+        if (!section.includes('Library ID:') || !section.includes('Started running')) continue;
+
+        // Date
+        const dateMatch = section.match(/Started running on (.+?)(?:\r?\n|$)/);
+        if (!dateMatch) continue;
+        const dateStr = dateMatch[1].trim();
+
+        // Advertiser name: line immediately before "Sponsored"
+        const sponsoredIdx = section.search(/\r?\nSponsored\r?\n/);
+        if (sponsoredIdx === -1) continue;
+        const beforeSponsored = section.slice(0, sponsoredIdx);
+        const lines = beforeSponsored.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+        const advertiserName = lines[lines.length - 1] ?? '';
+        if (!advertiserName || advertiserName.length > 100 || advertiserName.includes('Library ID')) continue;
+
+        // Ad copy: text after "Sponsored\n", skip domain/URL lines
+        const afterMatch = section.match(/\r?\nSponsored\r?\n([\s\S]*)/);
+        const adCopyRaw = afterMatch ? afterMatch[1] : '';
+        const adCopy = adCopyRaw
+          .split(/\r?\n/)
+          .map(l => l.trim())
+          .filter(l =>
+            l.length > 0 &&
+            l.length < 300 &&
+            !/\.(com|do|net|org|io)\b/i.test(l) &&
+            !/^https?:\/\//i.test(l) &&
+            !/^shop now$/i.test(l) &&
+            !/^get offer$/i.test(l) &&
+            !/^see more$/i.test(l)
+          )
+          .slice(0, 10)
+          .join(' ')
+          .trim()
+          .slice(0, 600);
+
+        // Video detection: timestamp pattern "0:00 / 0:46"
+        const hasVideo = /\d+:\d+\s*\/\s*\d+:\d+/.test(section);
+
+        // Days active
+        let daysActive = 0;
+        const parsed = new Date(dateStr);
+        if (!isNaN(parsed.getTime())) {
+          daysActive = Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 86400000));
+        }
+
+        ads.push({ advertiserName, pageUrl: null, format: hasVideo ? 'video' : 'image', platforms: ['facebook'], startDateRaw: dateStr, daysActive, adCopy });
+      }
+
+      // Match FB page links to ads
       const pageLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="facebook.com/"]'))
         .filter(a => {
-          const href = a.href || '';
+          const href = a.href ?? '';
+          const text = a.textContent?.trim() ?? '';
           return href.includes('facebook.com/') &&
+            !href.includes('l.facebook.com') &&
             !href.includes('/ads/library') &&
-            !href.includes('facebook.com/help') &&
-            !href.includes('facebook.com/policies') &&
-            a.textContent && a.textContent.trim().length > 1;
+            !href.includes('/help') &&
+            !href.includes('/policies') &&
+            text.length > 0 &&
+            text.length < 70 &&
+            !/\.(com|do|net|org)\b/i.test(text) &&
+            !/^https?:\/\//i.test(text);
         });
 
-      // Try to find ad card containers
-      const allText = document.body.innerText;
+      const seenHrefs = new Set<string>();
+      const uniqueLinks = pageLinks.filter(a => {
+        if (seenHrefs.has(a.href)) return false;
+        seenHrefs.add(a.href);
+        return true;
+      }).map(a => ({ text: a.textContent?.trim() ?? '', href: a.href }));
 
-      // Extract "Started running on" dates
-      const dateMatches = allText.match(/(?:Started running on|Empezó a publicarse el|Active since)\s+[\w\s,]+\d{4}/gi) ?? [];
-      const dates = dateMatches.map(d => d.replace(/(?:Started running on|Empezó a publicarse el|Active since)\s*/i, '').trim());
-
-      // Count videos vs images
-      const videoCount = document.querySelectorAll('video').length;
-      const imgCount = document.querySelectorAll('[role="img"], img:not([src*="static"])').length;
-
-      // Extract visible text blocks (likely ad copy)
-      const textBlocks = Array.from(document.querySelectorAll('div[dir="auto"]'))
-        .map(el => el.textContent?.trim() ?? '')
-        .filter(t => t.length > 20 && t.length < 600 && /[a-záéíóúñ]/i.test(t))
-        .slice(0, 50);
-
-      // Create ads by pairing page links with dates
-      const uniqueAdvertisers = [...new Map(pageLinks.map(a => [a.textContent?.trim(), a])).entries()];
-
-      uniqueAdvertisers.slice(0, 30).forEach(([name, link], i) => {
-        const dateStr = dates[i] ?? null;
-        let daysActive = 0;
-        if (dateStr) {
-          const parsed = new Date(dateStr);
-          if (!isNaN(parsed.getTime())) {
-            daysActive = Math.floor((Date.now() - parsed.getTime()) / 86400000);
-          }
-        }
-        ads.push({
-          advertiserName: name ?? 'Unknown',
-          pageUrl: link.href,
-          format: i < videoCount ? 'video' : 'image',
-          platforms: ['facebook'],
-          startDateRaw: dateStr,
-          daysActive: Math.max(0, daysActive),
-          adCopy: textBlocks[i] ?? '',
-        });
+      // Match by name first, then by order
+      for (const ad of ads) {
+        const match = uniqueLinks.find(l => l.text.toLowerCase() === ad.advertiserName.toLowerCase());
+        if (match) ad.pageUrl = match.href;
+      }
+      ads.forEach((ad, i) => {
+        if (!ad.pageUrl && uniqueLinks[i]) ad.pageUrl = uniqueLinks[i].href;
       });
 
       return ads;
