@@ -134,6 +134,20 @@ export class ScraperService implements OnModuleDestroy {
         await this.upsertProductAndSnapshot(raw);
       }
 
+      // Desactivar productos que ya no están en el catálogo de Effi
+      if (products.length > 100) {
+        const scrapedIds = products.map(p => p.effiId);
+        const deactivated = await this.productRepo
+          .createQueryBuilder()
+          .update()
+          .set({ isActive: false })
+          .where('effiId NOT IN (:...ids) AND isActive = true', { ids: scrapedIds })
+          .execute();
+        if (deactivated.affected && deactivated.affected > 0) {
+          this.logger.log(`Productos desactivados (quitados de Effi): ${deactivated.affected}`);
+        }
+      }
+
       // Actualizar caché de ventas diarias
       await this.productsService.refreshDailyCache();
 
