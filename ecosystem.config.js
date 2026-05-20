@@ -20,8 +20,8 @@ module.exports = {
       out_file: 'C:\\Users\\dioni\\winnerdrop\\backend\\pm2-out.log',
       error_file: 'C:\\Users\\dioni\\winnerdrop\\backend\\pm2-err.log',
       autorestart: true,
-      restart_delay: 3000,
-      max_restarts: 10,
+      restart_delay: 5000,
+      max_restarts: 999,
     },
     {
       name: 'winnerdrop-frontend',
@@ -37,8 +37,8 @@ module.exports = {
       out_file: 'C:\\Users\\dioni\\winnerdrop\\frontend\\pm2-out.log',
       error_file: 'C:\\Users\\dioni\\winnerdrop\\frontend\\pm2-err.log',
       autorestart: true,
-      restart_delay: 3000,
-      max_restarts: 10,
+      restart_delay: 5000,
+      max_restarts: 999,
     },
   ],
 };

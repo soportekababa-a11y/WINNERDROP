@@ -12,6 +12,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { use } from "react";
+import { CompetitorSpyPanel } from "@/components/competitor-spy/CompetitorSpyPanel";
 
 function shortLabel(dateStr: string, index: number, total: number) {
   const i = total - 1 - index;
@@ -249,6 +250,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                 <p className="text-gray-400 text-sm text-center py-10">Sin historial aún — vuelve después del primer ciclo</p>
               )}
             </div>
+            {/* Competitor Spy */}
+            <CompetitorSpyPanel productId={id} productName={product?.name ?? ''} />
           </>
         ) : (
           <div className="text-center py-24">

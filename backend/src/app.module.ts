@@ -9,6 +9,7 @@ import { ScraperModule } from './scraper/scraper.module';
 import { ScraperService } from './scraper/scraper.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { CompetitorSpyModule } from './competitor-spy/competitor-spy.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { UsersModule } from './users/users.module';
     ScraperModule,
     AuthModule,
     UsersModule,
+    CompetitorSpyModule,
   ],
 })
 export class AppModule implements OnModuleInit {

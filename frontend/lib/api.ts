@@ -106,3 +106,32 @@ export const fetchProductHistory = (id: string, days = 30) =>
   api.get<DailyHistory[]>(`/products/${id}/daily`, { params: { days } }).then(r => r.data);
 
 export const fetchScraperStats = () => api.get<ScraperStats>('/scraper/stats').then(r => r.data);
+
+export interface SpyResult {
+  productName: string;
+  market: string;
+  marketFlag: string;
+  platform: string;
+  scrapedAt: string;
+  searchQueries: string[];
+  totalAdsFound: number;
+  competitors: {
+    name: string;
+    pageUrl: string | null;
+    totalAds: number;
+    maxDaysActive: number;
+    dominantFormat: string;
+    platforms: string[];
+  }[];
+  saturation: { level: string; score: number; emoji: string; label: string };
+  dominantCompetitor: ({ name: string; pageUrl: string | null; maxDaysActive: number; dominantFormat: string; insight: string }) | null;
+  formatWinner: { format: string; videoCount: number; imageCount: number; percentage: number; label: string; emoji: string };
+  dominantCreativeType: { type: string; label: string; emoji: string; percentage: number };
+  creativeFatigue: { level: string; label: string; emoji: string };
+  opportunityScore: number;
+  opportunityEmoji: string;
+  opportunityLabel: string;
+}
+
+export const fetchCompetitorSpy = (productId: string, market = 'RD', platform = 'META_ADS') =>
+  api.get<SpyResult>(`/competitor-spy/${productId}`, { params: { market, platform }, timeout: 90000 }).then(r => r.data);
