@@ -123,28 +123,79 @@ export class ProductsService {
     if (search) qb.andWhere('LOWER(p.name) LIKE LOWER(:q) OR LOWER(p.category) LIKE LOWER(:q) OR LOWER(p.provider) LIKE LOWER(:q)', { q: `%${search}%` });
 
     if (sortBy === 'winners') {
-      // Winners: products with actual sales on 2+ different days in last 7 days
-      qb.innerJoin(
-        `(
-          SELECT daily."productId" as pid,
-            SUM(CASE WHEN daily.day_sales > 0 THEN 1 ELSE 0 END) as days_active,
-            SUM(daily.day_sales) as total_week
-          FROM (
-            SELECT s."productId",
-              DATE(s."capturedAt" - INTERVAL '4 hours') as day,
-              MAX(s."salesAccum") - MIN(s."salesAccum") as day_sales
-            FROM snapshots s
-            WHERE s."capturedAt" >= NOW() - INTERVAL '7 days'
-            GROUP BY s."productId", DATE(s."capturedAt" - INTERVAL '4 hours')
-          ) daily
-          GROUP BY daily."productId"
-          HAVING SUM(CASE WHEN daily.day_sales > 0 THEN 1 ELSE 0 END) >= 2
-        )`,
-        'w',
-        'w.pid::uuid = p.id',
-      )
-      .orderBy('w.days_active', 'DESC')
-      .addOrderBy('w.total_week', 'DESC');
+      // Two-step to avoid TypeORM alias resolution error on raw subquery ORDER BY
+      const params: unknown[] = [];
+      const conds = ['p."isActive" = true'];
+      if (category) { params.push(category); conds.push(`p.category = $${params.length}`); }
+      if (provider) { params.push(provider); conds.push(`p.provider = $${params.length}`); }
+      if (search) {
+        params.push(`%${search}%`);
+        const n = params.length;
+        conds.push(`(LOWER(p.name) LIKE LOWER($${n}) OR LOWER(p.category) LIKE LOWER($${n}) OR LOWER(p.provider) LIKE LOWER($${n}))`);
+      }
+      params.push(limit, offset);
+      const lp = params.length;
+      const winnerRows: { id: string }[] = await this.productRepo.manager.query(
+        `SELECT p.id FROM products p
+         INNER JOIN (
+           SELECT daily."productId" AS pid,
+             SUM(CASE WHEN daily.day_sales > 0 THEN 1 ELSE 0 END) AS days_active,
+             SUM(daily.day_sales) AS total_week
+           FROM (
+             SELECT s."productId",
+               DATE(s."capturedAt" - INTERVAL '4 hours') AS day,
+               MAX(s."salesAccum") - MIN(s."salesAccum") AS day_sales
+             FROM snapshots s
+             WHERE s."capturedAt" >= NOW() - INTERVAL '7 days'
+             GROUP BY s."productId", DATE(s."capturedAt" - INTERVAL '4 hours')
+           ) daily
+           GROUP BY daily."productId"
+           HAVING SUM(CASE WHEN daily.day_sales > 0 THEN 1 ELSE 0 END) >= 2
+         ) w ON w.pid = p.id
+         WHERE ${conds.join(' AND ')}
+         ORDER BY w.days_active DESC, w.total_week DESC
+         LIMIT $${lp - 1} OFFSET $${lp}`,
+        params,
+      );
+      if (!winnerRows.length) return [];
+      const winnerIds = winnerRows.map(r => r.id);
+      const fetched = await this.productRepo
+        .createQueryBuilder('p')
+        .where('p.id IN (:...ids)', { ids: winnerIds })
+        .getMany();
+      const order = new Map(winnerIds.map((id, i) => [id, i]));
+      const products = fetched.sort((a, b) => (order.get(a.id) ?? 999) - (order.get(b.id) ?? 999));
+
+      // Steps 2-4 inline for winners path
+      const from = new Date();
+      from.setDate(from.getDate() - days);
+      from.setHours(0, 0, 0, 0);
+      const histRows = await this.snapshotRepo
+        .createQueryBuilder('s')
+        .select('s.productId', 'productId')
+        .addSelect("DATE(s.capturedAt - INTERVAL '4 hours')", 'day')
+        .addSelect('MAX(s.salesAccum) - MIN(s.salesAccum)', 'sales')
+        .where('s.productId IN (:...ids)', { ids: winnerIds })
+        .andWhere('s.capturedAt >= :from', { from })
+        .groupBy("s.productId, DATE(s.capturedAt - INTERVAL '4 hours')")
+        .orderBy('day', 'ASC')
+        .getRawMany();
+      const histMap = new Map<string, Map<string, number>>();
+      for (const r of histRows) {
+        const dateKey = typeof r.day === 'string' ? r.day.slice(0, 10) : new Date(r.day).toISOString().slice(0, 10);
+        if (!histMap.has(r.productId)) histMap.set(r.productId, new Map());
+        histMap.get(r.productId)!.set(dateKey, Math.max(0, parseInt(r.sales) || 0));
+      }
+      const fullRange: string[] = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        fullRange.push(d.toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' }));
+      }
+      return products.map(p => {
+        const dayMap = histMap.get(p.id) ?? new Map<string, number>();
+        return { ...p, dailyGrid: fullRange.map(date => ({ date, sales: dayMap.get(date) ?? 0 })) };
+      });
     } else if (hot) {
       qb.andWhere(
         `EXISTS (
