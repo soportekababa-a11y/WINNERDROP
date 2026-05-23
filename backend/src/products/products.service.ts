@@ -4,6 +4,21 @@ import { Repository } from 'typeorm';
 import { Product } from './product.entity';
 import { Snapshot } from '../snapshots/snapshot.entity';
 
+const COUNTRY_TZ: Record<string, { tz: string; utcOffset: number }> = {
+  RD: { tz: 'America/Santo_Domingo', utcOffset: 4 },
+  GT: { tz: 'America/Guatemala',     utcOffset: 6 },
+};
+
+function getTzCfg(country?: string) {
+  return COUNTRY_TZ[country ?? 'RD'] ?? COUNTRY_TZ.RD;
+}
+
+function todayStartUTC(country?: string): Date {
+  const { tz, utcOffset } = getTzCfg(country);
+  const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+  return new Date(`${dateStr}T${String(utcOffset).padStart(2, '0')}:00:00.000Z`);
+}
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -11,12 +26,13 @@ export class ProductsService {
     @InjectRepository(Snapshot) private snapshotRepo: Repository<Snapshot>,
   ) {}
 
-  async getTopProducts(limit = 50, sortBy: 'today' | 'total' | 'growth' = 'today', category?: string) {
+  async getTopProducts(limit = 50, sortBy: 'today' | 'total' | 'growth' = 'today', category?: string, country?: string) {
     const qb = this.productRepo
       .createQueryBuilder('p')
       .where('p.isActive = true');
 
     if (category) qb.andWhere('p.category = :category', { category });
+    if (country) qb.andWhere('p.country = :country', { country });
 
     if (sortBy === 'growth') {
       qb.orderBy('CASE WHEN p.salesYesterday > 0 THEN (p.salesToday - p.salesYesterday)::float / p.salesYesterday ELSE p.salesToday END', 'DESC');
@@ -29,20 +45,23 @@ export class ProductsService {
     return qb.take(limit).getMany();
   }
 
-  async getDashboardStats() {
-    const result = await this.productRepo
+  async getDashboardStats(country?: string) {
+    const qb = this.productRepo
       .createQueryBuilder('p')
       .select('SUM(p.salesToday)', 'totalToday')
       .addSelect('SUM(p.salesYesterday)', 'totalYesterday')
       .addSelect('COUNT(*)', 'activeProducts')
-      .where('p.isActive = true')
-      .getRawOne();
+      .where('p.isActive = true');
+
+    if (country) qb.andWhere('p.country = :country', { country });
+
+    const result = await qb.getRawOne();
 
     const today = parseInt(result.totalToday) || 0;
     const yesterday = parseInt(result.totalYesterday) || 0;
     const growth = yesterday > 0 ? Math.round(((today - yesterday) / yesterday) * 100 * 10) / 10 : 0;
 
-    const topProducts = await this.getTopProducts(10, 'today');
+    const topProducts = await this.getTopProducts(10, 'today', undefined, country);
 
     return { totalSalesToday: today, totalSalesYesterday: yesterday, growthPercent: growth, activeProducts: parseInt(result.activeProducts), topProducts };
   }
@@ -51,25 +70,25 @@ export class ProductsService {
     return this.productRepo.findOne({ where: { id } });
   }
 
-  // Ventas por día para un producto (historial)
   async getProductDailyHistory(id: string, days = 30) {
+    const product = await this.productRepo.findOne({ where: { id }, select: ['id', 'country'] });
+    const { tz, utcOffset } = getTzCfg(product?.country);
+
     const from = new Date();
     from.setDate(from.getDate() - days);
     from.setHours(0, 0, 0, 0);
 
-    // Para cada día: ventas = MAX(salesAccum) del día - MIN(salesAccum) del día
     const rows = await this.snapshotRepo
       .createQueryBuilder('s')
-      .select("DATE(s.capturedAt - INTERVAL '4 hours')", 'day')
+      .select(`DATE(s."capturedAt" - INTERVAL '${utcOffset} hours')`, 'day')
       .addSelect('MAX(s.salesAccum)', 'maxAccum')
       .addSelect('MIN(s.salesAccum)', 'minAccum')
       .where('s.productId = :id', { id })
       .andWhere('s.capturedAt >= :from', { from })
-      .groupBy("DATE(s.capturedAt - INTERVAL '4 hours')")
+      .groupBy(`DATE(s."capturedAt" - INTERVAL '${utcOffset} hours')`)
       .orderBy('day', 'ASC')
       .getRawMany();
 
-    // Build a full date range so days with 0 sales are included
     const salesMap = new Map<string, number>();
     for (const r of rows) {
       const key = typeof r.day === 'string' ? r.day.slice(0, 10) : new Date(r.day).toISOString().slice(0, 10);
@@ -80,16 +99,15 @@ export class ProductsService {
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' });
+      const dateStr = d.toLocaleDateString('en-CA', { timeZone: tz });
       result.push({ date: dateStr, sales: salesMap.get(dateStr) ?? 0 });
     }
     return result;
   }
 
-  // Ventas de hoy en tiempo real para un producto
   async getProductTodaySales(id: string) {
-    const rdDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' });
-    const startOfDay = new Date(rdDateStr + 'T04:00:00.000Z');
+    const product = await this.productRepo.findOne({ where: { id }, select: ['id', 'country'] });
+    const startOfDay = todayStartUTC(product?.country);
 
     const rows = await this.snapshotRepo
       .createQueryBuilder('s')
@@ -115,19 +133,23 @@ export class ProductsService {
     offset = 0,
     hot = false,
     provider?: string,
+    country?: string,
   ) {
-    // 1. Get products
+    const { tz, utcOffset } = getTzCfg(country);
+    const intervalExpr = `'${utcOffset} hours'`;
+
     const qb = this.productRepo.createQueryBuilder('p').where('p.isActive = true');
     if (category) qb.andWhere('p.category = :category', { category });
     if (provider) qb.andWhere('p.provider = :provider', { provider });
+    if (country) qb.andWhere('p.country = :country', { country });
     if (search) qb.andWhere('LOWER(p.name) LIKE LOWER(:q) OR LOWER(p.category) LIKE LOWER(:q) OR LOWER(p.provider) LIKE LOWER(:q)', { q: `%${search}%` });
 
     if (sortBy === 'winners') {
-      // Two-step to avoid TypeORM alias resolution error on raw subquery ORDER BY
       const params: unknown[] = [];
       const conds = ['p."isActive" = true'];
       if (category) { params.push(category); conds.push(`p.category = $${params.length}`); }
       if (provider) { params.push(provider); conds.push(`p.provider = $${params.length}`); }
+      if (country)  { params.push(country);  conds.push(`p.country = $${params.length}`); }
       if (search) {
         params.push(`%${search}%`);
         const n = params.length;
@@ -143,11 +165,11 @@ export class ProductsService {
              SUM(daily.day_sales) AS total_week
            FROM (
              SELECT s."productId",
-               DATE(s."capturedAt" - INTERVAL '4 hours') AS day,
+               DATE(s."capturedAt" - INTERVAL ${intervalExpr}) AS day,
                MAX(s."salesAccum") - MIN(s."salesAccum") AS day_sales
              FROM snapshots s
              WHERE s."capturedAt" >= NOW() - INTERVAL '7 days'
-             GROUP BY s."productId", DATE(s."capturedAt" - INTERVAL '4 hours')
+             GROUP BY s."productId", DATE(s."capturedAt" - INTERVAL ${intervalExpr})
            ) daily
            GROUP BY daily."productId"
            HAVING SUM(CASE WHEN daily.day_sales > 0 THEN 1 ELSE 0 END) >= 2
@@ -166,18 +188,17 @@ export class ProductsService {
       const order = new Map(winnerIds.map((id, i) => [id, i]));
       const products = fetched.sort((a, b) => (order.get(a.id) ?? 999) - (order.get(b.id) ?? 999));
 
-      // Steps 2-4 inline for winners path
       const from = new Date();
       from.setDate(from.getDate() - days);
       from.setHours(0, 0, 0, 0);
       const histRows = await this.snapshotRepo
         .createQueryBuilder('s')
         .select('s.productId', 'productId')
-        .addSelect("DATE(s.capturedAt - INTERVAL '4 hours')", 'day')
+        .addSelect(`DATE(s."capturedAt" - INTERVAL ${intervalExpr})`, 'day')
         .addSelect('MAX(s.salesAccum) - MIN(s.salesAccum)', 'sales')
         .where('s.productId IN (:...ids)', { ids: winnerIds })
         .andWhere('s.capturedAt >= :from', { from })
-        .groupBy("s.productId, DATE(s.capturedAt - INTERVAL '4 hours')")
+        .groupBy(`s.productId, DATE(s."capturedAt" - INTERVAL ${intervalExpr})`)
         .orderBy('day', 'ASC')
         .getRawMany();
       const histMap = new Map<string, Map<string, number>>();
@@ -190,7 +211,7 @@ export class ProductsService {
       for (let i = days - 1; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        fullRange.push(d.toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' }));
+        fullRange.push(d.toLocaleDateString('en-CA', { timeZone: tz }));
       }
       return products.map(p => {
         const dayMap = histMap.get(p.id) ?? new Map<string, number>();
@@ -204,7 +225,7 @@ export class ProductsService {
             FROM snapshots s
             WHERE s."productId" = p.id
               AND s."capturedAt" >= NOW() - INTERVAL '2 days'
-            GROUP BY DATE(s."capturedAt" - INTERVAL '4 hours')
+            GROUP BY DATE(s."capturedAt" - INTERVAL ${intervalExpr})
           ) sub WHERE sub.daily_sales >= 7
         )`,
       );
@@ -219,7 +240,6 @@ export class ProductsService {
     const products = await qb.skip(offset).take(limit).getMany();
     if (!products.length) return [];
 
-    // 2. Bulk daily history for all products in one query
     const from = new Date();
     from.setDate(from.getDate() - days);
     from.setHours(0, 0, 0, 0);
@@ -228,15 +248,14 @@ export class ProductsService {
     const rows = await this.snapshotRepo
       .createQueryBuilder('s')
       .select('s.productId', 'productId')
-      .addSelect("DATE(s.capturedAt - INTERVAL '4 hours')", 'day')
+      .addSelect(`DATE(s."capturedAt" - INTERVAL ${intervalExpr})`, 'day')
       .addSelect('MAX(s.salesAccum) - MIN(s.salesAccum)', 'sales')
       .where('s.productId IN (:...ids)', { ids })
       .andWhere('s.capturedAt >= :from', { from })
-      .groupBy("s.productId, DATE(s.capturedAt - INTERVAL '4 hours')")
+      .groupBy(`s.productId, DATE(s."capturedAt" - INTERVAL ${intervalExpr})`)
       .orderBy('day', 'ASC')
       .getRawMany();
 
-    // 3. Build map productId -> dateStr -> sales
     const histMap = new Map<string, Map<string, number>>();
     for (const r of rows) {
       const dateKey = typeof r.day === 'string' ? r.day.slice(0, 10) : new Date(r.day).toISOString().slice(0, 10);
@@ -244,12 +263,11 @@ export class ProductsService {
       histMap.get(r.productId)!.set(dateKey, Math.max(0, parseInt(r.sales) || 0));
     }
 
-    // 4. Full date range in RD timezone so grid[last] is always today
     const fullRange: string[] = [];
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      fullRange.push(d.toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' }));
+      fullRange.push(d.toLocaleDateString('en-CA', { timeZone: tz }));
     }
 
     return products.map(p => {
@@ -261,58 +279,60 @@ export class ProductsService {
     });
   }
 
-  async getCategories(): Promise<string[]> {
-    const rows = await this.productRepo
+  async getCategories(country?: string): Promise<string[]> {
+    const qb = this.productRepo
       .createQueryBuilder('p')
       .select('DISTINCT p.category', 'category')
-      .where('p.isActive = true AND p.category IS NOT NULL AND p.category != :empty', { empty: '' })
-      .orderBy('p.category', 'ASC')
-      .getRawMany();
+      .where('p.isActive = true AND p.category IS NOT NULL AND p.category != :empty', { empty: '' });
+    if (country) qb.andWhere('p.country = :country', { country });
+    const rows = await qb.orderBy('p.category', 'ASC').getRawMany();
     return rows.map(r => r.category).filter(Boolean);
   }
 
-  async getProviders(): Promise<string[]> {
-    const rows = await this.productRepo
+  async getProviders(country?: string): Promise<string[]> {
+    const qb = this.productRepo
       .createQueryBuilder('p')
       .select('DISTINCT p.provider', 'provider')
-      .where('p.isActive = true AND p.provider IS NOT NULL AND p.provider != :empty', { empty: '' })
-      .orderBy('p.provider', 'ASC')
-      .getRawMany();
+      .where('p.isActive = true AND p.provider IS NOT NULL AND p.provider != :empty', { empty: '' });
+    if (country) qb.andWhere('p.country = :country', { country });
+    const rows = await qb.orderBy('p.provider', 'ASC').getRawMany();
     return rows.map(r => r.provider).filter(Boolean);
   }
 
-  async searchProducts(query: string, limit = 30) {
-    return this.productRepo
+  async searchProducts(query: string, limit = 30, country?: string) {
+    const qb = this.productRepo
       .createQueryBuilder('p')
       .where('LOWER(p.name) LIKE LOWER(:q)', { q: `%${query}%` })
       .orWhere('LOWER(p.category) LIKE LOWER(:q)', { q: `%${query}%` })
-      .orWhere('LOWER(p.provider) LIKE LOWER(:q)', { q: `%${query}%` })
-      .orderBy('p.salesToday', 'DESC')
-      .take(limit)
-      .getMany();
+      .orWhere('LOWER(p.provider) LIKE LOWER(:q)', { q: `%${query}%` });
+    if (country) qb.andWhere('p.country = :country', { country });
+    return qb.orderBy('p.salesToday', 'DESC').take(limit).getMany();
   }
 
-  // Recalcula salesToday y salesYesterday desde snapshots (se llama cada ciclo)
   async refreshDailyCache() {
-    // RD is always UTC-4 (no DST). Midnight RD = 04:00 UTC.
-    const rdDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santo_Domingo' }); // YYYY-MM-DD
-    const todayStart = new Date(rdDateStr + 'T04:00:00.000Z');
+    for (const country of Object.keys(COUNTRY_TZ)) {
+      await this._refreshForCountry(country);
+    }
+  }
+
+  private async _refreshForCountry(country: string) {
+    const todayStart = todayStartUTC(country);
     const yesterdayStart = new Date(todayStart.getTime() - 86_400_000);
 
-    // Calcular ventas de hoy por producto
     const todayRows: { productId: string; sales: string }[] = await this.snapshotRepo
       .createQueryBuilder('s')
       .select('s.productId', 'productId')
       .addSelect('MAX(s.salesAccum) - MIN(s.salesAccum)', 'sales')
+      .innerJoin(Product, 'p', 'p.id = s.productId AND p.country = :country', { country })
       .where('s.capturedAt >= :todayStart', { todayStart })
       .groupBy('s.productId')
       .getRawMany();
 
-    // Calcular ventas de ayer por producto
     const yesterdayRows: { productId: string; sales: string }[] = await this.snapshotRepo
       .createQueryBuilder('s')
       .select('s.productId', 'productId')
       .addSelect('MAX(s.salesAccum) - MIN(s.salesAccum)', 'sales')
+      .innerJoin(Product, 'p', 'p.id = s.productId AND p.country = :country', { country })
       .where('s.capturedAt >= :yesterdayStart AND s.capturedAt < :todayStart', { yesterdayStart, todayStart })
       .groupBy('s.productId')
       .getRawMany();
@@ -320,14 +340,11 @@ export class ProductsService {
     const todayMap = new Map(todayRows.map(r => [r.productId, Math.max(0, parseInt(r.sales))]));
     const yesterdayMap = new Map(yesterdayRows.map(r => [r.productId, Math.max(0, parseInt(r.sales))]));
 
-    // Actualizar en lotes
-    const products = await this.productRepo.find({ select: ['id'] });
+    const products = await this.productRepo.find({ where: { country }, select: ['id'] });
     for (const p of products) {
       const today = todayMap.get(p.id) ?? 0;
       const yesterday = yesterdayMap.get(p.id) ?? 0;
-      if (today !== undefined) {
-        await this.productRepo.update(p.id, { salesToday: today, salesYesterday: yesterday });
-      }
+      await this.productRepo.update(p.id, { salesToday: today, salesYesterday: yesterday });
     }
   }
 }

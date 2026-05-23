@@ -128,3 +128,45 @@
     @apply font-sans;
   }
 }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(139,92,246,0.3); }
+  50% { box-shadow: 0 0 40px rgba(139,92,246,0.6); }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite;
+}
+
+.glow-logo {
+  animation: glow-pulse 3s ease-in-out infinite;
+}
+
+.card-glass {
+  background: rgba(255,255,255,0.025);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+.card-glass:hover {
+  border-color: rgba(139,92,246,0.3);
+  box-shadow: 0 0 40px rgba(139,92,246,0.1), 0 8px 32px rgba(0,0,0,0.4);
+}
+
+select option {
+  background-color: #0d0d1a;
+  color: #e2e8f0;
+}

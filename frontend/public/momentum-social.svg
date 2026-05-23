@@ -1,0 +1,85 @@
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1080" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0618"/>
+      <stop offset="100%" stop-color="#060412"/>
+    </linearGradient>
+    <radialGradient id="orb1" cx="75%" cy="15%" r="50%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="orb2" cx="20%" cy="85%" r="40%">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="icon-stroke" x1="194" y1="843" x2="886" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5b21b6"/>
+      <stop offset="50%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#e879f9"/>
+    </linearGradient>
+    <radialGradient id="icon-bg-grad" cx="75%" cy="18%" r="60%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="text-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#c4b5fd"/>
+    </linearGradient>
+    <filter id="dot-glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="20" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="line-glow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Full black background -->
+  <rect width="1080" height="1080" fill="url(#bg)"/>
+  <rect width="1080" height="1080" fill="url(#orb1)"/>
+  <rect width="1080" height="1080" fill="url(#orb2)"/>
+
+  <!-- Icon card centered above wordmark -->
+  <!-- Icon: 320x320, centered at x=380 y=240 -->
+  <rect x="380" y="200" width="320" height="320" rx="76" fill="#0e0920"/>
+  <rect x="380" y="200" width="320" height="320" rx="76" fill="url(#icon-bg-grad)"/>
+  <rect x="380" y="200" width="320" height="320" rx="76" stroke="rgba(139,92,246,0.25)" stroke-width="5" fill="none"/>
+
+  <!-- M inside the card: scaled to fit 320x320, origin at (380,200) -->
+  <!-- Original: M18,78 L18,30 L50,57 L82,13 L82,78 in 100x100 space = x3.2 scale + offset -->
+  <!-- Scaled: M(380+18*3.2),(200+78*3.2) = M(437.6,449.6) ... let me calculate properly -->
+  <!-- scale=3.2, offset x=380, y=200 -->
+  <!-- (18,78) → (437.6, 449.6) → approx (438, 450) -->
+  <!-- (18,30) → (437.6, 296) → (438, 296) -->
+  <!-- (50,57) → (540, 382.4) → (540, 382) -->
+  <!-- (82,13) → (642.4, 241.6) → (642, 242) -->
+  <!-- (82,78) → (642.4, 449.6) → (642, 450) -->
+  <path d="M438 450 L438 296 L540 382 L642 242 L642 450"
+    stroke="url(#icon-stroke)" stroke-width="29"
+    stroke-linecap="round" stroke-linejoin="round"
+    filter="url(#line-glow)"/>
+
+  <!-- Apex dot -->
+  <circle cx="642" cy="242" r="45" fill="#d946ef" opacity="0.15" filter="url(#dot-glow)"/>
+  <circle cx="642" cy="242" r="20" fill="#e879f9"/>
+  <circle cx="642" cy="242" r="10" fill="white" opacity="0.95"/>
+
+  <!-- Wordmark: MOMENTUM -->
+  <text x="540" y="680"
+    text-anchor="middle"
+    font-family="'Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', sans-serif"
+    font-weight="800"
+    font-size="96"
+    letter-spacing="-3"
+    fill="url(#text-grad)">MOMENTUM</text>
+
+  <!-- Tagline -->
+  <text x="540" y="740"
+    text-anchor="middle"
+    font-family="'Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', sans-serif"
+    font-weight="400"
+    font-size="28"
+    letter-spacing="4"
+    fill="rgba(139,92,246,0.7)">PRODUCTOS GANADORES · RD</text>
+</svg>

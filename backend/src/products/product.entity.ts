@@ -1,12 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, Unique } from 'typeorm';
 import { Snapshot } from '../snapshots/snapshot.entity';
 
 @Entity('products')
+@Unique(['effiId', 'country'])
 export class Product {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   effiId: string;
 
   @Column()
@@ -33,20 +34,20 @@ export class Product {
   @Column({ default: 0 })
   stock: number;
 
-  // Ventas acumuladas (el número que muestra Effi)
   @Column({ default: 0 })
   totalSalesAccum: number;
 
-  // Cache de ventas de hoy (delta calculado desde snapshots)
   @Column({ default: 0 })
   salesToday: number;
 
-  // Cache de ventas de ayer
   @Column({ default: 0 })
   salesYesterday: number;
 
   @Column({ default: true })
   isActive: boolean;
+
+  @Column({ default: 'RD' })
+  country: string;
 
   @OneToMany(() => Snapshot, (s) => s.product)
   snapshots: Snapshot[];

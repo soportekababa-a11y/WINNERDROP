@@ -2,18 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { authLogin, authRegister } from '@/lib/api';
-import { Zap, Mail, Lock, User, Loader2, AlertCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-type Tab = 'login' | 'register';
+import { authLogin } from '@/lib/api';
+import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { MomentumIcon, MomentumWordmark } from '@/components/momentum-logo';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -22,16 +18,12 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      if (tab === 'login') {
-        await authLogin(email, password);
-      } else {
-        await authRegister(email, password, name || undefined);
-      }
+      await authLogin(email, password);
       router.push('/');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        (tab === 'login' ? 'Credenciales incorrectas' : 'No se pudo crear la cuenta');
+        'Credenciales incorrectas';
       setError(Array.isArray(msg) ? msg[0] : msg);
     } finally {
       setLoading(false);
@@ -39,110 +31,91 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-[#020209] flex flex-col items-center justify-center px-4">
 
       {/* Logo */}
-      <div className="flex items-center gap-2.5 mb-8">
-        <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md">
-          <Zap size={18} className="text-white" />
+      <div className="flex items-center gap-3 mb-10">
+        <div className="glow-logo" style={{ filter: 'drop-shadow(0 0 20px rgba(139,92,246,0.5))' }}>
+          <MomentumIcon size={48} />
         </div>
-        <span className="text-2xl font-bold text-gray-900">WinnerDrop</span>
+        <MomentumWordmark className="text-2xl" />
       </div>
 
       {/* Card */}
-      <div className="w-full max-w-sm bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+      <div className="w-full max-w-sm rounded-2xl p-7"
+        style={{
+          background: 'rgba(255,255,255,0.025)',
+          backdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 0 80px rgba(0,0,0,0.6), 0 0 40px rgba(139,92,246,0.05)',
+        }}>
 
-        <h1 className="text-lg font-bold text-gray-900 mb-1">
-          {tab === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
-        </h1>
-        <p className="text-sm text-gray-400 mb-6">
-          {tab === 'login' ? 'Accede a tu dashboard de productos' : 'Empieza a encontrar productos ganadores'}
-        </p>
-
-        {/* Tabs */}
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6">
-          {(['login', 'register'] as Tab[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => { setTab(t); setError(''); }}
-              className={cn(
-                'flex-1 py-2 rounded-lg text-sm font-semibold transition-all',
-                tab === t
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-400 hover:text-gray-600'
-              )}
-            >
-              {t === 'login' ? 'Entrar' : 'Registrarse'}
-            </button>
-          ))}
+        <div className="mb-7">
+          <h1 className="text-xl font-bold text-white mb-1">Bienvenido</h1>
+          <p className="text-sm text-gray-500">Inicia sesión para continuar</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
-          {/* Name (register only) */}
-          {tab === 'register' && (
-            <div className="relative">
-              <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Nombre (opcional)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
-              />
-            </div>
-          )}
-
-          {/* Email */}
           <div className="relative">
-            <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
             <input
               type="email"
               placeholder="Email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
+              className="w-full pl-9 pr-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 transition-all duration-200 outline-none"
+              style={{
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.07)',
+              }}
+              onFocus={e => { e.target.style.border = '1px solid rgba(139,92,246,0.5)'; e.target.style.boxShadow = '0 0 20px rgba(139,92,246,0.1)'; }}
+              onBlur={e => { e.target.style.border = '1px solid rgba(255,255,255,0.07)'; e.target.style.boxShadow = 'none'; }}
             />
           </div>
 
-          {/* Password */}
           <div className="relative">
-            <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
             <input
               type="password"
               placeholder="Contraseña"
               required
-              minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
+              className="w-full pl-9 pr-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 transition-all duration-200 outline-none"
+              style={{
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.07)',
+              }}
+              onFocus={e => { e.target.style.border = '1px solid rgba(139,92,246,0.5)'; e.target.style.boxShadow = '0 0 20px rgba(139,92,246,0.1)'; }}
+              onBlur={e => { e.target.style.border = '1px solid rgba(255,255,255,0.07)'; e.target.style.boxShadow = 'none'; }}
             />
           </div>
 
-          {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-sm text-red-600">
+            <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-red-400"
+              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
               <AlertCircle size={14} className="shrink-0" />
               {error}
             </div>
           )}
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-1"
+            className="w-full py-3 rounded-xl text-white text-sm font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2 active:scale-[0.98]"
+            style={{
+              background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+              boxShadow: '0 0 24px rgba(139,92,246,0.35)',
+            }}
+            onMouseEnter={e => { (e.target as HTMLElement).style.boxShadow = '0 0 40px rgba(139,92,246,0.55)'; }}
+            onMouseLeave={e => { (e.target as HTMLElement).style.boxShadow = '0 0 24px rgba(139,92,246,0.35)'; }}
           >
-            {loading && <Loader2 size={14} className="animate-spin" />}
-            {tab === 'login' ? 'Entrar' : 'Crear cuenta'}
+            {loading && <Loader2 size={15} className="animate-spin" />}
+            {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
       </div>
-
-      <p className="mt-6 text-xs text-gray-400">
-        Productos ganadores para dropshipping en República Dominicana
-      </p>
     </div>
   );
 }

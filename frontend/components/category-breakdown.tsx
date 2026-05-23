@@ -23,9 +23,9 @@ const COLORS = [
 ];
 
 export function CategoryBreakdown({ selected, onSelect }: Props) {
-  const { data: categories, isLoading } = useQuery({
+  const { data: categories, isLoading } = useQuery<string[]>({
     queryKey: ['categories'],
-    queryFn: fetchCategories,
+    queryFn: () => fetchCategories(),
     staleTime: 5 * 60_000,
   });
 

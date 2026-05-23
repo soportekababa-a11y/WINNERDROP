@@ -58,6 +58,7 @@ export interface Product {
   salesToday: number;
   salesYesterday: number;
   isActive: boolean;
+  country: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -88,17 +89,17 @@ export interface ProductWithGrid extends Product {
   dailyGrid: { date: string; sales: number }[];
 }
 
-export const fetchProductsGrid = (params?: { limit?: number; sort?: 'today' | 'total' | 'growth' | 'winners'; days?: number; search?: string; category?: string; provider?: string; offset?: number; hot?: boolean }) =>
+export const fetchProductsGrid = (params?: { limit?: number; sort?: 'today' | 'total' | 'growth' | 'winners'; days?: number; search?: string; category?: string; provider?: string; offset?: number; hot?: boolean; country?: string }) =>
   api.get<ProductWithGrid[]>('/products/grid', { params }).then(r => r.data);
 
-export const fetchDashboard = () => api.get<DashboardStats>('/products/dashboard').then(r => r.data);
+export const fetchDashboard = (country?: string) => api.get<DashboardStats>('/products/dashboard', { params: country ? { country } : undefined }).then(r => r.data);
 
-export const fetchProducts = (params?: { limit?: number; sort?: string; search?: string; category?: string }) =>
+export const fetchProducts = (params?: { limit?: number; sort?: string; search?: string; category?: string; country?: string }) =>
   api.get<Product[]>('/products', { params }).then(r => r.data);
 
-export const fetchCategories = () => api.get<string[]>('/products/categories').then(r => r.data);
+export const fetchCategories = (country?: string) => api.get<string[]>('/products/categories', { params: country ? { country } : undefined }).then(r => r.data);
 
-export const fetchProviders = () => api.get<string[]>('/products/providers').then(r => r.data);
+export const fetchProviders = (country?: string) => api.get<string[]>('/products/providers', { params: country ? { country } : undefined }).then(r => r.data);
 
 export const fetchProduct = (id: string) => api.get<Product>(`/products/${id}`).then(r => r.data);
 
@@ -108,30 +109,8 @@ export const fetchProductHistory = (id: string, days = 30) =>
 export const fetchScraperStats = () => api.get<ScraperStats>('/scraper/stats').then(r => r.data);
 
 export interface SpyResult {
-  productName: string;
-  market: string;
-  marketFlag: string;
-  platform: string;
-  scrapedAt: string;
-  searchQueries: string[];
-  totalAdsFound: number;
-  competitors: {
-    name: string;
-    pageUrl: string | null;
-    totalAds: number;
-    maxDaysActive: number;
-    dominantFormat: string;
-    platforms: string[];
-  }[];
-  saturation: { level: string; score: number; emoji: string; label: string };
-  dominantCompetitor: ({ name: string; pageUrl: string | null; maxDaysActive: number; dominantFormat: string; insight: string }) | null;
-  formatWinner: { format: string; videoCount: number; imageCount: number; percentage: number; label: string; emoji: string };
-  dominantCreativeType: { type: string; label: string; emoji: string; percentage: number };
-  creativeFatigue: { level: string; label: string; emoji: string };
-  opportunityScore: number;
-  opportunityEmoji: string;
-  opportunityLabel: string;
+  competitors: string[];
 }
 
-export const fetchCompetitorSpy = (productId: string, market = 'RD', platform = 'META_ADS') =>
-  api.get<SpyResult>(`/competitor-spy/${productId}`, { params: { market, platform }, timeout: 90000 }).then(r => r.data);
+export const fetchCompetitorSpy = (productId: string) =>
+  api.get<SpyResult>(`/competitor-spy/${productId}`, { timeout: 90000 }).then(r => r.data);

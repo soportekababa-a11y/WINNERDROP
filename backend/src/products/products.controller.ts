@@ -8,13 +8,13 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get('categories')
-  getCategories() {
-    return this.productsService.getCategories();
+  getCategories(@Query('country') country?: string) {
+    return this.productsService.getCategories(country);
   }
 
   @Get('providers')
-  getProviders() {
-    return this.productsService.getProviders();
+  getProviders(@Query('country') country?: string) {
+    return this.productsService.getProviders(country);
   }
 
   @Get()
@@ -23,12 +23,14 @@ export class ProductsController {
     @Query('sort') sort?: string,
     @Query('search') search?: string,
     @Query('category') category?: string,
+    @Query('country') country?: string,
   ) {
-    if (search) return this.productsService.searchProducts(search, limit ? parseInt(limit) : 30);
+    if (search) return this.productsService.searchProducts(search, limit ? parseInt(limit) : 30, country);
     return this.productsService.getTopProducts(
       limit ? parseInt(limit) : 50,
       (sort as any) ?? 'today',
       category,
+      country,
     );
   }
 
@@ -42,6 +44,7 @@ export class ProductsController {
     @Query('offset') offset?: string,
     @Query('hot') hot?: string,
     @Query('provider') provider?: string,
+    @Query('country') country?: string,
   ) {
     return this.productsService.getProductsWithDailyGrid(
       limit ? parseInt(limit) : 40,
@@ -52,12 +55,13 @@ export class ProductsController {
       offset ? parseInt(offset) : 0,
       hot === 'true',
       provider,
+      country,
     );
   }
 
   @Get('dashboard')
-  getDashboardStats() {
-    return this.productsService.getDashboardStats();
+  getDashboardStats(@Query('country') country?: string) {
+    return this.productsService.getDashboardStats(country);
   }
 
   @Get(':id/daily')

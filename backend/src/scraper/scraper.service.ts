@@ -9,18 +9,24 @@ import { ProductsService } from '../products/products.service';
 
 const EFFI_LOGIN_URL = 'https://effi.com.co/ingreso';
 const EFFI_CATALOG_URL = 'https://effi.com.co/app/articulo_dropshipping';
-const SCRAPE_INTERVAL_MS = 60 * 60 * 1000; // 60 minutos
+const SCRAPE_INTERVAL_MS = 60 * 60 * 1000;
 const PRODUCTS_PER_PAGE = 40;
+
+const COUNTRIES: Array<{ code: string; storeName: string | null }> = [
+  { code: 'RD', storeName: null },           // default store after login
+  { code: 'GT', storeName: 'Guatemala 1' },  // must select this store
+  { code: 'EC', storeName: 'Ecuador' },      // matches ECUADOR 1 etc.
+];
 
 @Injectable()
 export class ScraperService implements OnModuleDestroy {
   private readonly logger = new Logger(ScraperService.name);
   private browser: Browser | null = null;
-  private context: BrowserContext | null = null;
+  private contexts: Map<string, BrowserContext> = new Map();
   private isRunning = false;
   private intervalHandle: NodeJS.Timeout | null = null;
   private lastScrapeStats = { total: 0, pages: 0, durationMs: 0, finishedAt: null as Date | null };
-  private progress = { currentPage: 0, totalPages: 0, accumulated: 0 };
+  private progress = { currentPage: 0, totalPages: 0, accumulated: 0, country: '' };
 
   constructor(
     private config: ConfigService,
@@ -45,7 +51,6 @@ export class ScraperService implements OnModuleDestroy {
     if (this.isRunning) return;
     this.isRunning = true;
     this.logger.log('Scraper iniciado');
-
     this.startWithRetry();
   }
 
@@ -54,15 +59,15 @@ export class ScraperService implements OnModuleDestroy {
     while (true) {
       try {
         await this.launchBrowser();
-        await this.login();
+        await this.loginAllCountries();
         await this.runCycle();
         break;
       } catch (err) {
         this.logger.error(`Error en arranque inicial, reintentando en ${RETRY_DELAY_MS / 1000}s...`, err);
-        await this.context?.close().catch(() => {});
+        for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
+        this.contexts.clear();
         await this.browser?.close().catch(() => {});
         this.browser = null;
-        this.context = null;
         await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
       }
     }
@@ -73,9 +78,9 @@ export class ScraperService implements OnModuleDestroy {
       } catch (err) {
         this.logger.error('Error en ciclo, re-loginando...', err);
         try {
-          await this.context?.close();
-          this.context = await this.browser!.newContext({ userAgent: this.userAgent() });
-          await this.login();
+          for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
+          this.contexts.clear();
+          await this.loginAllCountries();
           await this.runCycle();
         } catch (e) {
           this.logger.error('Re-login fallido', e);
@@ -87,8 +92,9 @@ export class ScraperService implements OnModuleDestroy {
   async stop() {
     if (this.intervalHandle) clearInterval(this.intervalHandle);
     this.isRunning = false;
-    await this.context?.close();
-    await this.browser?.close();
+    for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
+    this.contexts.clear();
+    await this.browser?.close().catch(() => {});
     this.logger.log('Scraper detenido');
   }
 
@@ -99,22 +105,93 @@ export class ScraperService implements OnModuleDestroy {
   private async launchBrowser() {
     const executablePath = process.env.CHROMIUM_PATH || undefined;
     this.browser = await chromium.launch({ headless: true, executablePath });
-    this.context = await this.browser.newContext({ userAgent: this.userAgent() });
+  }
+
+  private async loginAllCountries() {
+    const email = this.config.get<string>('EFFI_EMAIL');
+    const password = this.config.get<string>('EFFI_PASSWORD');
+
+    for (const { code, storeName } of COUNTRIES) {
+      this.logger.log(`Iniciando sesión para país: ${code}`);
+      const context = await this.browser!.newContext({ userAgent: this.userAgent() });
+      await this.loginContext(context, email!, password!, storeName);
+      this.contexts.set(code, context);
+    }
   }
 
   async login() {
-    const email = this.config.get<string>('EFFI_EMAIL');
-    const password = this.config.get<string>('EFFI_PASSWORD');
-    const page = await this.context!.newPage();
+    // Keep for backward compat — re-login all
+    await this.loginAllCountries();
+  }
 
+  private async loginContext(context: BrowserContext, email: string, password: string, storeName: string | null) {
+    const page = await context.newPage();
     try {
-      this.logger.log('Iniciando sesión en Effi...');
       await page.goto(EFFI_LOGIN_URL, { waitUntil: 'networkidle' });
-      await page.locator('input[type="email"], input[placeholder*="Email"], input[placeholder*="email"]').fill(email!);
-      await page.locator('input[type="password"]').fill(password!);
-      await page.locator('button[type="submit"], button:has-text("Ingresar")').click();
-      await page.waitForURL((url) => !url.href.includes('/ingreso'), { timeout: 15000 });
-      this.logger.log('Sesión activa');
+      await page.locator('input[type="email"], input[placeholder*="Email"], input[placeholder*="email"]').fill(email);
+      await page.locator('input[type="password"]').fill(password);
+      // Click submit — use .first() to avoid ambiguity if multiple "Ingresar" buttons exist
+      await page.locator('button[type="submit"], button:has-text("Ingresar")').first().click();
+
+      // Wait for company selector page at /ingreso/validar_usuario
+      await page.waitForURL('**/ingreso/validar_usuario', { timeout: 20000 });
+
+      // Effi uses jQuery Chosen — native <select> is hidden, must click Chosen widget
+      const chosenContainer = page.locator('.chosen-container').first();
+      await chosenContainer.waitFor({ state: 'visible', timeout: 10000 });
+      await chosenContainer.click();
+
+      // Wait for Chosen dropdown results to appear
+      const resultItems = page.locator('.chosen-results li.active-result');
+      await resultItems.first().waitFor({ state: 'visible', timeout: 5000 });
+
+      const optionTexts = await resultItems.allTextContents();
+      this.logger.log(`Empresas disponibles: ${JSON.stringify(optionTexts)}`);
+
+      if (storeName) {
+        // Case-insensitive match (Effi stores names in UPPERCASE)
+        const match = resultItems.filter({ hasText: new RegExp(storeName, 'i') });
+        const count = await match.count();
+        if (count > 0) {
+          const text = await match.first().textContent();
+          await match.first().click();
+          this.logger.log(`Empresa seleccionada: "${text?.trim()}"`);
+        } else {
+          this.logger.warn(`No se encontró empresa "${storeName}". Opciones: ${JSON.stringify(optionTexts)}`);
+          await resultItems.first().click();
+        }
+      } else {
+        // RD: first option that isn't the placeholder and isn't Guatemala
+        const rdItems = resultItems
+          .filter({ hasNotText: /guatemala/i })
+          .filter({ hasNotText: /seleccione/i });
+        const rdCount = await rdItems.count();
+        if (rdCount > 0) {
+          const text = await rdItems.first().textContent();
+          await rdItems.first().click();
+          this.logger.log(`Empresa RD seleccionada: "${text?.trim()}"`);
+        } else {
+          // Fallback: second item (skip placeholder)
+          const text = await resultItems.nth(1).textContent().catch(() => '?');
+          await resultItems.nth(1).click();
+          this.logger.log(`Empresa RD seleccionada (fallback): "${text?.trim()}"`);
+        }
+      }
+
+      // Click Ingresar on the company selector form
+      await page.locator('button:has-text("Ingresar")').click();
+
+      // Wait for navigation away from /ingreso paths
+      await page.waitForURL(url => !url.href.includes('/ingreso'), { timeout: 20000 });
+
+      // Navigate to catalog to confirm session is active
+      await page.goto(EFFI_CATALOG_URL, { waitUntil: 'networkidle', timeout: 30000 });
+
+      if (page.url().includes('/ingreso')) {
+        throw new Error(`Login fallido — redirigido a ${page.url()}`);
+      }
+
+      this.logger.log(`Sesión activa${storeName ? ` [${storeName}]` : ' [RD]'}`);
     } finally {
       await page.close();
     }
@@ -122,65 +199,74 @@ export class ScraperService implements OnModuleDestroy {
 
   private async runCycle() {
     const start = Date.now();
-    const page = await this.context!.newPage();
+    let totalProducts = 0;
+    let totalPages = 0;
 
-    try {
-      this.logger.log('Iniciando ciclo de scraping completo...');
-      const { products, pages } = await this.scrapeAllPages(page);
-
-      this.logger.log(`Scraping completo: ${products.length} productos en ${pages} páginas`);
-
-      for (const raw of products) {
-        await this.upsertProductAndSnapshot(raw);
+    for (const { code } of COUNTRIES) {
+      const context = this.contexts.get(code);
+      if (!context) {
+        this.logger.warn(`Sin contexto para país ${code}, omitiendo`);
+        continue;
       }
 
-      // Desactivar productos que ya no están en el catálogo de Effi
-      if (products.length > 100) {
-        const scrapedIds = products.map(p => p.effiId);
-        const deactivated = await this.productRepo
-          .createQueryBuilder()
-          .update()
-          .set({ isActive: false })
-          .where('effiId NOT IN (:...ids) AND isActive = true', { ids: scrapedIds })
-          .execute();
-        if (deactivated.affected && deactivated.affected > 0) {
-          this.logger.log(`Productos desactivados (quitados de Effi): ${deactivated.affected}`);
+      this.logger.log(`Iniciando ciclo para país: ${code}`);
+      const page = await context.newPage();
+      try {
+        const { products, pages } = await this.scrapeAllPages(page, code);
+        this.logger.log(`[${code}] Scraping completo: ${products.length} productos en ${pages} páginas`);
+
+        for (const raw of products) {
+          await this.upsertProductAndSnapshot(raw, code);
         }
+
+        if (products.length > 100) {
+          const scrapedIds = products.map(p => p.effiId);
+          const deactivated = await this.productRepo
+            .createQueryBuilder()
+            .update()
+            .set({ isActive: false })
+            .where('effiId NOT IN (:...ids) AND isActive = true AND country = :country', { ids: scrapedIds, country: code })
+            .execute();
+          if (deactivated.affected && deactivated.affected > 0) {
+            this.logger.log(`[${code}] Productos desactivados: ${deactivated.affected}`);
+          }
+        }
+
+        totalProducts += products.length;
+        totalPages += pages;
+      } finally {
+        await page.close();
       }
-
-      // Actualizar caché de ventas diarias
-      await this.productsService.refreshDailyCache();
-
-      this.lastScrapeStats = {
-        total: products.length,
-        pages,
-        durationMs: Date.now() - start,
-        finishedAt: new Date(),
-      };
-
-      this.logger.log(`Ciclo completado en ${Math.round((Date.now() - start) / 1000)}s`);
-    } finally {
-      await page.close();
     }
+
+    await this.productsService.refreshDailyCache();
+
+    this.lastScrapeStats = {
+      total: totalProducts,
+      pages: totalPages,
+      durationMs: Date.now() - start,
+      finishedAt: new Date(),
+    };
+
+    this.logger.log(`Ciclo completo (todos los países) en ${Math.round((Date.now() - start) / 1000)}s`);
   }
 
-  private async scrapeAllPages(page: Page): Promise<{ products: RawProduct[]; pages: number }> {
+  private async scrapeAllPages(page: Page, country: string): Promise<{ products: RawProduct[]; pages: number }> {
     const all: RawProduct[] = [];
     let pageNum = 1;
 
-    // Cargar primera página y detectar total
     await page.goto(EFFI_CATALOG_URL, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1500);
 
     const totalText = await page.locator('text=/\\d+ Artículos/').textContent().catch(() => '');
     const totalMatch = (totalText ?? '').match(/([\d,]+)\s+Artículos/);
     const totalProducts = totalMatch ? parseInt(totalMatch[1].replace(',', '')) : 3000;
-    const totalPages = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
-    this.logger.log(`Total productos: ${totalProducts} | Total páginas: ${totalPages}`);
+    const totalPagesCount = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
+    this.logger.log(`[${country}] Total productos: ${totalProducts} | Total páginas: ${totalPagesCount}`);
 
-    this.progress = { currentPage: 1, totalPages, accumulated: 0 };
+    this.progress = { currentPage: 1, totalPages: totalPagesCount, accumulated: 0, country };
 
-    while (pageNum <= totalPages) {
+    while (pageNum <= totalPagesCount) {
       const url = pageNum === 1 ? EFFI_CATALOG_URL : `${EFFI_CATALOG_URL}?page=${pageNum}`;
 
       if (pageNum > 1) {
@@ -194,10 +280,10 @@ export class ScraperService implements OnModuleDestroy {
       const pageProducts = await this.extractPageProducts(page);
       all.push(...pageProducts);
 
-      this.progress = { currentPage: pageNum, totalPages, accumulated: all.length };
+      this.progress = { currentPage: pageNum, totalPages: totalPagesCount, accumulated: all.length, country };
 
       if (pageNum % 10 === 0) {
-        this.logger.log(`  Página ${pageNum}/${totalPages} — total acumulado: ${all.length}`);
+        this.logger.log(`  [${country}] Página ${pageNum}/${totalPagesCount} — acumulado: ${all.length}`);
       }
 
       pageNum++;
@@ -221,7 +307,6 @@ export class ScraperService implements OnModuleDestroy {
           const imageUrl = verDetalles?.getAttribute('data-url_foto')
             ?? (card.querySelector('.img-box img') as HTMLImageElement)?.src ?? '';
 
-          // Stats
           const labels = Array.from(card.querySelectorAll('.product-stats .label'));
           let stock = 0, salesAccum = 0;
           labels.forEach(label => {
@@ -232,14 +317,12 @@ export class ScraperService implements OnModuleDestroy {
             if (salesM) salesAccum = parseInt(salesM[1].replace(/,/g, ''));
           });
 
-          // Precio
           const priceText = card.querySelector('.price-block')?.textContent ?? '';
-          const costoM    = priceText.match(/Costo[:\s]+(?:RD\$)?\s*([\d,.]+)/i);
-          const sugeridoM = priceText.match(/Sugerido[:\s]+(?:RD\$)?\s*([\d,.]+)/i);
+          const costoM    = priceText.match(/Costo[:\s]+(?:RD\$|Q)?\s*([\d,.]+)/i);
+          const sugeridoM = priceText.match(/Sugerido[:\s]+(?:RD\$|Q)?\s*([\d,.]+)/i);
           const cost  = costoM    ? parseFloat(costoM[1].replace(/,/g, ''))    : 0;
           const price = sugeridoM ? parseFloat(sugeridoM[1].replace(/,/g, '')) : cost;
 
-          // Proveedor, categoría, subcategoría
           const metaLinks = Array.from(card.querySelectorAll('.product-meta a'));
           const provider    = metaLinks[0]?.textContent?.trim() ?? '';
           const category    = metaLinks[1]?.textContent?.trim() ?? '';
@@ -253,8 +336,8 @@ export class ScraperService implements OnModuleDestroy {
     });
   }
 
-  private async upsertProductAndSnapshot(raw: RawProduct) {
-    let product = await this.productRepo.findOne({ where: { effiId: raw.effiId } });
+  private async upsertProductAndSnapshot(raw: RawProduct, country: string) {
+    let product = await this.productRepo.findOne({ where: { effiId: raw.effiId, country } });
 
     if (!product) {
       product = this.productRepo.create({
@@ -271,6 +354,7 @@ export class ScraperService implements OnModuleDestroy {
         salesToday: 0,
         salesYesterday: 0,
         isActive: true,
+        country,
       });
     } else {
       product.name = raw.name;

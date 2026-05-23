@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Zap, Calculator, LayoutDashboard, LogOut } from 'lucide-react';
+import { Calculator, LayoutDashboard, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getUser, clearAuth } from '@/lib/auth';
-import { ScraperStatus } from './scraper-status';
+import { MomentumIcon, MomentumWordmark } from '@/components/momentum-logo';
 
 const NAV = [
   { href: '/', label: 'Winner', icon: LayoutDashboard, desc: 'Dashboard' },
@@ -18,17 +18,14 @@ export function Sidebar() {
   const user = getUser();
 
   return (
-    <aside className="w-52 shrink-0 bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0">
+    <aside className="w-56 shrink-0 flex flex-col h-screen sticky top-0 z-20"
+      style={{ background: 'rgba(5,5,15,0.7)', backdropFilter: 'blur(20px)', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+
       {/* Brand */}
-      <div className="px-4 py-5 border-b border-gray-100">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm">
-            <Zap size={14} className="text-white" />
-          </div>
-          <div>
-            <p className="font-bold text-gray-900 text-sm leading-none">WinnerDrop</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">Effi RD</p>
-          </div>
+      <div className="px-5 py-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+        <div className="flex items-center gap-3">
+          <MomentumIcon size={36} />
+          <MomentumWordmark className="text-sm" />
         </div>
       </div>
 
@@ -41,34 +38,40 @@ export function Sidebar() {
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group",
+                "flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-200 group relative overflow-hidden",
                 active
-                  ? "bg-indigo-50 text-indigo-700"
-                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                  ? "text-white"
+                  : "text-gray-500 hover:text-gray-200"
               )}
+              style={active ? {
+                background: 'linear-gradient(135deg, rgba(124,58,237,0.2), rgba(168,85,247,0.08))',
+                border: '1px solid rgba(139,92,246,0.3)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 0 20px rgba(139,92,246,0.08)',
+              } : {
+                border: '1px solid transparent',
+              }}
             >
-              <Icon size={16} className={active ? "text-indigo-600" : "text-gray-400 group-hover:text-gray-600"} />
+              {active && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full"
+                  style={{ background: 'linear-gradient(to bottom, #a78bfa, #7c3aed)' }} />
+              )}
+              <Icon size={16} className={cn("flex-shrink-0 transition-colors", active ? "text-violet-400" : "text-gray-600 group-hover:text-gray-400")} />
               <div>
                 <p className="leading-none">{label}</p>
-                <p className={cn("text-[10px] mt-0.5", active ? "text-indigo-400" : "text-gray-400")}>{desc}</p>
+                <p className={cn("text-[10px] mt-0.5", active ? "text-violet-500/80" : "text-gray-700")}>{desc}</p>
               </div>
             </Link>
           );
         })}
       </nav>
 
-      {/* Scraper */}
-      <div className="px-4 py-3 border-t border-gray-100">
-        <ScraperStatus />
-      </div>
-
       {/* User */}
       {user && (
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between gap-2">
-          <p className="text-xs text-gray-400 truncate">{user.email}</p>
+        <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+          <p className="text-xs text-gray-700 truncate">{user.email}</p>
           <button
             onClick={() => { clearAuth(); router.replace('/login'); }}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors shrink-0"
+            className="p-1.5 rounded-lg text-gray-700 hover:text-gray-300 hover:bg-white/5 transition-all shrink-0"
             title="Cerrar sesión"
           >
             <LogOut size={13} />
