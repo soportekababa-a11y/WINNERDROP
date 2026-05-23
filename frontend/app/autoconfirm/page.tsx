@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { MessageCircle, Store, CheckCircle2, XCircle, AlertCircle, ExternalLink, Trash2, Save, RefreshCw } from 'lucide-react';
-import api from '@/lib/api';
+import { getToken } from '@/lib/auth';
 
 interface ShopifyStore {
   id: string;
@@ -25,6 +25,20 @@ interface OrderLog {
   status: 'sent' | 'failed' | 'pending';
   error: string;
   createdAt: string;
+}
+
+async function apiFetch(path: string, options?: RequestInit) {
+  const token = getToken();
+  const res = await fetch(`/api/proxy${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options?.headers },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw err;
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 export default function AutoConfirmPage() {
@@ -53,13 +67,13 @@ export default function AutoConfirmPage() {
   async function loadStore() {
     setLoading(true);
     try {
-      const res = await api.get<ShopifyStore>('/autoconfirm/store');
-      if (res.data) {
-        setStore(res.data);
-        setTemplate(res.data.messageTemplate);
-        setTemplateName(res.data.whatsappTemplateName || '');
-        setTemplateLang(res.data.whatsappLanguage || 'es');
-        setWaEnabled(res.data.whatsappEnabled);
+      const data = await apiFetch('/autoconfirm/store');
+      if (data) {
+        setStore(data);
+        setTemplate(data.messageTemplate);
+        setTemplateName(data.whatsappTemplateName || '');
+        setTemplateLang(data.whatsappLanguage || 'es');
+        setWaEnabled(data.whatsappEnabled);
         loadLogs();
       }
     } catch {
@@ -71,8 +85,8 @@ export default function AutoConfirmPage() {
 
   async function loadLogs() {
     try {
-      const res = await api.get<OrderLog[]>('/autoconfirm/logs?limit=20');
-      setLogs(res.data);
+      const data = await apiFetch('/autoconfirm/logs?limit=20');
+      setLogs(data || []);
     } catch { /* ignore */ }
   }
 
@@ -82,17 +96,17 @@ export default function AutoConfirmPage() {
     if (!shop.includes('.myshopify.com')) shop = `${shop}.myshopify.com`;
     setConnecting(true);
     try {
-      const res = await api.get<{ url: string }>(`/autoconfirm/shopify/install?shop=${shop}`);
-      window.location.href = res.data.url;
+      const data = await apiFetch(`/autoconfirm/shopify/install?shop=${shop}`);
+      window.location.href = data.url;
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Error al conectar');
+      alert(err.message || 'Error al conectar');
       setConnecting(false);
     }
   }
 
   async function disconnect() {
     if (!confirm('¿Desconectar tienda? Se eliminará el webhook de Shopify.')) return;
-    await api.delete('/autoconfirm/store');
+    await apiFetch('/autoconfirm/store', { method: 'DELETE' });
     setStore(null);
     setLogs([]);
   }
@@ -100,11 +114,9 @@ export default function AutoConfirmPage() {
   async function saveTemplate() {
     setSaving(true);
     try {
-      await api.put('/autoconfirm/template', {
-        messageTemplate: template,
-        whatsappTemplateName: templateName,
-        whatsappLanguage: templateLang,
-        whatsappEnabled: waEnabled,
+      await apiFetch('/autoconfirm/template', {
+        method: 'PUT',
+        body: JSON.stringify({ messageTemplate: template, whatsappTemplateName: templateName, whatsappLanguage: templateLang, whatsappEnabled: waEnabled }),
       });
       await loadStore();
     } finally {
