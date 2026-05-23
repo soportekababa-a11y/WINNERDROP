@@ -1,7 +1,4 @@
-import {
-  Controller, Get, Post, Put, Delete, Query, Body, Req, Res,
-  UseGuards, HttpCode, Headers, RawBodyRequest,
-} from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Req, Res, UseGuards, HttpCode, Headers } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AutoconfirmService } from './autoconfirm.service';
@@ -10,26 +7,18 @@ import { AutoconfirmService } from './autoconfirm.service';
 export class AutoconfirmController {
   constructor(private svc: AutoconfirmService) {}
 
-  // ─── Shopify OAuth ─────────────────────────────────────────────────────────
+  // ─── Connect store ─────────────────────────────────────────────────────────
 
   @UseGuards(JwtAuthGuard)
-  @Get('shopify/install')
-  install(@Req() req: any, @Query('shop') shop: string, @Res() res: Response) {
-    if (!shop) return res.status(400).json({ message: 'Missing shop param' });
-    const url = this.svc.getInstallUrl(req.user.id, shop);
-    return res.json({ url });
+  @Post('shopify/connect')
+  connectStore(
+    @Req() req: any,
+    @Body() body: { shopDomain: string; accessToken: string },
+  ) {
+    return this.svc.connectStore(req.user.id, body.shopDomain, body.accessToken);
   }
 
-  @Get('shopify/callback')
-  async callback(
-    @Query('code') code: string,
-    @Query('shop') shop: string,
-    @Query('state') state: string,
-    @Res() res: Response,
-  ) {
-    const redirectUrl = await this.svc.handleCallback(code, shop, state);
-    return res.redirect(redirectUrl);
-  }
+  // ─── Webhook (called by Shopify) ───────────────────────────────────────────
 
   @Post('shopify/webhook')
   @HttpCode(200)
@@ -44,14 +33,12 @@ export class AutoconfirmController {
       const valid = this.svc.verifyWebhookHmac(rawBody, hmac);
       if (!valid) return res.status(401).json({ message: 'Invalid HMAC' });
     }
-
     const order = req.body;
     if (shopDomain && order) {
       this.svc.processOrder(shopDomain, order).catch(err =>
         console.error('[AutoConfirm webhook]', err.message)
       );
     }
-
     return res.json({ ok: true });
   }
 
@@ -84,7 +71,7 @@ export class AutoconfirmController {
 
   @UseGuards(JwtAuthGuard)
   @Get('logs')
-  getLogs(@Req() req: any, @Query('limit') limit?: string) {
-    return this.svc.getLogs(req.user.id, limit ? Number(limit) : 50);
+  getLogs(@Req() req: any) {
+    return this.svc.getLogs(req.user.id, 50);
   }
 }

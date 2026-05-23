@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { MessageCircle, Store, CheckCircle2, XCircle, AlertCircle, ExternalLink, Trash2, Save, RefreshCw } from 'lucide-react';
+import { MessageCircle, Store, CheckCircle2, XCircle, AlertCircle, ExternalLink, Trash2, Save, RefreshCw, Key } from 'lucide-react';
 import { getToken } from '@/lib/auth';
 
 interface ShopifyStore {
@@ -31,7 +30,11 @@ async function apiFetch(path: string, options?: RequestInit) {
   const token = getToken();
   const res = await fetch(`/api/proxy${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
@@ -42,27 +45,20 @@ async function apiFetch(path: string, options?: RequestInit) {
 }
 
 export default function AutoConfirmPage() {
-  const searchParams = useSearchParams();
   const [store, setStore] = useState<ShopifyStore | null>(null);
   const [logs, setLogs] = useState<OrderLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [shopInput, setShopInput] = useState('');
+  const [tokenInput, setTokenInput] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState('');
   const [saving, setSaving] = useState(false);
   const [template, setTemplate] = useState('');
   const [templateName, setTemplateName] = useState('');
   const [templateLang, setTemplateLang] = useState('es');
   const [waEnabled, setWaEnabled] = useState(false);
 
-  useEffect(() => {
-    loadStore();
-  }, []);
-
-  useEffect(() => {
-    if (searchParams.get('connected') === 'true') {
-      loadStore();
-    }
-  }, [searchParams]);
+  useEffect(() => { loadStore(); }, []);
 
   async function loadStore() {
     setLoading(true);
@@ -85,21 +81,26 @@ export default function AutoConfirmPage() {
 
   async function loadLogs() {
     try {
-      const data = await apiFetch('/autoconfirm/logs?limit=20');
+      const data = await apiFetch('/autoconfirm/logs');
       setLogs(data || []);
     } catch { /* ignore */ }
   }
 
   async function connectShop() {
-    let shop = shopInput.trim();
-    if (!shop) return;
-    if (!shop.includes('.myshopify.com')) shop = `${shop}.myshopify.com`;
+    if (!shopInput.trim() || !tokenInput.trim()) return;
     setConnecting(true);
+    setConnectError('');
     try {
-      const data = await apiFetch(`/autoconfirm/shopify/install?shop=${shop}`);
-      window.location.href = data.url;
+      await apiFetch('/autoconfirm/shopify/connect', {
+        method: 'POST',
+        body: JSON.stringify({ shopDomain: shopInput.trim(), accessToken: tokenInput.trim() }),
+      });
+      setShopInput('');
+      setTokenInput('');
+      await loadStore();
     } catch (err: any) {
-      alert(err.message || 'Error al conectar');
+      setConnectError(err.message || 'Token o dominio incorrecto');
+    } finally {
       setConnecting(false);
     }
   }
@@ -148,46 +149,78 @@ export default function AutoConfirmPage() {
         </div>
         <div>
           <h1 className="text-xl font-semibold text-white">AutoConfirm</h1>
-          <p className="text-xs text-gray-500">Bot WhatsApp — confirmación automática de pedidos</p>
+          <p className="text-xs text-gray-500">Bot WhatsApp — confirmación automática de pedidos Shopify</p>
         </div>
       </div>
 
       {!store ? (
         /* ─── Connect store ─── */
-        <div className="max-w-lg">
+        <div className="max-w-xl space-y-4">
           <div className="rounded-2xl p-6 space-y-5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="flex items-center gap-3">
               <Store size={18} className="text-gray-400" />
               <h2 className="text-sm font-medium text-white">Conectar tienda Shopify</h2>
             </div>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Conecta tu tienda para activar el bot. Cuando llegue un pedido, el bot enviará automáticamente un mensaje de confirmación al WhatsApp del cliente.
-            </p>
-            <div className="flex gap-2">
-              <div className="flex-1 relative">
+
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-xs text-gray-500">Dominio de la tienda</label>
                 <input
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50"
-                  placeholder="mi-tienda o mi-tienda.myshopify.com"
+                  placeholder="mi-tienda.myshopify.com"
                   value={shopInput}
                   onChange={e => setShopInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && connectShop()}
                 />
               </div>
-              <button
-                onClick={connectShop}
-                disabled={connecting || !shopInput}
-                className="px-4 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50 transition-all"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
-              >
-                {connecting ? <RefreshCw size={14} className="animate-spin" /> : 'Conectar'}
-              </button>
+              <div className="space-y-1.5">
+                <label className="text-xs text-gray-500">Admin API Access Token</label>
+                <div className="relative">
+                  <Key size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600" />
+                  <input
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50"
+                    placeholder="shpat_xxxxxxxxxxxxxxxxxxxx"
+                    value={tokenInput}
+                    onChange={e => setTokenInput(e.target.value)}
+                    type="password"
+                  />
+                </div>
+              </div>
             </div>
-            <div className="rounded-xl p-4 text-xs text-gray-500 space-y-1.5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-              <p className="text-gray-400 font-medium">¿Cómo funciona?</p>
-              <p>1. Conectas tu tienda Shopify con OAuth</p>
-              <p>2. El bot se registra como webhook en tu tienda</p>
-              <p>3. Cuando llega un pedido → bot manda WhatsApp al cliente automáticamente</p>
-              <p>4. Configuras el mensaje a tu gusto con variables como <code className="text-violet-400">{'{{nombre}}'}</code>, <code className="text-violet-400">{'{{numero}}'}</code>, <code className="text-violet-400">{'{{tienda}}'}</code></p>
+
+            {connectError && (
+              <p className="text-xs text-red-400 flex items-center gap-1.5"><XCircle size={12} /> {connectError}</p>
+            )}
+
+            <button
+              onClick={connectShop}
+              disabled={connecting || !shopInput || !tokenInput}
+              className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
+            >
+              {connecting ? <><RefreshCw size={14} className="animate-spin" /> Verificando...</> : 'Conectar tienda'}
+            </button>
+          </div>
+
+          {/* Instructions */}
+          <div className="rounded-2xl p-5 space-y-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <p className="text-xs font-medium text-gray-400">¿Cómo obtener el Access Token?</p>
+            <div className="space-y-3 text-xs text-gray-500">
+              <div className="flex gap-3">
+                <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">1</span>
+                <p>Ve a tu Shopify Admin → <span className="text-gray-300">Configuración → Apps y canales de ventas</span></p>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">2</span>
+                <p>Clic en <span className="text-gray-300">Desarrollar apps</span> → <span className="text-gray-300">Crear una app</span></p>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">3</span>
+                <p>Nombre: <span className="text-gray-300">AutoConfirm</span> → Configurar permisos de Admin API → activar <span className="text-gray-300">read_orders</span></p>
+              </div>
+              <div className="flex gap-3">
+                <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">4</span>
+                <p>Clic <span className="text-gray-300">Instalar app</span> → copia el <span className="text-gray-300">Admin API access token</span> (empieza con <code className="text-violet-400">shpat_</code>)</p>
+              </div>
             </div>
           </div>
         </div>
@@ -204,18 +237,12 @@ export default function AutoConfirmPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <a
-                  href={`https://${store.shopDomain}/admin`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-all"
-                >
+                <a href={`https://${store.shopDomain}/admin`} target="_blank" rel="noopener noreferrer"
+                  className="p-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-all">
                   <ExternalLink size={14} />
                 </a>
-                <button
-                  onClick={disconnect}
-                  className="p-2 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                >
+                <button onClick={disconnect}
+                  className="p-2 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -228,7 +255,7 @@ export default function AutoConfirmPage() {
               <h2 className="text-sm font-medium text-white">Mensaje automático</h2>
 
               <div className="space-y-1.5">
-                <label className="text-xs text-gray-500">Texto del mensaje</label>
+                <label className="text-xs text-gray-500">Texto del mensaje (preview)</label>
                 <textarea
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50 resize-none"
                   rows={4}
@@ -239,10 +266,10 @@ export default function AutoConfirmPage() {
                 <p className="text-xs text-gray-600">Variables: <code className="text-violet-400">{'{{nombre}}'}</code> <code className="text-violet-400">{'{{numero}}'}</code> <code className="text-violet-400">{'{{tienda}}'}</code></p>
               </div>
 
-              <div className="space-y-3 pt-2 border-t border-white/5">
+              <div className="space-y-3 pt-3 border-t border-white/5">
                 <p className="text-xs font-medium text-gray-400">WhatsApp Meta Cloud API</p>
                 <div className="space-y-1.5">
-                  <label className="text-xs text-gray-500">Nombre del template (Meta Business)</label>
+                  <label className="text-xs text-gray-500">Nombre del template aprobado en Meta</label>
                   <input
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50"
                     placeholder="order_confirmation"
@@ -251,7 +278,7 @@ export default function AutoConfirmPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs text-gray-500">Idioma del template</label>
+                  <label className="text-xs text-gray-500">Idioma</label>
                   <input
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50"
                     placeholder="es"
@@ -259,66 +286,49 @@ export default function AutoConfirmPage() {
                     onChange={e => setTemplateLang(e.target.value)}
                   />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between py-1">
                   <div>
                     <p className="text-xs text-white">Activar envío real</p>
-                    <p className="text-xs text-gray-600">Requiere WHATSAPP_ACCESS_TOKEN configurado</p>
+                    <p className="text-xs text-gray-600">Requiere credenciales WhatsApp en el servidor</p>
                   </div>
-                  <button
-                    onClick={() => setWaEnabled(!waEnabled)}
-                    className={`w-11 h-6 rounded-full transition-colors relative ${waEnabled ? 'bg-violet-600' : 'bg-white/10'}`}
-                  >
-                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${waEnabled ? 'translate-x-5.5 left-0.5' : 'left-0.5'}`} />
+                  <button onClick={() => setWaEnabled(!waEnabled)}
+                    className={`w-11 h-6 rounded-full transition-colors relative ${waEnabled ? 'bg-violet-600' : 'bg-white/10'}`}>
+                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${waEnabled ? 'left-[22px]' : 'left-0.5'}`} />
                   </button>
                 </div>
               </div>
 
-              <button
-                onClick={saveTemplate}
-                disabled={saving}
+              <button onClick={saveTemplate} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-50"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
-              >
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
                 <Save size={14} />
                 {saving ? 'Guardando...' : 'Guardar configuración'}
               </button>
             </div>
 
-            {/* ─── Setup guide ─── */}
+            {/* ─── WhatsApp setup guide ─── */}
             <div className="rounded-2xl p-5 space-y-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <h2 className="text-sm font-medium text-white">Configurar WhatsApp</h2>
+              <h2 className="text-sm font-medium text-white">Activar WhatsApp</h2>
               <div className="space-y-3 text-xs text-gray-500">
                 <div className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs shrink-0">1</span>
-                  <div>
-                    <p className="text-gray-300">Crear cuenta Meta Business</p>
-                    <p>Ve a business.facebook.com → crear cuenta de negocio</p>
-                  </div>
+                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">1</span>
+                  <div><p className="text-gray-300">Crear cuenta Meta Business</p><p>business.facebook.com</p></div>
                 </div>
                 <div className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs shrink-0">2</span>
-                  <div>
-                    <p className="text-gray-300">Configurar WhatsApp Business API</p>
-                    <p>En Meta Developers → crear app → WhatsApp → obtener Phone Number ID y Token</p>
-                  </div>
+                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">2</span>
+                  <div><p className="text-gray-300">Crear app en Meta Developers</p><p>developers.facebook.com → agregar WhatsApp → copiar Phone Number ID y Token</p></div>
                 </div>
                 <div className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs shrink-0">3</span>
-                  <div>
-                    <p className="text-gray-300">Crear template de mensaje</p>
-                    <p>En Meta Business → WhatsApp → Message Templates → crear template con variables: {'{{1}}'} nombre, {'{{2}}'} #orden, {'{{3}}'} tienda</p>
-                  </div>
+                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">3</span>
+                  <div><p className="text-gray-300">Crear template aprobado</p><p>Meta Business → WhatsApp → Message Templates → variables: {'{{1}}'} nombre, {'{{2}}'} #orden, {'{{3}}'} tienda</p></div>
                 </div>
                 <div className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs shrink-0">4</span>
-                  <div>
-                    <p className="text-gray-300">Agregar credenciales al servidor</p>
-                    <p>En el servidor editar <code className="text-violet-400">/opt/winnerdrop/backend/.env</code> con WHATSAPP_ACCESS_TOKEN y WHATSAPP_PHONE_NUMBER_ID</p>
-                  </div>
+                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">4</span>
+                  <div><p className="text-gray-300">Agregar al servidor</p><p>Editar <code className="text-violet-400">/opt/winnerdrop/backend/.env</code> con WHATSAPP_ACCESS_TOKEN y WHATSAPP_PHONE_NUMBER_ID</p></div>
                 </div>
-                <div className="rounded-xl p-3 mt-2" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                  <p className="text-violet-300 font-medium">Gratis hasta 1,000 conversaciones/mes</p>
-                  <p className="text-gray-500 mt-0.5">Después: ~$0.015 por confirmación de pedido</p>
+                <div className="rounded-xl p-3 mt-1" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                  <p className="text-violet-300 font-medium">Gratis hasta 1,000 mensajes/mes</p>
+                  <p className="text-gray-500 mt-0.5">Después: ~$0.015 por confirmación</p>
                 </div>
               </div>
             </div>
@@ -327,14 +337,13 @@ export default function AutoConfirmPage() {
           {/* ─── Order logs ─── */}
           <div className="rounded-2xl p-5 space-y-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-medium text-white">Pedidos recientes</h2>
+              <h2 className="text-sm font-medium text-white">Pedidos recibidos</h2>
               <button onClick={loadLogs} className="p-1.5 rounded-lg text-gray-600 hover:text-gray-300 hover:bg-white/5 transition-all">
                 <RefreshCw size={13} />
               </button>
             </div>
-
             {logs.length === 0 ? (
-              <p className="text-xs text-gray-600 text-center py-6">No hay pedidos aún. Cuando llegue uno aparecerá aquí.</p>
+              <p className="text-xs text-gray-600 text-center py-6">Sin pedidos aún. Cuando llegue uno aparecerá aquí.</p>
             ) : (
               <div className="space-y-2">
                 {logs.map(log => (
