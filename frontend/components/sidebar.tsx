@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Calculator, LayoutDashboard, LogOut } from 'lucide-react';
+import { Calculator, LayoutDashboard, LogOut, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getUser, clearAuth } from '@/lib/auth';
 import { MomentumIcon, MomentumWordmark } from '@/components/momentum-logo';
@@ -10,6 +10,7 @@ import { MomentumIcon, MomentumWordmark } from '@/components/momentum-logo';
 const NAV = [
   { href: '/', label: 'Winner', icon: LayoutDashboard, desc: 'Dashboard' },
   { href: '/calculator', label: 'Rentabilidad', icon: Calculator, desc: 'Calculadora' },
+  { href: '/autoconfirm', label: 'AutoConfirm', icon: MessageCircle, desc: 'Bot WhatsApp' },
 ];
 
 export function Sidebar() {

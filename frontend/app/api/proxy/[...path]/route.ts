@@ -9,6 +9,10 @@ async function handler(req: NextRequest, { params }: { params: Promise<{ path: s
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const auth = req.headers.get('Authorization');
   if (auth) headers['Authorization'] = auth;
+  for (const h of ['x-shopify-hmac-sha256', 'x-shopify-shop-domain', 'x-shopify-topic', 'x-shopify-api-version']) {
+    const v = req.headers.get(h);
+    if (v) headers[h] = v;
+  }
 
   const body = req.method !== 'GET' && req.method !== 'HEAD'
     ? await req.text()

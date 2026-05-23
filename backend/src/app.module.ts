@@ -4,12 +4,15 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Product } from './products/product.entity';
 import { Snapshot } from './snapshots/snapshot.entity';
 import { User } from './users/user.entity';
+import { ShopifyStore } from './autoconfirm/entities/shopify-store.entity';
+import { OrderLog } from './autoconfirm/entities/order-log.entity';
 import { ProductsModule } from './products/products.module';
 import { ScraperModule } from './scraper/scraper.module';
 import { ScraperService } from './scraper/scraper.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CompetitorSpyModule } from './competitor-spy/competitor-spy.module';
+import { AutoconfirmModule } from './autoconfirm/autoconfirm.module';
 
 @Module({
   imports: [
@@ -23,7 +26,7 @@ import { CompetitorSpyModule } from './competitor-spy/competitor-spy.module';
         username: config.get('DB_USERNAME', 'postgres'),
         password: config.get('DB_PASSWORD'),
         database: config.get('DB_DATABASE', 'winnerdrop'),
-        entities: [Product, Snapshot, User],
+        entities: [Product, Snapshot, User, ShopifyStore, OrderLog],
         synchronize: true,
         logging: false,
       }),
@@ -33,6 +36,7 @@ import { CompetitorSpyModule } from './competitor-spy/competitor-spy.module';
     AuthModule,
     UsersModule,
     CompetitorSpyModule,
+    AutoconfirmModule,
   ],
 })
 export class AppModule implements OnModuleInit {
