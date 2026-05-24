@@ -18,8 +18,7 @@ function rankBadge(rank: number) {
 
 export function ProductCard({ product: p, rank }: Props) {
   const grid = p.dailyGrid ?? [];
-  const todayEntry = grid[grid.length - 1];
-  const sales = todayEntry?.sales ?? p.salesToday;
+  const sales = p.salesToday;
   const trending = sales >= 10;
   const badge = rankBadge(rank);
 
