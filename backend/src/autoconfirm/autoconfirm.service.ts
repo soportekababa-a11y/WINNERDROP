@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
+
+const SHOPIFY_SCOPES = 'read_orders,write_orders';
 import { ShopifyStore } from './entities/shopify-store.entity';
 import { OrderLog } from './entities/order-log.entity';
 import { WhatsappService } from './whatsapp.service';
@@ -19,6 +21,38 @@ export class AutoconfirmService {
     private logRepo: Repository<OrderLog>,
     private whatsapp: WhatsappService,
   ) {}
+
+  private oauthStates = new Map<string, string>(); // nonce → userId
+
+  buildOAuthUrl(shopDomain: string, userId: string): string {
+    let domain = shopDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    if (!domain.includes('.myshopify.com')) domain = `${domain}.myshopify.com`;
+    const clientId = this.config.get<string>('SHOPIFY_CLIENT_ID', '');
+    const redirectUri = this.config.get<string>('SHOPIFY_REDIRECT_URI', 'http://116.203.82.110/autoconfirm/callback');
+    const nonce = crypto.randomBytes(16).toString('hex');
+    this.oauthStates.set(nonce, userId);
+    setTimeout(() => this.oauthStates.delete(nonce), 10 * 60 * 1000); // expire in 10min
+    return `https://${domain}/admin/oauth/authorize?client_id=${clientId}&scope=${encodeURIComponent(SHOPIFY_SCOPES)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${nonce}`;
+  }
+
+  async handleOAuthCallback(shopDomain: string, code: string, state: string): Promise<void> {
+    const userId = this.oauthStates.get(state);
+    if (!userId) throw new Error('Estado OAuth inválido o expirado');
+    this.oauthStates.delete(state);
+
+    const clientId = this.config.get<string>('SHOPIFY_CLIENT_ID', '');
+    const clientSecret = this.config.get<string>('SHOPIFY_CLIENT_SECRET', '');
+
+    const tokenRes = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+    });
+    if (!tokenRes.ok) throw new Error(`Shopify token exchange failed: ${tokenRes.status}`);
+    const { access_token } = await tokenRes.json() as { access_token: string };
+
+    await this.connectStore(userId, shopDomain, access_token);
+  }
 
   // ─── Connect store via access token ──────────────────────────────────────
 

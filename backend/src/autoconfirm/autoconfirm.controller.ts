@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Req, Res, UseGuards, HttpCode, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Req, Res, Query, UseGuards, HttpCode, Headers } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AutoconfirmService } from './autoconfirm.service';
@@ -7,7 +7,32 @@ import { AutoconfirmService } from './autoconfirm.service';
 export class AutoconfirmController {
   constructor(private svc: AutoconfirmService) {}
 
-  // ─── Connect Shopify ───────────────────────────────────────────────────────
+  // ─── OAuth: get install URL ────────────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Post('shopify/oauth-url')
+  getOAuthUrl(@Req() req: any, @Body() body: { shopDomain: string }) {
+    return { url: this.svc.buildOAuthUrl(body.shopDomain, req.user.id) };
+  }
+
+  // ─── OAuth: callback from Shopify ─────────────────────────────────────────
+
+  @Get('shopify/callback')
+  async shopifyCallback(
+    @Query('code') code: string,
+    @Query('shop') shop: string,
+    @Query('state') state: string,
+    @Res() res: Response,
+  ) {
+    try {
+      await this.svc.handleOAuthCallback(shop, code, state);
+      return res.redirect('http://116.203.82.110/autoconfirm?connected=1');
+    } catch (err: any) {
+      return res.redirect(`http://116.203.82.110/autoconfirm?error=${encodeURIComponent(err.message)}`);
+    }
+  }
+
+  // ─── Connect Shopify (direct token — legacy) ───────────────────────────────
 
   @UseGuards(JwtAuthGuard)
   @Post('shopify/connect')
