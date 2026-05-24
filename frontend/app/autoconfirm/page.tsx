@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { MessageCircle, Store, CheckCircle2, XCircle, AlertCircle, ExternalLink, Trash2, Save, RefreshCw, Key } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { MessageCircle, Store, CheckCircle2, XCircle, AlertCircle, Trash2, Save, RefreshCw, Key, Smartphone, Wifi, WifiOff } from 'lucide-react';
 import { getToken } from '@/lib/auth';
 
 interface ShopifyStore {
@@ -9,10 +9,6 @@ interface ShopifyStore {
   shopDomain: string;
   isActive: boolean;
   messageTemplate: string;
-  whatsappTemplateName: string;
-  whatsappLanguage: string;
-  whatsappEnabled: boolean;
-  whatsappPhoneNumberId: string;
   createdAt: string;
 }
 
@@ -26,6 +22,8 @@ interface OrderLog {
   error: string;
   createdAt: string;
 }
+
+type WaStatus = 'disconnected' | 'connecting' | 'qr' | 'connected';
 
 async function apiFetch(path: string, options?: RequestInit) {
   const token = getToken();
@@ -55,13 +53,28 @@ export default function AutoConfirmPage() {
   const [connectError, setConnectError] = useState('');
   const [saving, setSaving] = useState(false);
   const [template, setTemplate] = useState('');
-  const [templateName, setTemplateName] = useState('');
-  const [templateLang, setTemplateLang] = useState('es');
-  const [waEnabled, setWaEnabled] = useState(false);
-  const [waPhoneId, setWaPhoneId] = useState('');
-  const [waToken, setWaToken] = useState('');
+  const [waStatus, setWaStatus] = useState<WaStatus>('disconnected');
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [initiating, setInitiating] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => { loadStore(); }, []);
+  useEffect(() => { loadStore(); return () => stopPoll(); }, []);
+
+  function stopPoll() {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }
+
+  function startPoll() {
+    stopPoll();
+    pollRef.current = setInterval(async () => {
+      try {
+        const data = await apiFetch('/autoconfirm/whatsapp/status');
+        setWaStatus(data.status);
+        setQrDataUrl(data.qr || '');
+        if (data.status === 'connected') { stopPoll(); loadLogs(); }
+      } catch { /* ignore */ }
+    }, 3000);
+  }
 
   async function loadStore() {
     setLoading(true);
@@ -70,11 +83,12 @@ export default function AutoConfirmPage() {
       if (data) {
         setStore(data);
         setTemplate(data.messageTemplate);
-        setTemplateName(data.whatsappTemplateName || '');
-        setTemplateLang(data.whatsappLanguage || 'es');
-        setWaEnabled(data.whatsappEnabled);
-        setWaPhoneId(data.whatsappPhoneNumberId || '');
         loadLogs();
+        // Check WA status
+        const waData = await apiFetch('/autoconfirm/whatsapp/status').catch(() => ({ status: 'disconnected' }));
+        setWaStatus(waData.status);
+        setQrDataUrl(waData.qr || '');
+        if (waData.status === 'qr' || waData.status === 'connecting') startPoll();
       }
     } catch {
       setStore(null);
@@ -95,13 +109,14 @@ export default function AutoConfirmPage() {
     setConnecting(true);
     setConnectError('');
     try {
-      await apiFetch('/autoconfirm/shopify/connect', {
+      const data = await apiFetch('/autoconfirm/shopify/connect', {
         method: 'POST',
         body: JSON.stringify({ shopDomain: shopInput.trim(), accessToken: tokenInput.trim() }),
       });
+      setStore(data);
+      setTemplate(data.messageTemplate);
       setShopInput('');
       setTokenInput('');
-      await loadStore();
     } catch (err: any) {
       setConnectError(err.message || 'Token o dominio incorrecto');
     } finally {
@@ -109,8 +124,31 @@ export default function AutoConfirmPage() {
     }
   }
 
-  async function disconnect() {
+  async function initWhatsapp() {
+    setInitiating(true);
+    setWaStatus('connecting');
+    try {
+      await apiFetch('/autoconfirm/whatsapp/init', { method: 'POST' });
+      startPoll();
+    } catch (err: any) {
+      setWaStatus('disconnected');
+      alert(err.message || 'Error iniciando WhatsApp');
+    } finally {
+      setInitiating(false);
+    }
+  }
+
+  async function disconnectWhatsapp() {
+    if (!confirm('¿Desconectar WhatsApp?')) return;
+    await apiFetch('/autoconfirm/whatsapp', { method: 'DELETE' }).catch(() => null);
+    setWaStatus('disconnected');
+    setQrDataUrl('');
+    stopPoll();
+  }
+
+  async function disconnectStore() {
     if (!confirm('¿Desconectar tienda? Se eliminará el webhook de Shopify.')) return;
+    await disconnectWhatsapp();
     await apiFetch('/autoconfirm/store', { method: 'DELETE' });
     setStore(null);
     setLogs([]);
@@ -121,9 +159,8 @@ export default function AutoConfirmPage() {
     try {
       await apiFetch('/autoconfirm/template', {
         method: 'PUT',
-        body: JSON.stringify({ messageTemplate: template, whatsappTemplateName: templateName, whatsappLanguage: templateLang, whatsappEnabled: waEnabled, whatsappPhoneNumberId: waPhoneId, ...(waToken ? { whatsappAccessToken: waToken } : {}) }),
+        body: JSON.stringify({ messageTemplate: template }),
       });
-      await loadStore();
     } finally {
       setSaving(false);
     }
@@ -153,7 +190,7 @@ export default function AutoConfirmPage() {
         </div>
         <div>
           <h1 className="text-xl font-semibold text-white">AutoConfirm</h1>
-          <p className="text-xs text-gray-500">Bot WhatsApp — confirmación automática de pedidos Shopify</p>
+          <p className="text-xs text-gray-500">Confirmaciones de pedidos por WhatsApp — desde tu número</p>
         </div>
       </div>
 
@@ -165,7 +202,6 @@ export default function AutoConfirmPage() {
               <Store size={18} className="text-gray-400" />
               <h2 className="text-sm font-medium text-white">Conectar tienda Shopify</h2>
             </div>
-
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <label className="text-xs text-gray-500">Dominio de la tienda</label>
@@ -190,41 +226,24 @@ export default function AutoConfirmPage() {
                 </div>
               </div>
             </div>
-
-            {connectError && (
-              <p className="text-xs text-red-400 flex items-center gap-1.5"><XCircle size={12} /> {connectError}</p>
-            )}
-
+            {connectError && <p className="text-xs text-red-400 flex items-center gap-1.5"><XCircle size={12} /> {connectError}</p>}
             <button
               onClick={connectShop}
               disabled={connecting || !shopInput || !tokenInput}
-              className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50 flex items-center justify-center gap-2"
               style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
             >
               {connecting ? <><RefreshCw size={14} className="animate-spin" /> Verificando...</> : 'Conectar tienda'}
             </button>
           </div>
 
-          {/* Instructions */}
-          <div className="rounded-2xl p-5 space-y-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div className="rounded-2xl p-5 space-y-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
             <p className="text-xs font-medium text-gray-400">¿Cómo obtener el Access Token?</p>
-            <div className="space-y-3 text-xs text-gray-500">
-              <div className="flex gap-3">
-                <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">1</span>
-                <p>Ve a tu Shopify Admin → <span className="text-gray-300">Configuración → Apps y canales de ventas</span></p>
-              </div>
-              <div className="flex gap-3">
-                <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">2</span>
-                <p>Clic en <span className="text-gray-300">Desarrollar apps</span> → <span className="text-gray-300">Crear una app</span></p>
-              </div>
-              <div className="flex gap-3">
-                <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">3</span>
-                <p>Nombre: <span className="text-gray-300">AutoConfirm</span> → Configurar permisos de Admin API → activar <span className="text-gray-300">read_orders</span></p>
-              </div>
-              <div className="flex gap-3">
-                <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">4</span>
-                <p>Clic <span className="text-gray-300">Instalar app</span> → copia el <span className="text-gray-300">Admin API access token</span> (empieza con <code className="text-violet-400">shpat_</code>)</p>
-              </div>
+            <div className="space-y-2 text-xs text-gray-500">
+              <p>1. Shopify Admin → <span className="text-gray-300">Configuración → Apps → Desarrollar apps</span></p>
+              <p>2. Crear app → nombre <span className="text-gray-300">AutoConfirm</span></p>
+              <p>3. Configurar permisos → activar <span className="text-gray-300">read_orders</span> → Guardar</p>
+              <p>4. Instalar app → copiar el <span className="text-gray-300">Admin API access token</span> (empieza con <code className="text-violet-400">shpat_</code>)</p>
             </div>
           </div>
         </div>
@@ -237,120 +256,104 @@ export default function AutoConfirmPage() {
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <div>
                   <p className="text-sm font-medium text-white">{store.shopDomain}</p>
-                  <p className="text-xs text-gray-500">Conectado · webhook activo</p>
+                  <p className="text-xs text-gray-500">Tienda conectada · webhook activo</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <a href={`https://${store.shopDomain}/admin`} target="_blank" rel="noopener noreferrer"
-                  className="p-2 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-all">
-                  <ExternalLink size={14} />
-                </a>
-                <button onClick={disconnect}
-                  className="p-2 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all">
-                  <Trash2 size={14} />
-                </button>
-              </div>
+              <button onClick={disconnectStore} className="p-2 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all">
+                <Trash2 size={14} />
+              </button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* ─── Template editor ─── */}
+            {/* ─── WhatsApp QR ─── */}
             <div className="rounded-2xl p-5 space-y-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <h2 className="text-sm font-medium text-white">Mensaje automático</h2>
-
-              <div className="space-y-1.5">
-                <label className="text-xs text-gray-500">Texto del mensaje (preview)</label>
-                <textarea
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50 resize-none"
-                  rows={4}
-                  value={template}
-                  onChange={e => setTemplate(e.target.value)}
-                  placeholder="¡Hola {{nombre}}! Tu pedido #{{numero}} en {{tienda}} fue confirmado. 🛍️"
-                />
-                <p className="text-xs text-gray-600">Variables: <code className="text-violet-400">{'{{nombre}}'}</code> <code className="text-violet-400">{'{{numero}}'}</code> <code className="text-violet-400">{'{{tienda}}'}</code></p>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Smartphone size={16} className="text-gray-400" />
+                  <h2 className="text-sm font-medium text-white">WhatsApp</h2>
+                </div>
+                {waStatus === 'connected' && (
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+                    <Wifi size={12} /> Conectado
+                  </span>
+                )}
+                {waStatus === 'disconnected' && (
+                  <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <WifiOff size={12} /> Desconectado
+                  </span>
+                )}
+                {(waStatus === 'connecting' || waStatus === 'qr') && (
+                  <span className="flex items-center gap-1.5 text-xs text-yellow-400">
+                    <RefreshCw size={12} className="animate-spin" /> Esperando...
+                  </span>
+                )}
               </div>
 
-              <div className="space-y-3 pt-3 border-t border-white/5">
-                <p className="text-xs font-medium text-gray-400">WhatsApp Meta Cloud API</p>
-                <div className="space-y-1.5">
-                  <label className="text-xs text-gray-500">Nombre del template aprobado en Meta</label>
-                  <input
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50"
-                    placeholder="order_confirmation"
-                    value={templateName}
-                    onChange={e => setTemplateName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs text-gray-500">Idioma</label>
-                  <input
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50"
-                    placeholder="es"
-                    value={templateLang}
-                    onChange={e => setTemplateLang(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center justify-between py-1">
-                  <div>
-                    <p className="text-xs text-white">Activar envío real</p>
-                    <p className="text-xs text-gray-600">Requiere credenciales WhatsApp en el servidor</p>
+              {waStatus === 'connected' ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl p-4 text-center" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                    <CheckCircle2 size={28} className="text-emerald-400 mx-auto mb-2" />
+                    <p className="text-sm text-emerald-300 font-medium">WhatsApp activo</p>
+                    <p className="text-xs text-gray-500 mt-1">El bot enviará confirmaciones automáticamente</p>
                   </div>
-                  <button onClick={() => setWaEnabled(!waEnabled)}
-                    className={`w-11 h-6 rounded-full transition-colors relative ${waEnabled ? 'bg-violet-600' : 'bg-white/10'}`}>
-                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${waEnabled ? 'left-[22px]' : 'left-0.5'}`} />
+                  <button onClick={disconnectWhatsapp} className="w-full py-2 rounded-xl text-xs text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all border border-white/5">
+                    Desconectar WhatsApp
                   </button>
                 </div>
-              </div>
-
-              <button onClick={saveTemplate} disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-50"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
-                <Save size={14} />
-                {saving ? 'Guardando...' : 'Guardar configuración'}
-              </button>
+              ) : waStatus === 'qr' && qrDataUrl ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl p-4 flex flex-col items-center gap-3" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                    <img src={qrDataUrl} alt="QR WhatsApp" className="w-48 h-48 rounded-lg" />
+                    <div className="text-center">
+                      <p className="text-xs text-white font-medium">Escanea con tu WhatsApp</p>
+                      <p className="text-xs text-gray-500 mt-0.5">WhatsApp → Dispositivos vinculados → Vincular dispositivo</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-gray-500">
+                    Conecta tu WhatsApp para que el bot envíe las confirmaciones de pedidos desde tu número.
+                  </p>
+                  <button
+                    onClick={initWhatsapp}
+                    disabled={initiating}
+                    className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                    style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
+                  >
+                    {initiating
+                      ? <><RefreshCw size={14} className="animate-spin" /> Generando QR...</>
+                      : <><Smartphone size={14} /> Conectar WhatsApp</>
+                    }
+                  </button>
+                  <p className="text-xs text-gray-600 text-center">El QR aparece en segundos</p>
+                </div>
+              )}
             </div>
 
-            {/* ─── WhatsApp credentials ─── */}
+            {/* ─── Template editor ─── */}
             <div className="rounded-2xl p-5 space-y-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div>
-                <h2 className="text-sm font-medium text-white">Tu número WhatsApp Business</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Los mensajes salen desde tu número — el cliente lo ve como si tú se lo mandaras</p>
+              <h2 className="text-sm font-medium text-white">Mensaje de confirmación</h2>
+              <div className="space-y-1.5">
+                <textarea
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50 resize-none"
+                  rows={5}
+                  value={template}
+                  onChange={e => setTemplate(e.target.value)}
+                  placeholder="¡Hola {{nombre}}! Tu pedido #{{numero}} en {{tienda}} fue confirmado. Lo estamos procesando. 🛍️"
+                />
+                <p className="text-xs text-gray-600">Variables disponibles: <code className="text-violet-400">{'{{nombre}}'}</code> <code className="text-violet-400">{'{{numero}}'}</code> <code className="text-violet-400">{'{{tienda}}'}</code></p>
               </div>
-
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs text-gray-500">Phone Number ID <span className="text-gray-700">(de Meta Developers)</span></label>
-                  <input
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50"
-                    placeholder="123456789012345"
-                    value={waPhoneId}
-                    onChange={e => setWaPhoneId(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs text-gray-500">Access Token <span className="text-gray-700">(déjalo vacío para no cambiar)</span></label>
-                  <input
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50"
-                    placeholder="EAAxxxxxxx..."
-                    value={waToken}
-                    onChange={e => setWaToken(e.target.value)}
-                    type="password"
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-xl p-3 space-y-2 text-xs" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                <p className="text-gray-400 font-medium">¿Cómo obtener estas credenciales?</p>
-                <p className="text-gray-600">1. Ve a <span className="text-gray-400">developers.facebook.com</span> → crear app → agregar WhatsApp</p>
-                <p className="text-gray-600">2. En WhatsApp → Getting Started → copia <span className="text-gray-400">Phone Number ID</span> y <span className="text-gray-400">Temporary access token</span></p>
-                <p className="text-gray-600">3. Para token permanente: Meta Business → System Users → generar token</p>
-                <p className="text-gray-600">4. Crea template en Meta Business → WhatsApp → Message Templates</p>
-              </div>
-
-              <div className="rounded-xl p-3" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                <p className="text-violet-300 text-xs font-medium">Gratis hasta 1,000 mensajes/mes por número</p>
-                <p className="text-gray-500 text-xs mt-0.5">Después: ~$0.015 por confirmación de pedido</p>
-              </div>
+              <button
+                onClick={saveTemplate}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
+              >
+                <Save size={14} />
+                {saving ? 'Guardando...' : 'Guardar mensaje'}
+              </button>
             </div>
           </div>
 

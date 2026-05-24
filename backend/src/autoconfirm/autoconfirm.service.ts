@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { ShopifyStore } from './entities/shopify-store.entity';
 import { OrderLog } from './entities/order-log.entity';
+import { WhatsappService } from './whatsapp.service';
 
 @Injectable()
 export class AutoconfirmService {
@@ -16,6 +17,7 @@ export class AutoconfirmService {
     private storeRepo: Repository<ShopifyStore>,
     @InjectRepository(OrderLog)
     private logRepo: Repository<OrderLog>,
+    private whatsapp: WhatsappService,
   ) {}
 
   // ─── Connect store via access token ──────────────────────────────────────
@@ -109,18 +111,13 @@ export class AutoconfirmService {
     log.messageSent = message;
 
     try {
-      if (store.whatsappEnabled && store.whatsappTemplateName && store.whatsappPhoneNumberId) {
-        // Load token (excluded from default select)
-        const storeWithToken = await this.storeRepo.createQueryBuilder('s').addSelect('s.whatsappAccessToken').where('s.id = :id', { id: store.id }).getOne();
-        const token = storeWithToken?.whatsappAccessToken;
-        if (!token) { log.status = 'pending'; log.error = 'Falta WhatsApp Access Token'; }
-        else {
-          await this.sendWhatsApp(this.normalizePhone(phone), store.whatsappTemplateName, store.whatsappLanguage, [customerName, orderNumber, storeName], store.whatsappPhoneNumberId, token);
-          log.status = 'sent';
-        }
+      const waStatus = this.whatsapp.getStatus(store.id);
+      if (waStatus.status === 'connected') {
+        await this.whatsapp.sendMessage(store.id, this.normalizePhone(phone), message);
+        log.status = 'sent';
       } else {
         log.status = 'pending';
-        log.error = 'WhatsApp no configurado aún';
+        log.error = `WhatsApp ${waStatus.status === 'disconnected' ? 'no conectado' : 'conectando...'}`;
       }
     } catch (err: any) {
       log.status = 'failed';
@@ -142,27 +139,6 @@ export class AutoconfirmService {
     return `+${digits}`;
   }
 
-  private async sendWhatsApp(to: string, templateName: string, language: string, params: string[], phoneNumberId: string, token: string): Promise<void> {
-    if (!token || !phoneNumberId) throw new Error('Credenciales WhatsApp incompletas');
-
-    const res = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to,
-        type: 'template',
-        template: {
-          name: templateName,
-          language: { code: language || 'es' },
-          components: [{ type: 'body', parameters: params.map(text => ({ type: 'text', text })) }],
-        },
-      }),
-    });
-
-    if (!res.ok) throw new Error(`Meta API error: ${await res.text()}`);
-  }
-
   // ─── Store management ─────────────────────────────────────────────────────
 
   async getStore(userId: string): Promise<ShopifyStore | null> {
@@ -182,11 +158,29 @@ export class AutoconfirmService {
     await this.storeRepo.save(store);
   }
 
-  async updateTemplate(userId: string, dto: { messageTemplate?: string; whatsappTemplateName?: string; whatsappLanguage?: string; whatsappEnabled?: boolean; whatsappPhoneNumberId?: string; whatsappAccessToken?: string }): Promise<ShopifyStore> {
+  async updateTemplate(userId: string, dto: { messageTemplate?: string }): Promise<ShopifyStore> {
     const store = await this.storeRepo.findOne({ where: { userId, isActive: true } });
     if (!store) throw new NotFoundException('No hay tienda conectada');
     Object.assign(store, dto);
     return this.storeRepo.save(store);
+  }
+
+  async initWhatsapp(userId: string): Promise<void> {
+    const store = await this.storeRepo.findOne({ where: { userId, isActive: true } });
+    if (!store) throw new NotFoundException('No hay tienda conectada');
+    await this.whatsapp.initSession(store.id);
+  }
+
+  async getWhatsappStatus(userId: string): Promise<{ status: string; qr?: string }> {
+    const store = await this.storeRepo.findOne({ where: { userId, isActive: true } });
+    if (!store) return { status: 'disconnected' };
+    return this.whatsapp.getStatus(store.id);
+  }
+
+  async disconnectWhatsapp(userId: string): Promise<void> {
+    const store = await this.storeRepo.findOne({ where: { userId, isActive: true } });
+    if (!store) throw new NotFoundException('No hay tienda conectada');
+    await this.whatsapp.disconnect(store.id);
   }
 
   async getLogs(userId: string, limit = 50): Promise<OrderLog[]> {

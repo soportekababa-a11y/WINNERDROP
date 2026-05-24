@@ -7,18 +7,15 @@ import { AutoconfirmService } from './autoconfirm.service';
 export class AutoconfirmController {
   constructor(private svc: AutoconfirmService) {}
 
-  // ─── Connect store ─────────────────────────────────────────────────────────
+  // ─── Connect Shopify ───────────────────────────────────────────────────────
 
   @UseGuards(JwtAuthGuard)
   @Post('shopify/connect')
-  connectStore(
-    @Req() req: any,
-    @Body() body: { shopDomain: string; accessToken: string },
-  ) {
+  connectStore(@Req() req: any, @Body() body: { shopDomain: string; accessToken: string }) {
     return this.svc.connectStore(req.user.id, body.shopDomain, body.accessToken);
   }
 
-  // ─── Webhook (called by Shopify) ───────────────────────────────────────────
+  // ─── Shopify webhook ───────────────────────────────────────────────────────
 
   @Post('shopify/webhook')
   @HttpCode(200)
@@ -60,11 +57,30 @@ export class AutoconfirmController {
 
   @UseGuards(JwtAuthGuard)
   @Put('template')
-  updateTemplate(
-    @Req() req: any,
-    @Body() body: { messageTemplate?: string; whatsappTemplateName?: string; whatsappLanguage?: string; whatsappEnabled?: boolean; whatsappPhoneNumberId?: string; whatsappAccessToken?: string },
-  ) {
+  updateTemplate(@Req() req: any, @Body() body: { messageTemplate?: string }) {
     return this.svc.updateTemplate(req.user.id, body);
+  }
+
+  // ─── WhatsApp ──────────────────────────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Post('whatsapp/init')
+  @HttpCode(200)
+  async initWhatsapp(@Req() req: any) {
+    await this.svc.initWhatsapp(req.user.id);
+    return { ok: true };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('whatsapp/status')
+  getWhatsappStatus(@Req() req: any) {
+    return this.svc.getWhatsappStatus(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('whatsapp')
+  disconnectWhatsapp(@Req() req: any) {
+    return this.svc.disconnectWhatsapp(req.user.id);
   }
 
   // ─── Logs ──────────────────────────────────────────────────────────────────
