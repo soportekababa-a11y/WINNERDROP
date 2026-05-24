@@ -356,18 +356,29 @@ export class ScraperService implements OnModuleDestroy {
         isActive: true,
         country,
       });
+      await this.productRepo.save(product);
     } else {
+      // Calculate salesToday from last snapshot
+      const lastSnapshot = await this.snapshotRepo.findOne({
+        where: { productId: product.id },
+        order: { capturedAt: 'DESC' },
+      });
+
+      const prevAccum = lastSnapshot?.salesAccum ?? product.totalSalesAccum;
+      const diff = Math.max(0, raw.salesAccum - prevAccum);
+
       product.name = raw.name;
       product.imageUrl = raw.imageUrl;
       product.provider = raw.provider;
       product.price = raw.price;
       product.cost = raw.cost;
       product.stock = raw.stock;
+      product.salesYesterday = product.salesToday;
+      product.salesToday = diff;
       product.totalSalesAccum = raw.salesAccum;
       product.isActive = true;
+      await this.productRepo.save(product);
     }
-
-    await this.productRepo.save(product);
 
     await this.snapshotRepo.save(
       this.snapshotRepo.create({
