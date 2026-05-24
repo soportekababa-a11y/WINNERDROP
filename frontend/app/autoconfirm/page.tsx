@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { MessageCircle, Store, CheckCircle2, XCircle, AlertCircle, Trash2, Save, RefreshCw, Key, Smartphone, Wifi, WifiOff } from 'lucide-react';
-import { getToken } from '@/lib/auth';
+import { getToken, isAuthenticated } from '@/lib/auth';
+import { Sidebar } from '@/components/sidebar';
 
 interface ShopifyStore {
   id: string;
@@ -44,6 +46,8 @@ async function apiFetch(path: string, options?: RequestInit) {
 }
 
 export default function AutoConfirmPage() {
+  const router = useRouter();
+  const [authed, setAuthed] = useState(false);
   const [store, setStore] = useState<ShopifyStore | null>(null);
   const [logs, setLogs] = useState<OrderLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +62,12 @@ export default function AutoConfirmPage() {
   const [initiating, setInitiating] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => { loadStore(); return () => stopPoll(); }, []);
+  useEffect(() => {
+    if (!isAuthenticated()) { router.replace('/login'); return; }
+    setAuthed(true);
+    loadStore();
+    return () => stopPoll();
+  }, [router]);
 
   function stopPoll() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -172,16 +181,18 @@ export default function AutoConfirmPage() {
     return <span className="flex items-center gap-1 text-xs text-yellow-400"><AlertCircle size={12} /> Pendiente</span>;
   };
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (!authed) return null;
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+    <div className="min-h-screen bg-[#020209] flex">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center py-32">
+          <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+      <div className="max-w-4xl w-full mx-auto px-6 py-8 space-y-6">
 
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -390,6 +401,9 @@ export default function AutoConfirmPage() {
           </div>
         </div>
       )}
+    </div>
+      )}
+      </div>
     </div>
   );
 }
