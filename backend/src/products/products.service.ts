@@ -7,6 +7,7 @@ import { Snapshot } from '../snapshots/snapshot.entity';
 const COUNTRY_TZ: Record<string, { tz: string; utcOffset: number }> = {
   RD: { tz: 'America/Santo_Domingo', utcOffset: 4 },
   GT: { tz: 'America/Guatemala',     utcOffset: 6 },
+  EC: { tz: 'America/Guayaquil',     utcOffset: 5 },
 };
 
 function getTzCfg(country?: string) {
@@ -310,41 +311,7 @@ export class ProductsService {
   }
 
   async refreshDailyCache() {
-    for (const country of Object.keys(COUNTRY_TZ)) {
-      await this._refreshForCountry(country);
-    }
-  }
-
-  private async _refreshForCountry(country: string) {
-    const todayStart = todayStartUTC(country);
-    const yesterdayStart = new Date(todayStart.getTime() - 86_400_000);
-
-    const todayRows: { productId: string; sales: string }[] = await this.snapshotRepo
-      .createQueryBuilder('s')
-      .select('s.productId', 'productId')
-      .addSelect('MAX(s.salesAccum) - MIN(s.salesAccum)', 'sales')
-      .innerJoin(Product, 'p', 'p.id = s.productId AND p.country = :country', { country })
-      .where('s.capturedAt >= :todayStart', { todayStart })
-      .groupBy('s.productId')
-      .getRawMany();
-
-    const yesterdayRows: { productId: string; sales: string }[] = await this.snapshotRepo
-      .createQueryBuilder('s')
-      .select('s.productId', 'productId')
-      .addSelect('MAX(s.salesAccum) - MIN(s.salesAccum)', 'sales')
-      .innerJoin(Product, 'p', 'p.id = s.productId AND p.country = :country', { country })
-      .where('s.capturedAt >= :yesterdayStart AND s.capturedAt < :todayStart', { yesterdayStart, todayStart })
-      .groupBy('s.productId')
-      .getRawMany();
-
-    const todayMap = new Map(todayRows.map(r => [r.productId, Math.max(0, parseInt(r.sales))]));
-    const yesterdayMap = new Map(yesterdayRows.map(r => [r.productId, Math.max(0, parseInt(r.sales))]));
-
-    const products = await this.productRepo.find({ where: { country }, select: ['id'] });
-    for (const p of products) {
-      const today = todayMap.get(p.id) ?? 0;
-      const yesterday = yesterdayMap.get(p.id) ?? 0;
-      await this.productRepo.update(p.id, { salesToday: today, salesYesterday: yesterday });
-    }
+    // salesToday/salesYesterday are now managed by upsertProductAndSnapshot in the scraper
+    // using a baseline approach per product — no snapshot recalculation needed here
   }
 }

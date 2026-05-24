@@ -12,6 +12,16 @@ const EFFI_CATALOG_URL = 'https://effi.com.co/app/articulo_dropshipping';
 const SCRAPE_INTERVAL_MS = 30 * 60 * 1000;
 const PRODUCTS_PER_PAGE = 40;
 
+const COUNTRY_TZ: Record<string, string> = {
+  RD: 'America/Santo_Domingo',
+  GT: 'America/Guatemala',
+  EC: 'America/Guayaquil',
+};
+
+function todayForCountry(country: string): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: COUNTRY_TZ[country] ?? 'America/Santo_Domingo' });
+}
+
 const COUNTRIES: Array<{ code: string; storeName: string | null }> = [
   { code: 'RD', storeName: null },           // default store after login
   { code: 'GT', storeName: 'Guatemala 1' },  // must select this store
@@ -339,7 +349,7 @@ export class ScraperService implements OnModuleDestroy {
   private async upsertProductAndSnapshot(raw: RawProduct, country: string) {
     let product = await this.productRepo.findOne({ where: { effiId: raw.effiId, country } });
 
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const today = todayForCountry(country);
 
     if (!product) {
       product = this.productRepo.create({
