@@ -12,6 +12,7 @@ interface ShopifyStore {
   whatsappTemplateName: string;
   whatsappLanguage: string;
   whatsappEnabled: boolean;
+  whatsappPhoneNumberId: string;
   createdAt: string;
 }
 
@@ -57,6 +58,8 @@ export default function AutoConfirmPage() {
   const [templateName, setTemplateName] = useState('');
   const [templateLang, setTemplateLang] = useState('es');
   const [waEnabled, setWaEnabled] = useState(false);
+  const [waPhoneId, setWaPhoneId] = useState('');
+  const [waToken, setWaToken] = useState('');
 
   useEffect(() => { loadStore(); }, []);
 
@@ -70,6 +73,7 @@ export default function AutoConfirmPage() {
         setTemplateName(data.whatsappTemplateName || '');
         setTemplateLang(data.whatsappLanguage || 'es');
         setWaEnabled(data.whatsappEnabled);
+        setWaPhoneId(data.whatsappPhoneNumberId || '');
         loadLogs();
       }
     } catch {
@@ -117,7 +121,7 @@ export default function AutoConfirmPage() {
     try {
       await apiFetch('/autoconfirm/template', {
         method: 'PUT',
-        body: JSON.stringify({ messageTemplate: template, whatsappTemplateName: templateName, whatsappLanguage: templateLang, whatsappEnabled: waEnabled }),
+        body: JSON.stringify({ messageTemplate: template, whatsappTemplateName: templateName, whatsappLanguage: templateLang, whatsappEnabled: waEnabled, whatsappPhoneNumberId: waPhoneId, ...(waToken ? { whatsappAccessToken: waToken } : {}) }),
       });
       await loadStore();
     } finally {
@@ -306,30 +310,46 @@ export default function AutoConfirmPage() {
               </button>
             </div>
 
-            {/* ─── WhatsApp setup guide ─── */}
+            {/* ─── WhatsApp credentials ─── */}
             <div className="rounded-2xl p-5 space-y-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <h2 className="text-sm font-medium text-white">Activar WhatsApp</h2>
-              <div className="space-y-3 text-xs text-gray-500">
-                <div className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">1</span>
-                  <div><p className="text-gray-300">Crear cuenta Meta Business</p><p>business.facebook.com</p></div>
+              <div>
+                <h2 className="text-sm font-medium text-white">Tu número WhatsApp Business</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Los mensajes salen desde tu número — el cliente lo ve como si tú se lo mandaras</p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs text-gray-500">Phone Number ID <span className="text-gray-700">(de Meta Developers)</span></label>
+                  <input
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50"
+                    placeholder="123456789012345"
+                    value={waPhoneId}
+                    onChange={e => setWaPhoneId(e.target.value)}
+                  />
                 </div>
-                <div className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">2</span>
-                  <div><p className="text-gray-300">Crear app en Meta Developers</p><p>developers.facebook.com → agregar WhatsApp → copiar Phone Number ID y Token</p></div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-gray-500">Access Token <span className="text-gray-700">(déjalo vacío para no cambiar)</span></label>
+                  <input
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50"
+                    placeholder="EAAxxxxxxx..."
+                    value={waToken}
+                    onChange={e => setWaToken(e.target.value)}
+                    type="password"
+                  />
                 </div>
-                <div className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">3</span>
-                  <div><p className="text-gray-300">Crear template aprobado</p><p>Meta Business → WhatsApp → Message Templates → variables: {'{{1}}'} nombre, {'{{2}}'} #orden, {'{{3}}'} tienda</p></div>
-                </div>
-                <div className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center shrink-0">4</span>
-                  <div><p className="text-gray-300">Agregar al servidor</p><p>Editar <code className="text-violet-400">/opt/winnerdrop/backend/.env</code> con WHATSAPP_ACCESS_TOKEN y WHATSAPP_PHONE_NUMBER_ID</p></div>
-                </div>
-                <div className="rounded-xl p-3 mt-1" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                  <p className="text-violet-300 font-medium">Gratis hasta 1,000 mensajes/mes</p>
-                  <p className="text-gray-500 mt-0.5">Después: ~$0.015 por confirmación</p>
-                </div>
+              </div>
+
+              <div className="rounded-xl p-3 space-y-2 text-xs" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                <p className="text-gray-400 font-medium">¿Cómo obtener estas credenciales?</p>
+                <p className="text-gray-600">1. Ve a <span className="text-gray-400">developers.facebook.com</span> → crear app → agregar WhatsApp</p>
+                <p className="text-gray-600">2. En WhatsApp → Getting Started → copia <span className="text-gray-400">Phone Number ID</span> y <span className="text-gray-400">Temporary access token</span></p>
+                <p className="text-gray-600">3. Para token permanente: Meta Business → System Users → generar token</p>
+                <p className="text-gray-600">4. Crea template en Meta Business → WhatsApp → Message Templates</p>
+              </div>
+
+              <div className="rounded-xl p-3" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                <p className="text-violet-300 text-xs font-medium">Gratis hasta 1,000 mensajes/mes por número</p>
+                <p className="text-gray-500 text-xs mt-0.5">Después: ~$0.015 por confirmación de pedido</p>
               </div>
             </div>
           </div>

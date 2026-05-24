@@ -32,6 +32,12 @@ export class ShopifyStore {
   @Column({ default: false })
   whatsappEnabled: boolean;
 
+  @Column({ nullable: true })
+  whatsappPhoneNumberId: string;
+
+  @Column({ nullable: true, select: false })
+  whatsappAccessToken: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

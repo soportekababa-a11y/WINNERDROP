@@ -62,7 +62,7 @@ export class AutoconfirmController {
   @Put('template')
   updateTemplate(
     @Req() req: any,
-    @Body() body: { messageTemplate?: string; whatsappTemplateName?: string; whatsappLanguage?: string; whatsappEnabled?: boolean },
+    @Body() body: { messageTemplate?: string; whatsappTemplateName?: string; whatsappLanguage?: string; whatsappEnabled?: boolean; whatsappPhoneNumberId?: string; whatsappAccessToken?: string },
   ) {
     return this.svc.updateTemplate(req.user.id, body);
   }

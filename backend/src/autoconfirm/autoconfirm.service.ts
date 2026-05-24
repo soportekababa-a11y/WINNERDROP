@@ -109,9 +109,15 @@ export class AutoconfirmService {
     log.messageSent = message;
 
     try {
-      if (store.whatsappEnabled && store.whatsappTemplateName) {
-        await this.sendWhatsApp(this.normalizePhone(phone), store.whatsappTemplateName, store.whatsappLanguage, [customerName, orderNumber, storeName]);
-        log.status = 'sent';
+      if (store.whatsappEnabled && store.whatsappTemplateName && store.whatsappPhoneNumberId) {
+        // Load token (excluded from default select)
+        const storeWithToken = await this.storeRepo.createQueryBuilder('s').addSelect('s.whatsappAccessToken').where('s.id = :id', { id: store.id }).getOne();
+        const token = storeWithToken?.whatsappAccessToken;
+        if (!token) { log.status = 'pending'; log.error = 'Falta WhatsApp Access Token'; }
+        else {
+          await this.sendWhatsApp(this.normalizePhone(phone), store.whatsappTemplateName, store.whatsappLanguage, [customerName, orderNumber, storeName], store.whatsappPhoneNumberId, token);
+          log.status = 'sent';
+        }
       } else {
         log.status = 'pending';
         log.error = 'WhatsApp no configurado aún';
@@ -136,10 +142,8 @@ export class AutoconfirmService {
     return `+${digits}`;
   }
 
-  private async sendWhatsApp(to: string, templateName: string, language: string, params: string[]): Promise<void> {
-    const token = this.config.get<string>('WHATSAPP_ACCESS_TOKEN');
-    const phoneNumberId = this.config.get<string>('WHATSAPP_PHONE_NUMBER_ID');
-    if (!token || !phoneNumberId) throw new Error('WhatsApp no configurado en .env');
+  private async sendWhatsApp(to: string, templateName: string, language: string, params: string[], phoneNumberId: string, token: string): Promise<void> {
+    if (!token || !phoneNumberId) throw new Error('Credenciales WhatsApp incompletas');
 
     const res = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
       method: 'POST',
@@ -178,7 +182,7 @@ export class AutoconfirmService {
     await this.storeRepo.save(store);
   }
 
-  async updateTemplate(userId: string, dto: { messageTemplate?: string; whatsappTemplateName?: string; whatsappLanguage?: string; whatsappEnabled?: boolean }): Promise<ShopifyStore> {
+  async updateTemplate(userId: string, dto: { messageTemplate?: string; whatsappTemplateName?: string; whatsappLanguage?: string; whatsappEnabled?: boolean; whatsappPhoneNumberId?: string; whatsappAccessToken?: string }): Promise<ShopifyStore> {
     const store = await this.storeRepo.findOne({ where: { userId, isActive: true } });
     if (!store) throw new NotFoundException('No hay tienda conectada');
     Object.assign(store, dto);
