@@ -43,6 +43,12 @@ export class Product {
   @Column({ default: 0 })
   salesYesterday: number;
 
+  @Column({ default: 0 })
+  salesBaseline: number;
+
+  @Column({ type: 'date', nullable: true })
+  salesBaselineDate: string | null;
+
   @Column({ default: true })
   isActive: boolean;
 

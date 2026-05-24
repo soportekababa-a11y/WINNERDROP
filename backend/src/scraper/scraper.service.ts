@@ -339,6 +339,8 @@ export class ScraperService implements OnModuleDestroy {
   private async upsertProductAndSnapshot(raw: RawProduct, country: string) {
     let product = await this.productRepo.findOne({ where: { effiId: raw.effiId, country } });
 
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
     if (!product) {
       product = this.productRepo.create({
         effiId: raw.effiId,
@@ -351,21 +353,31 @@ export class ScraperService implements OnModuleDestroy {
         cost: raw.cost,
         stock: raw.stock,
         totalSalesAccum: raw.salesAccum,
-        salesToday: raw.salesAccum,
-        salesYesterday: raw.salesAccum,
+        salesBaseline: raw.salesAccum,
+        salesBaselineDate: today,
+        salesToday: 0,
+        salesYesterday: 0,
         isActive: true,
         country,
       });
       await this.productRepo.save(product);
     } else {
+      const isNewDay = product.salesBaselineDate !== today;
+
+      if (isNewDay) {
+        // Day rolled over: yesterday = what we accumulated all of yesterday
+        product.salesYesterday = product.salesToday;
+        product.salesBaseline = product.totalSalesAccum;
+        product.salesBaselineDate = today;
+      }
+
       product.name = raw.name;
       product.imageUrl = raw.imageUrl;
       product.provider = raw.provider;
       product.price = raw.price;
       product.cost = raw.cost;
       product.stock = raw.stock;
-      product.salesToday = raw.salesAccum;
-      product.salesYesterday = raw.salesAccum;
+      product.salesToday = Math.max(0, raw.salesAccum - product.salesBaseline);
       product.totalSalesAccum = raw.salesAccum;
       product.isActive = true;
       await this.productRepo.save(product);
