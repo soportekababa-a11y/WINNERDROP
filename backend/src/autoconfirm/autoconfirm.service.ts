@@ -27,10 +27,15 @@ export class AutoconfirmService {
     if (!domain.includes('.myshopify.com')) domain = `${domain}.myshopify.com`;
 
     // Verify token works
-    const verifyRes = await fetch(`https://${domain}/admin/api/2024-01/shop.json`, {
+    const verifyRes = await fetch(`https://${domain}/admin/api/2025-01/shop.json`, {
       headers: { 'X-Shopify-Access-Token': accessToken },
     });
-    if (!verifyRes.ok) throw new BadRequestException('Token inválido o dominio incorrecto');
+    if (!verifyRes.ok) {
+      const status = verifyRes.status;
+      if (status === 401 || status === 403) throw new BadRequestException('Token inválido — verifica que copiaste el Admin API access token (shpat_...) y que la app está instalada');
+      if (status === 404) throw new BadRequestException('Dominio incorrecto — verifica el nombre de la tienda');
+      throw new BadRequestException(`Error Shopify ${status} — verifica dominio y token`);
+    }
 
     let store = await this.storeRepo.findOne({ where: { userId } });
     if (store) {
@@ -50,13 +55,13 @@ export class AutoconfirmService {
     const webhookUrl = this.config.get<string>('SHOPIFY_WEBHOOK_URL', `http://116.203.82.110/api/proxy/autoconfirm/shopify/webhook`);
 
     if (store.webhookId) {
-      await fetch(`https://${store.shopDomain}/admin/api/2024-01/webhooks/${store.webhookId}.json`, {
+      await fetch(`https://${store.shopDomain}/admin/api/2025-01/webhooks/${store.webhookId}.json`, {
         method: 'DELETE',
         headers: { 'X-Shopify-Access-Token': store.accessToken },
       }).catch(() => null);
     }
 
-    const res = await fetch(`https://${store.shopDomain}/admin/api/2024-01/webhooks.json`, {
+    const res = await fetch(`https://${store.shopDomain}/admin/api/2025-01/webhooks.json`, {
       method: 'POST',
       headers: { 'X-Shopify-Access-Token': store.accessToken, 'Content-Type': 'application/json' },
       body: JSON.stringify({ webhook: { topic: 'orders/create', address: webhookUrl, format: 'json' } }),
@@ -149,7 +154,7 @@ export class AutoconfirmService {
     const store = await this.storeRepo.findOne({ where: { userId } });
     if (!store) throw new NotFoundException('No hay tienda conectada');
     if (store.webhookId) {
-      await fetch(`https://${store.shopDomain}/admin/api/2024-01/webhooks/${store.webhookId}.json`, {
+      await fetch(`https://${store.shopDomain}/admin/api/2025-01/webhooks/${store.webhookId}.json`, {
         method: 'DELETE',
         headers: { 'X-Shopify-Access-Token': store.accessToken },
       }).catch(() => null);
