@@ -352,29 +352,20 @@ export class ScraperService implements OnModuleDestroy {
         stock: raw.stock,
         totalSalesAccum: raw.salesAccum,
         salesToday: raw.salesAccum,
-        salesYesterday: 0,
+        salesYesterday: raw.salesAccum,
         isActive: true,
         country,
       });
       await this.productRepo.save(product);
     } else {
-      const lastSnapshot = await this.snapshotRepo.findOne({
-        where: { productId: product.id },
-        order: { capturedAt: 'DESC' },
-      });
-
-      // Use 0 as baseline when no snapshot — gives diff = full salesAccum on first real scrape
-      const prevAccum = lastSnapshot?.salesAccum ?? 0;
-      const diff = Math.max(0, raw.salesAccum - prevAccum);
-
       product.name = raw.name;
       product.imageUrl = raw.imageUrl;
       product.provider = raw.provider;
       product.price = raw.price;
       product.cost = raw.cost;
       product.stock = raw.stock;
-      product.salesYesterday = product.salesToday;
-      product.salesToday = diff;
+      product.salesToday = raw.salesAccum;
+      product.salesYesterday = raw.salesAccum;
       product.totalSalesAccum = raw.salesAccum;
       product.isActive = true;
       await this.productRepo.save(product);
