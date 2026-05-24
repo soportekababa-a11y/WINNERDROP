@@ -23,7 +23,7 @@ export class AutoconfirmService {
   // ─── Connect store via access token ──────────────────────────────────────
 
   async connectStore(userId: string, shopDomain: string, accessToken: string): Promise<ShopifyStore> {
-    let domain = shopDomain.trim().toLowerCase();
+    let domain = shopDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
     if (!domain.includes('.myshopify.com')) domain = `${domain}.myshopify.com`;
 
     // Verify token works
