@@ -12,12 +12,14 @@ import { Sidebar } from "@/components/sidebar";
 
 const PAGE_SIZE = 40;
 type ProductoFilter = 'todos' | 'hoy' | 'winners';
-type CountryFilter = '' | 'RD' | 'GT' | 'EC';
+type CountryFilter = '' | 'RD' | 'GT' | 'EC' | 'CR' | 'CO';
 const COUNTRIES: { value: CountryFilter; label: string }[] = [
   { value: '',   label: 'Elegir país' },
   { value: 'RD', label: '🇩🇴 Rep. Dominicana' },
   { value: 'GT', label: '🇬🇹 Guatemala' },
   { value: 'EC', label: '🇪🇨 Ecuador' },
+  { value: 'CR', label: '🇨🇷 Costa Rica' },
+  { value: 'CO', label: '🇨🇴 Colombia' },
 ];
 
 const PRODUCTO_OPTIONS: { value: ProductoFilter; label: string }[] = [

@@ -11,14 +11,15 @@ const COUNTRIES = [
   { code: 'RD', flag: '🇩🇴', name: 'República Dominicana', active: true },
   { code: 'GT', flag: '🇬🇹', name: 'Guatemala',            active: true },
   { code: 'EC', flag: '🇪🇨', name: 'Ecuador',              active: true },
-  { code: 'CO', flag: '🇨🇴', name: 'Colombia',             active: false },
+  { code: 'CO', flag: '🇨🇴', name: 'Colombia',             active: true  },
   { code: 'MX', flag: '🇲🇽', name: 'México',               active: false },
 ];
 
 const COUNTRY_CONFIG: Record<string, { currency: string; shippingLabel: string; shippingRange: string; shippingAvg: number; adCost: number; markups: number[]; profitLow: number; profitOk: number }> = {
   RD: { currency: 'RD$', shippingLabel: 'Envío zona RD', shippingRange: 'RD$350 – RD$500', shippingAvg: 425, adCost: 500, markups: [1100, 1300, 1450, 1700, 2100], profitLow: 300,  profitOk: 500  },
   GT: { currency: 'Q',   shippingLabel: 'Envío zona GT', shippingRange: 'Q55 – Q80',       shippingAvg: 65,  adCost: 80,  markups: [170,  200,  225,  265,  325],  profitLow: 50,   profitOk: 80   },
-  EC: { currency: '$',   shippingLabel: 'Envío zona EC', shippingRange: '$3 – $6',          shippingAvg: 4,   adCost: 5,   markups: [12,   15,   18,   22,   28],   profitLow: 5,    profitOk: 10   },
+  EC: { currency: '$',   shippingLabel: 'Envío zona EC', shippingRange: '$3 – $6',          shippingAvg: 4,     adCost: 5,     markups: [12,    15,    18,    22,    28],    profitLow: 5,     profitOk: 10    },
+  CO: { currency: 'COP$', shippingLabel: 'Envío zona CO', shippingRange: 'COP$10k – COP$18k', shippingAvg: 14000, adCost: 8000,  markups: [45000, 55000, 65000, 80000, 100000], profitLow: 15000, profitOk: 25000 },
 };
 
 function markupOptions(totalCost: number, countryCode: string) {
