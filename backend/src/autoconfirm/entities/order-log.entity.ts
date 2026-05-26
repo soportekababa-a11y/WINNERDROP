@@ -26,6 +26,9 @@ export class OrderLog {
   @Column({ default: 'pending' })
   status: string;
 
+  @Column({ nullable: true })
+  confirmationStatus: string; // 'confirmed' | 'cancelled' | null
+
   @Column({ type: 'text', nullable: true })
   error: string;
 
