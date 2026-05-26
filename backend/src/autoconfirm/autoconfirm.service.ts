@@ -72,7 +72,9 @@ export class AutoconfirmService {
     }
 
     let store = await this.storeRepo.findOne({ where: { userId } });
+    if (!store) store = await this.storeRepo.findOne({ where: { shopDomain: domain } });
     if (store) {
+      store.userId = userId;
       store.shopDomain = domain;
       store.accessToken = accessToken;
       store.isActive = true;
@@ -132,10 +134,13 @@ export class AutoconfirmService {
     const existing = await this.logRepo.findOne({ where: { storeId: store.id, shopifyOrderId: orderId } });
     if (existing) return;
 
-    const phone = orderData.billing_address?.phone || orderData.shipping_address?.phone || orderData.customer?.phone;
+    const phone = orderData.phone || orderData.customer?.phone || orderData.billing_address?.phone || orderData.shipping_address?.phone;
     const customerName = orderData.customer?.first_name || orderData.billing_address?.first_name || 'Cliente';
     const orderNumber = String(orderData.order_number || orderData.name || orderId);
     const storeName = store.shopDomain.replace('.myshopify.com', '');
+    const city = orderData.shipping_address?.city || orderData.billing_address?.city || '';
+    const price = orderData.total_price ? `${orderData.total_price} ${orderData.currency || ''}`.trim() : '';
+    const products = (orderData.line_items as any[] || []).map((i: any) => i.name || i.title).join(', ') || '';
 
     const log = this.logRepo.create({ storeId: store.id, shopifyOrderId: orderId, orderNumber, customerName, customerPhone: phone || null });
 
@@ -146,13 +151,28 @@ export class AutoconfirmService {
       return;
     }
 
-    const message = this.renderTemplate(store.messageTemplate, { nombre: customerName, numero: orderNumber, tienda: storeName });
+    const vars = { nombre: customerName, numero: orderNumber, tienda: storeName, ciudad: city, precio: price, productos: products };
+    const message = this.renderTemplate(store.messageTemplate, vars);
     log.messageSent = message;
 
     try {
       const waStatus = this.whatsapp.getStatus(store.id);
       if (waStatus.status === 'connected') {
-        await this.whatsapp.sendMessage(store.id, this.normalizePhone(phone), message);
+        await this.logRepo.save(log); // save first to get log.id
+        await this.whatsapp.sendOrderConfirmation(
+          store.id,
+          this.normalizePhone(phone),
+          message,
+          log.id,
+          orderId,
+          store.shopDomain,
+          store.accessToken,
+          this.renderTemplate(store.confirmMessage, vars),
+          this.renderTemplate(store.cancelMessage, vars),
+          store.labelPendingId ?? undefined,
+          store.labelConfirmedId ?? undefined,
+          store.labelCancelledId ?? undefined,
+        );
         log.status = 'sent';
       } else {
         log.status = 'pending';
@@ -197,7 +217,7 @@ export class AutoconfirmService {
     await this.storeRepo.save(store);
   }
 
-  async updateTemplate(userId: string, dto: { messageTemplate?: string }): Promise<ShopifyStore> {
+  async updateTemplate(userId: string, dto: { messageTemplate?: string; confirmMessage?: string; cancelMessage?: string }): Promise<ShopifyStore> {
     const store = await this.storeRepo.findOne({ where: { userId, isActive: true } });
     if (!store) throw new NotFoundException('No hay tienda conectada');
     Object.assign(store, dto);
@@ -226,5 +246,24 @@ export class AutoconfirmService {
     const store = await this.storeRepo.findOne({ where: { userId, isActive: true } });
     if (!store) return [];
     return this.logRepo.find({ where: { storeId: store.id }, order: { createdAt: 'DESC' }, take: limit });
+  }
+
+  async getWhatsappLabels(userId: string): Promise<Array<{ id: string; name: string; color: number }>> {
+    const store = await this.storeRepo.findOne({ where: { userId, isActive: true } });
+    if (!store) return [];
+    return this.whatsapp.getSessionLabels(store.id);
+  }
+
+  async updateLabels(userId: string, dto: { labelPendingId?: string; labelConfirmedId?: string; labelCancelledId?: string }): Promise<ShopifyStore> {
+    const store = await this.storeRepo.findOne({ where: { userId, isActive: true } });
+    if (!store) throw new NotFoundException('No hay tienda conectada');
+    Object.assign(store, dto);
+    return this.storeRepo.save(store);
+  }
+
+  async getStoreLabelConfig(userId: string): Promise<{ labelPendingId: string | null; labelConfirmedId: string | null; labelCancelledId: string | null }> {
+    const store = await this.storeRepo.findOne({ where: { userId, isActive: true } });
+    if (!store) return { labelPendingId: null, labelConfirmedId: null, labelCancelledId: null };
+    return { labelPendingId: store.labelPendingId ?? null, labelConfirmedId: store.labelConfirmedId ?? null, labelCancelledId: store.labelCancelledId ?? null };
   }
 }

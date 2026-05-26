@@ -50,12 +50,13 @@ export class AutoconfirmController {
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    const rawBody = (req as any).rawBody as string;
-    if (hmac && rawBody) {
-      const valid = this.svc.verifyWebhookHmac(rawBody, hmac);
+    const rawBody = (req as any).rawBody as Buffer | string | undefined;
+    const rawStr = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : (rawBody ?? '');
+    if (hmac && rawStr) {
+      const valid = this.svc.verifyWebhookHmac(rawStr, hmac);
       if (!valid) return res.status(401).json({ message: 'Invalid HMAC' });
     }
-    const order = req.body;
+    const order = req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body) ? req.body : (rawStr ? JSON.parse(rawStr) : null);
     if (shopDomain && order) {
       this.svc.processOrder(shopDomain, order).catch(err =>
         console.error('[AutoConfirm webhook]', err.message)
@@ -106,6 +107,26 @@ export class AutoconfirmController {
   @Delete('whatsapp')
   disconnectWhatsapp(@Req() req: any) {
     return this.svc.disconnectWhatsapp(req.user.id);
+  }
+
+  // ─── Labels ────────────────────────────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Get('whatsapp/labels')
+  getWhatsappLabels(@Req() req: any) {
+    return this.svc.getWhatsappLabels(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('labels/config')
+  getLabelConfig(@Req() req: any) {
+    return this.svc.getStoreLabelConfig(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put('labels/config')
+  updateLabels(@Req() req: any, @Body() body: { labelPendingId?: string; labelConfirmedId?: string; labelCancelledId?: string }) {
+    return this.svc.updateLabels(req.user.id, body);
   }
 
   // ─── Logs ──────────────────────────────────────────────────────────────────

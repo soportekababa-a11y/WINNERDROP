@@ -16,6 +16,8 @@ const COUNTRY_TZ: Record<string, string> = {
   RD: 'America/Santo_Domingo',
   GT: 'America/Guatemala',
   EC: 'America/Guayaquil',
+  CR: 'America/Costa_Rica',
+  CO: 'America/Bogota',
 };
 
 function todayForCountry(country: string): string {
@@ -26,6 +28,8 @@ const COUNTRIES: Array<{ code: string; storeName: string | null }> = [
   { code: 'RD', storeName: null },           // default store after login
   { code: 'GT', storeName: 'Guatemala 1' },  // must select this store
   { code: 'EC', storeName: 'Ecuador' },      // matches ECUADOR 1 etc.
+  { code: 'CR', storeName: 'Costa Rica' },   // 54832 - COSTA RICA
+  { code: 'CO', storeName: 'Colombia' },     // 54865 - COLOMBIA
 ];
 
 @Injectable()
@@ -171,9 +175,10 @@ export class ScraperService implements OnModuleDestroy {
           await resultItems.first().click();
         }
       } else {
-        // RD: first option that isn't the placeholder and isn't Guatemala
+        // RD: first option that isn't the placeholder, Guatemala, or Costa Rica
         const rdItems = resultItems
           .filter({ hasNotText: /guatemala/i })
+          .filter({ hasNotText: /costa rica/i })
           .filter({ hasNotText: /seleccione/i });
         const rdCount = await rdItems.count();
         if (rdCount > 0) {

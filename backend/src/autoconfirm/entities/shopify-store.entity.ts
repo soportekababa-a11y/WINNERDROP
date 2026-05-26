@@ -20,8 +20,14 @@ export class ShopifyStore {
   @Column({ default: true })
   isActive: boolean;
 
-  @Column({ type: 'text', default: '¡Hola {{nombre}}! Gracias por tu pedido #{{numero}} en {{tienda}}. Lo estamos procesando. 🛍️' })
+  @Column({ type: 'text', default: 'Hola {{nombre}}, te escribimos de *{{tienda}}* 👋\n\nRecibimos tu pedido *#{{numero}}*:\n🛍️ {{productos}}\n📍 {{ciudad}}\n💰 {{precio}}\n\n¿Confirmas tu pedido?' })
   messageTemplate: string;
+
+  @Column({ type: 'text', default: '✅ ¡Perfecto {{nombre}}! Tu pedido #{{numero}} ha sido confirmado. Pronto te llegará. 🚀' })
+  confirmMessage: string;
+
+  @Column({ type: 'text', default: '❌ Tu pedido #{{numero}} ha sido cancelado. Si tienes dudas escríbenos. 😊' })
+  cancelMessage: string;
 
   @Column({ nullable: true })
   whatsappTemplateName: string;
@@ -37,6 +43,15 @@ export class ShopifyStore {
 
   @Column({ nullable: true, select: false })
   whatsappAccessToken: string;
+
+  @Column({ nullable: true })
+  labelPendingId: string;
+
+  @Column({ nullable: true })
+  labelConfirmedId: string;
+
+  @Column({ nullable: true })
+  labelCancelledId: string;
 
   @CreateDateColumn()
   createdAt: Date;
