@@ -25,20 +25,25 @@ export class AutoconfirmService {
     private whatsapp: WhatsappService,
   ) {}
 
-  async getMsgUsage(userId: string): Promise<{ used: number; limit: number }> {
+  async getMsgUsage(userId: string): Promise<{ used: number; limit: number; periodStart: Date }> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     const limit = user?.msgMonthlyLimit ?? 50;
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
+
+    // Rolling 30-day cycle anchored to planActivatedAt (or createdAt as fallback)
+    const anchor = user?.planActivatedAt ?? user?.createdAt ?? new Date();
+    const now = Date.now();
+    const anchorMs = new Date(anchor).getTime();
+    const elapsed = Math.floor((now - anchorMs) / (30 * 24 * 60 * 60 * 1000));
+    const periodStart = new Date(anchorMs + elapsed * 30 * 24 * 60 * 60 * 1000);
+
     const used = await this.logRepo
       .createQueryBuilder('log')
       .innerJoin(ShopifyStore, 'store', 'store.id = log.storeId')
       .where('store.userId = :userId', { userId })
       .andWhere('log.status = :status', { status: 'sent' })
-      .andWhere('log.createdAt >= :monthStart', { monthStart })
+      .andWhere('log.createdAt >= :periodStart', { periodStart })
       .getCount();
-    return { used, limit };
+    return { used, limit, periodStart };
   }
 
   private async checkMsgLimit(userId: string): Promise<void> {
