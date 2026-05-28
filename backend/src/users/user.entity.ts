@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 export enum Plan {
   FREE = 'free',
   BASIC = 'basic',
+  PRO = 'pro',
   PREMIUM = 'premium',
 }
 
@@ -20,15 +21,30 @@ export class User {
   @Column({ nullable: true })
   name: string;
 
-  @Column({ type: 'enum', enum: Plan, default: Plan.FREE })
+  @Column({ type: 'varchar', default: Plan.FREE })
   plan: Plan;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, type: 'timestamptz' })
   planExpiresAt: Date;
+
+  @Column({ nullable: true, type: 'timestamptz' })
+  planActivatedAt: Date;
+
+  @Column({ nullable: true })
+  selectedCountry: string;
+
+  @Column({ nullable: true })
+  selectedPlatform: string;
+
+  @Column({ nullable: true })
+  sessionToken: string;
 
   @Column({ default: true })
   isActive: boolean;
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

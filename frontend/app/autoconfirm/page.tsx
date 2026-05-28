@@ -11,6 +11,8 @@ interface ShopifyStore {
   shopDomain: string;
   isActive: boolean;
   messageTemplate: string;
+  confirmMessage: string;
+  cancelMessage: string;
   createdAt: string;
 }
 
@@ -56,6 +58,8 @@ export default function AutoConfirmPage() {
   const [connectError, setConnectError] = useState('');
   const [saving, setSaving] = useState(false);
   const [template, setTemplate] = useState('');
+  const [confirmMsg, setConfirmMsg] = useState('');
+  const [cancelMsg, setCancelMsg] = useState('');
   const [waStatus, setWaStatus] = useState<WaStatus>('disconnected');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [initiating, setInitiating] = useState(false);
@@ -100,6 +104,8 @@ export default function AutoConfirmPage() {
       if (data) {
         setStore(data);
         setTemplate(data.messageTemplate);
+        setConfirmMsg(data.confirmMessage || '');
+        setCancelMsg(data.cancelMessage || '');
         loadLogs();
         // Check WA status
         const waData = await apiFetch('/autoconfirm/whatsapp/status').catch(() => ({ status: 'disconnected' }));
@@ -172,7 +178,7 @@ export default function AutoConfirmPage() {
     try {
       await apiFetch('/autoconfirm/template', {
         method: 'PUT',
-        body: JSON.stringify({ messageTemplate: template }),
+        body: JSON.stringify({ messageTemplate: template, confirmMessage: confirmMsg, cancelMessage: cancelMsg }),
       });
     } finally {
       setSaving(false);
@@ -337,17 +343,38 @@ export default function AutoConfirmPage() {
 
             {/* ─── Template editor ─── */}
             <div className="rounded-2xl p-5 space-y-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <h2 className="text-sm font-medium text-white">Mensaje de confirmación</h2>
+              <h2 className="text-sm font-medium text-white">Mensajes automáticos</h2>
               <div className="space-y-1.5">
+                <label className="text-xs text-gray-400 font-medium">📩 Mensaje inicial al recibir el pedido</label>
                 <textarea
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50 resize-none"
-                  rows={5}
+                  rows={3}
                   value={template}
                   onChange={e => setTemplate(e.target.value)}
-                  placeholder="¡Hola {{nombre}}! Tu pedido #{{numero}} en {{tienda}} fue confirmado. Lo estamos procesando. 🛍️"
+                  placeholder="¡Hola {{nombre}}! Tu pedido #{{numero}} en {{tienda}} fue recibido. 🛍️"
                 />
-                <p className="text-xs text-gray-600">Variables disponibles: <code className="text-violet-400">{'{{nombre}}'}</code> <code className="text-violet-400">{'{{numero}}'}</code> <code className="text-violet-400">{'{{tienda}}'}</code></p>
               </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-emerald-400 font-medium">✅ Mensaje cuando el cliente confirma</label>
+                <textarea
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/30 focus:border resize-none"
+                  rows={3}
+                  value={confirmMsg}
+                  onChange={e => setConfirmMsg(e.target.value)}
+                  placeholder="✅ ¡Perfecto {{nombre}}! Tu pedido #{{numero}} ha sido confirmado. Pronto te llegará. 🚀"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-red-400 font-medium">❌ Mensaje cuando el cliente cancela</label>
+                <textarea
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500/30 focus:border resize-none"
+                  rows={3}
+                  value={cancelMsg}
+                  onChange={e => setCancelMsg(e.target.value)}
+                  placeholder="❌ Tu pedido #{{numero}} ha sido cancelado. Si tienes dudas escríbenos. 😊"
+                />
+              </div>
+              <p className="text-xs text-gray-600">Variables: <code className="text-violet-400">{'{{nombre}}'}</code> <code className="text-violet-400">{'{{numero}}'}</code> <code className="text-violet-400">{'{{tienda}}'}</code> <code className="text-violet-400">{'{{productos}}'}</code> <code className="text-violet-400">{'{{ciudad}}'}</code> <code className="text-violet-400">{'{{precio}}'}</code></p>
               <button
                 onClick={saveTemplate}
                 disabled={saving}
@@ -355,7 +382,7 @@ export default function AutoConfirmPage() {
                 style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
               >
                 <Save size={14} />
-                {saving ? 'Guardando...' : 'Guardar mensaje'}
+                {saving ? 'Guardando...' : 'Guardar mensajes'}
               </button>
             </div>
           </div>

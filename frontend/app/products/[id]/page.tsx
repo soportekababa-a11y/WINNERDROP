@@ -64,7 +64,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     <div className="min-h-screen bg-[#020209]">
       <header className="sticky top-0 z-10 px-4 py-3.5" style={{ background: 'rgba(2,2,9,0.8)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-1.5 text-gray-600 hover:text-gray-300 transition-colors text-sm">
+          <Link href="/dashboard" className="flex items-center gap-1.5 text-gray-600 hover:text-gray-300 transition-colors text-sm">
             <ArrowLeft size={14} />
             Dashboard
           </Link>

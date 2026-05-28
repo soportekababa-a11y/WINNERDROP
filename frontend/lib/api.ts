@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getToken, saveAuth, clearAuth, AuthUser } from './auth';
+import { getToken, saveAuth, clearAuth, AuthUser, PlanType } from './auth';
 
 const baseURL = typeof window !== 'undefined'
   ? '/api/proxy'
@@ -114,3 +114,25 @@ export interface SpyResult {
 
 export const fetchCompetitorSpy = (productId: string) =>
   api.get<SpyResult>(`/competitor-spy/${productId}`, { timeout: 90000 }).then(r => r.data);
+
+export interface MyPlan {
+  plan: PlanType;
+  selectedCountry: string | null;
+  selectedPlatform: string | null;
+  planExpiresAt: string | null;
+  planActivatedAt: string | null;
+}
+
+export const fetchMyPlan = () => api.get<MyPlan>('/subscriptions/me').then(r => r.data);
+
+export const selectCountryPlatform = (country: string, platform: string) =>
+  api.post<{ token: string; user: AuthUser }>('/subscriptions/select', { country, platform }).then(r => {
+    saveAuth(r.data.token, r.data.user);
+    return r.data;
+  });
+
+export const refreshMe = () =>
+  api.get<{ token: string; user: AuthUser }>('/auth/me').then(r => {
+    saveAuth(r.data.token, r.data.user);
+    return r.data;
+  });

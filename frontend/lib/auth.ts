@@ -1,11 +1,16 @@
 const TOKEN_KEY = 'wd_token';
 const USER_KEY = 'wd_user';
 
+export type PlanType = 'free' | 'basic' | 'pro' | 'premium';
+
 export interface AuthUser {
   id: string;
   email: string;
   name: string | null;
-  plan: 'free' | 'basic' | 'premium';
+  plan: PlanType;
+  selectedCountry: string | null;
+  selectedPlatform: string | null;
+  planExpiresAt: string | null;
 }
 
 export function getToken(): string | null {
@@ -31,4 +36,10 @@ export function clearAuth() {
 
 export function isAuthenticated(): boolean {
   return !!getToken();
+}
+
+const PLAN_RANK: Record<PlanType, number> = { free: 0, basic: 1, pro: 2, premium: 3 };
+
+export function isPlanAtLeast(userPlan: PlanType, required: PlanType): boolean {
+  return PLAN_RANK[userPlan] >= PLAN_RANK[required];
 }

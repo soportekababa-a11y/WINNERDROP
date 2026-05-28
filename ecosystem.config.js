@@ -16,6 +16,7 @@ module.exports = {
         EFFI_PASSWORD: 'Davdem.Online',
         JWT_SECRET: 'winnerdrop_jwt_secret_2026_change_in_prod',
         PORT: '3001',
+        ADMIN_SECRET: 'winnerdrop_admin_2026_secret',
       },
       out_file: 'C:\\Users\\dioni\\winnerdrop\\backend\\pm2-out.log',
       error_file: 'C:\\Users\\dioni\\winnerdrop\\backend\\pm2-err.log',

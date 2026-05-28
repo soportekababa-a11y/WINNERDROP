@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CompetitorSpyModule } from './competitor-spy/competitor-spy.module';
 import { AutoconfirmModule } from './autoconfirm/autoconfirm.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { AutoconfirmModule } from './autoconfirm/autoconfirm.module';
     UsersModule,
     CompetitorSpyModule,
     AutoconfirmModule,
+    SubscriptionsModule,
   ],
 })
 export class AppModule implements OnModuleInit {

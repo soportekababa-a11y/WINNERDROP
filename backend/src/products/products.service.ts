@@ -8,6 +8,7 @@ const COUNTRY_TZ: Record<string, { tz: string; utcOffset: number }> = {
   RD: { tz: 'America/Santo_Domingo', utcOffset: 4 },
   GT: { tz: 'America/Guatemala',     utcOffset: 6 },
   EC: { tz: 'America/Guayaquil',     utcOffset: 5 },
+  CR: { tz: 'America/Costa_Rica',    utcOffset: 6 },
 };
 
 function getTzCfg(country?: string) {
@@ -72,36 +73,46 @@ export class ProductsService {
   }
 
   async getProductDailyHistory(id: string, days = 30) {
-    const product = await this.productRepo.findOne({ where: { id }, select: ['id', 'country'] });
+    const product = await this.productRepo.findOne({ where: { id }, select: ['id', 'country', 'salesToday', 'salesBaselineDate'] });
     const { tz, utcOffset } = getTzCfg(product?.country);
 
+    // Fetch one extra day so we have a baseline for the oldest day we want to show
     const from = new Date();
-    from.setDate(from.getDate() - days);
+    from.setDate(from.getDate() - (days + 1));
     from.setHours(0, 0, 0, 0);
 
     const rows = await this.snapshotRepo
       .createQueryBuilder('s')
       .select(`DATE(s."capturedAt" - INTERVAL '${utcOffset} hours')`, 'day')
       .addSelect('MAX(s.salesAccum)', 'maxAccum')
-      .addSelect('MIN(s.salesAccum)', 'minAccum')
       .where('s.productId = :id', { id })
       .andWhere('s.capturedAt >= :from', { from })
       .groupBy(`DATE(s."capturedAt" - INTERVAL '${utcOffset} hours')`)
       .orderBy('day', 'ASC')
       .getRawMany();
 
+    // MAX(day) - MAX(prev day) captures the overnight gap that MIN-based approach misses
     const salesMap = new Map<string, number>();
-    for (const r of rows) {
-      const key = typeof r.day === 'string' ? r.day.slice(0, 10) : new Date(r.day).toISOString().slice(0, 10);
-      salesMap.set(key, Math.max(0, parseInt(r.maxAccum) - parseInt(r.minAccum)));
+    for (let i = 1; i < rows.length; i++) {
+      const key = typeof rows[i].day === 'string' ? rows[i].day.slice(0, 10) : new Date(rows[i].day).toISOString().slice(0, 10);
+      const prev = parseInt(rows[i - 1].maxAccum) || 0;
+      const curr = parseInt(rows[i].maxAccum) || 0;
+      salesMap.set(key, Math.max(0, curr - prev));
     }
+
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: tz });
 
     const result: { date: string; sales: number }[] = [];
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toLocaleDateString('en-CA', { timeZone: tz });
-      result.push({ date: dateStr, sales: salesMap.get(dateStr) ?? 0 });
+      let sales = salesMap.get(dateStr) ?? 0;
+      // Today: the denormalized salesToday is always current (scraper updates it with each run)
+      if (dateStr === todayStr && product?.salesBaselineDate === todayStr) {
+        sales = product.salesToday ?? sales;
+      }
+      result.push({ date: dateStr, sales });
     }
     return result;
   }

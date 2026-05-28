@@ -2,13 +2,20 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Calculator, LayoutDashboard, LogOut, MessageCircle } from 'lucide-react';
+import { Calculator, LayoutDashboard, LogOut, MessageCircle, Settings, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getUser, clearAuth } from '@/lib/auth';
+import { getUser, clearAuth, PlanType } from '@/lib/auth';
 import { MomentumIcon, MomentumWordmark } from '@/components/momentum-logo';
 
+const PLAN_BADGE: Record<PlanType, { label: string; color: string; bg: string }> = {
+  free:    { label: 'Free',    color: '#6b7280', bg: 'rgba(107,114,128,0.1)' },
+  basic:   { label: 'Básico',  color: '#60a5fa', bg: 'rgba(96,165,250,0.1)' },
+  pro:     { label: 'Pro',     color: '#a78bfa', bg: 'rgba(139,92,246,0.15)' },
+  premium: { label: 'Premium', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)' },
+};
+
 const NAV = [
-  { href: '/', label: 'Winner', icon: LayoutDashboard, desc: 'Dashboard' },
+  { href: '/dashboard', label: 'Winner', icon: LayoutDashboard, desc: 'Dashboard' },
   { href: '/calculator', label: 'Rentabilidad', icon: Calculator, desc: 'Calculadora' },
   { href: '/autoconfirm', label: 'AutoConfirm', icon: MessageCircle, desc: 'Bot WhatsApp' },
 ];
@@ -68,15 +75,37 @@ export function Sidebar() {
 
       {/* User */}
       {user && (
-        <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-          <p className="text-xs text-gray-700 truncate">{user.email}</p>
-          <button
-            onClick={() => { clearAuth(); router.replace('/login'); }}
-            className="p-1.5 rounded-lg text-gray-700 hover:text-gray-300 hover:bg-white/5 transition-all shrink-0"
-            title="Cerrar sesión"
-          >
-            <LogOut size={13} />
-          </button>
+        <div className="px-4 py-3 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+          {/* Plan badge */}
+          {(() => {
+            const badge = PLAN_BADGE[user.plan as PlanType] ?? PLAN_BADGE.free;
+            return (
+              <Link href={user.plan === 'free' || user.plan === 'basic' ? '/pricing' : '#'}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg w-fit transition-all duration-200 hover:opacity-80"
+                style={{ background: badge.bg, border: `1px solid ${badge.color}22` }}>
+                <Zap size={10} style={{ color: badge.color }} />
+                <span className="text-[10px] font-bold" style={{ color: badge.color }}>{badge.label}</span>
+              </Link>
+            );
+          })()}
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-gray-700 truncate">{user.email}</p>
+            <div className="flex items-center gap-1 shrink-0">
+              {user.plan === 'basic' && (
+                <Link href="/settings"
+                  className="p-1.5 rounded-lg text-gray-700 hover:text-gray-300 hover:bg-white/5 transition-all"
+                  title="Configuración">
+                  <Settings size={13} />
+                </Link>
+              )}
+              <button
+                onClick={() => { clearAuth(); router.replace('/login'); }}
+                className="p-1.5 rounded-lg text-gray-700 hover:text-gray-300 hover:bg-white/5 transition-all"
+                title="Cerrar sesión">
+                <LogOut size={13} />
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </aside>
