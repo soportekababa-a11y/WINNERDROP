@@ -71,6 +71,13 @@ export class SubscriptionsService {
     return { email: updated!.email, plan: updated!.plan, planExpiresAt: updated!.planExpiresAt };
   }
 
+  async setMsgLimit(email: string, limit: number) {
+    const user = await this.users.findByEmail(email);
+    if (!user) throw new NotFoundException(`Usuario no encontrado: ${email}`);
+    await this.users.setMsgLimit(user.id, limit);
+    return { email: user.email, msgMonthlyLimit: limit };
+  }
+
   listUsers() {
     return this.users.findAll();
   }

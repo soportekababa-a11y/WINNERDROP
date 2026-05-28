@@ -64,6 +64,13 @@ export default function AutoConfirmPage() {
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [initiating, setInitiating] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [msgUsage, setMsgUsage] = useState<{ used: number; limit: number } | null>(null);
+
+  const WA_PACKS = [
+    { msgs: 300,      price: 5,  label: '300 mensajes/mes',    unlimited: false },
+    { msgs: 1000,     price: 11, label: '1,000 mensajes/mes',  unlimited: false },
+    { msgs: Infinity, price: 25, label: 'Mensajes ilimitados', unlimited: true  },
+  ];
 
   useEffect(() => {
     if (!isAuthenticated()) { router.replace('/login'); return; }
@@ -78,6 +85,7 @@ export default function AutoConfirmPage() {
       window.history.replaceState({}, '', '/autoconfirm');
     }
     loadStore();
+    apiFetch('/autoconfirm/msg-usage').then(setMsgUsage).catch(() => null);
     return () => stopPoll();
   }, [router]);
 
@@ -214,6 +222,48 @@ export default function AutoConfirmPage() {
           <p className="text-xs text-gray-500">Confirmaciones de pedidos por WhatsApp — desde tu número</p>
         </div>
       </div>
+
+      {/* Message usage */}
+      {msgUsage && (() => {
+        const { used, limit } = msgUsage;
+        const unlimited = limit === -1;
+        const pct = unlimited ? 0 : Math.min((used / limit) * 100, 100);
+        const atLimit = !unlimited && used >= limit;
+        const barColor = atLimit ? '#ef4444' : pct >= 75 ? '#fb923c' : '#a78bfa';
+        return (
+          <div className="rounded-2xl p-5 space-y-4"
+            style={{ background: atLimit ? 'rgba(239,68,68,0.06)' : 'rgba(255,255,255,0.025)', border: `1px solid ${atLimit ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.06)'}` }}>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-white">Mensajes este mes</p>
+              <span className="text-sm font-bold" style={{ color: barColor }}>
+                {used} / {unlimited ? '∞' : limit}
+              </span>
+            </div>
+            {!unlimited && (
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: barColor }} />
+              </div>
+            )}
+            {atLimit && (
+              <div className="space-y-3 pt-1">
+                <p className="text-xs text-red-400 font-medium">Alcanzaste el límite mensual. Activa un paquete para seguir enviando:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {WA_PACKS.map(({ msgs, price, label, unlimited: ul }) => (
+                    <a key={price}
+                      href={`https://wa.me/18299607483?text=${encodeURIComponent(`Hola, quiero agregar el paquete de ${label} ($${price}/mes) a mi AutoConfirm de MOMENTUM`)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex flex-col gap-1.5 p-4 rounded-xl text-center transition-all hover:opacity-90"
+                      style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)' }}>
+                      <span className="text-lg font-black text-white">${price}<span className="text-xs font-normal text-gray-500">/mes</span></span>
+                      <span className="text-xs text-violet-300">{label}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {!store ? (
         /* ─── Connect store ─── */

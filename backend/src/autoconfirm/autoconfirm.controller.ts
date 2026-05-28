@@ -136,4 +136,12 @@ export class AutoconfirmController {
   getLogs(@Req() req: any) {
     return this.svc.getLogs(req.user.id, 50);
   }
+
+  // ─── Message usage ─────────────────────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Get('msg-usage')
+  getMsgUsage(@Req() req: any) {
+    return this.svc.getMsgUsage(req.user.id);
+  }
 }

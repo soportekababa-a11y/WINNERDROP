@@ -39,6 +39,9 @@ export class User {
   @Column({ nullable: true })
   sessionToken: string;
 
+  @Column({ default: 50 })
+  msgMonthlyLimit: number;
+
   @Column({ default: true })
   isActive: boolean;
 

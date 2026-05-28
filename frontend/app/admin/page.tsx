@@ -26,9 +26,17 @@ interface UserRow {
   selectedPlatform: string | null;
   planActivatedAt: string | null;
   planExpiresAt: string | null;
+  msgMonthlyLimit: number;
   isActive: boolean;
   createdAt: string;
 }
+
+const MSG_PACKS = [
+  { label: '50',  value: 50,   color: '#6b7280' },
+  { label: '300', value: 300,  color: '#60a5fa' },
+  { label: '1K',  value: 1000, color: '#a78bfa' },
+  { label: '∞',   value: -1,   color: '#fbbf24' },
+];
 
 const api = (secret: string) => axios.create({
   baseURL: '/api/proxy',
@@ -52,6 +60,7 @@ export default function AdminPage() {
   // Plan change
   const [changingPlan, setChangingPlan] = useState<string | null>(null);
   const [renewingUser, setRenewingUser] = useState<string | null>(null);
+  const [changingMsgLimit, setChangingMsgLimit] = useState<string | null>(null);
 
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
@@ -99,6 +108,16 @@ export default function AdminPage() {
       loadUsers();
     } finally {
       setChangingPlan(null);
+    }
+  }
+
+  async function handleMsgLimit(userId: string, email: string, limit: number) {
+    setChangingMsgLimit(userId);
+    try {
+      await api(secret).post('/subscriptions/admin/set-msg-limit', { email, limit });
+      loadUsers();
+    } finally {
+      setChangingMsgLimit(null);
     }
   }
 
@@ -262,6 +281,28 @@ export default function AdminPage() {
                         </p>
                       );
                     })()}
+                    {u.plan === 'premium' && (
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <span className="text-[10px] text-gray-600">Msgs/mes:</span>
+                        {MSG_PACKS.map(pack => {
+                          const active = u.msgMonthlyLimit === pack.value;
+                          return (
+                            <button key={pack.value}
+                              onClick={() => handleMsgLimit(u.id, u.email, pack.value)}
+                              disabled={changingMsgLimit === u.id}
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all disabled:opacity-40"
+                              style={{
+                                background: active ? `${pack.color}22` : 'rgba(255,255,255,0.03)',
+                                border: `1px solid ${active ? pack.color + '50' : 'rgba(255,255,255,0.07)'}`,
+                                color: active ? pack.color : '#6b7280',
+                              }}>
+                              {pack.label}
+                            </button>
+                          );
+                        })}
+                        {changingMsgLimit === u.id && <Loader2 size={10} className="animate-spin text-violet-400" />}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg"

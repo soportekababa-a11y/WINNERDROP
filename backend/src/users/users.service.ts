@@ -40,9 +40,13 @@ export class UsersService {
     await this.repo.update(userId, { sessionToken: token });
   }
 
+  async setMsgLimit(userId: string, limit: number) {
+    await this.repo.update(userId, { msgMonthlyLimit: limit });
+  }
+
   findAll() {
     return this.repo.find({
-      select: ['id', 'email', 'name', 'plan', 'selectedCountry', 'selectedPlatform', 'planActivatedAt', 'planExpiresAt', 'isActive', 'createdAt'],
+      select: ['id', 'email', 'name', 'plan', 'selectedCountry', 'selectedPlatform', 'planActivatedAt', 'planExpiresAt', 'msgMonthlyLimit', 'isActive', 'createdAt'],
       order: { createdAt: 'DESC' },
     });
   }

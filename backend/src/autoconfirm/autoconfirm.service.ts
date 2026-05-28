@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -7,6 +7,7 @@ import * as crypto from 'crypto';
 const SHOPIFY_SCOPES = 'read_orders,write_orders';
 import { ShopifyStore } from './entities/shopify-store.entity';
 import { OrderLog } from './entities/order-log.entity';
+import { User } from '../users/user.entity';
 import { WhatsappService } from './whatsapp.service';
 
 @Injectable()
@@ -19,8 +20,31 @@ export class AutoconfirmService {
     private storeRepo: Repository<ShopifyStore>,
     @InjectRepository(OrderLog)
     private logRepo: Repository<OrderLog>,
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
     private whatsapp: WhatsappService,
   ) {}
+
+  async getMsgUsage(userId: string): Promise<{ used: number; limit: number }> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const limit = user?.msgMonthlyLimit ?? 50;
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const used = await this.logRepo
+      .createQueryBuilder('log')
+      .innerJoin(ShopifyStore, 'store', 'store.id = log.storeId')
+      .where('store.userId = :userId', { userId })
+      .andWhere('log.status = :status', { status: 'sent' })
+      .andWhere('log.createdAt >= :monthStart', { monthStart })
+      .getCount();
+    return { used, limit };
+  }
+
+  private async checkMsgLimit(userId: string): Promise<void> {
+    const { used, limit } = await this.getMsgUsage(userId);
+    if (limit !== -1 && used >= limit) throw new ForbiddenException('MSG_LIMIT_REACHED');
+  }
 
   private oauthStates = new Map<string, string>(); // nonce → userId
 
@@ -156,6 +180,7 @@ export class AutoconfirmService {
     log.messageSent = message;
 
     try {
+      await this.checkMsgLimit(store.userId);
       const waStatus = this.whatsapp.getStatus(store.id);
       if (waStatus.status === 'connected') {
         await this.logRepo.save(log); // save first to get log.id

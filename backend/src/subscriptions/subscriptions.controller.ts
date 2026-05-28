@@ -52,6 +52,16 @@ export class SubscriptionsController {
     return this.subs.listUsers();
   }
 
+  @Post('admin/set-msg-limit')
+  @HttpCode(200)
+  adminSetMsgLimit(
+    @Headers('x-admin-secret') secret: string,
+    @Body() dto: { email: string; limit: number },
+  ) {
+    this.subs.verifyAdminSecret(secret);
+    return this.subs.setMsgLimit(dto.email, dto.limit);
+  }
+
   @Post('admin/renew')
   @HttpCode(200)
   adminRenew(
