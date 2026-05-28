@@ -32,6 +32,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       plan: payload.plan,
       selectedCountry: payload.selectedCountry ?? null,
       selectedPlatform: payload.selectedPlatform ?? null,
+      planExpiresAt: user.planExpiresAt ?? null,
     };
   }
 }

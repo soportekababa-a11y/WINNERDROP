@@ -2,10 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Calculator, LayoutDashboard, LogOut, MessageCircle, Settings, Zap } from 'lucide-react';
+import { Calculator, LayoutDashboard, LogOut, MessageCircle, Settings, Zap, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getUser, clearAuth, PlanType } from '@/lib/auth';
 import { MomentumIcon, MomentumWordmark } from '@/components/momentum-logo';
+
+function daysLeft(planExpiresAt: string | null): number | null {
+  if (!planExpiresAt) return null;
+  const diff = new Date(planExpiresAt).getTime() - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
 
 const PLAN_BADGE: Record<PlanType, { label: string; color: string; bg: string }> = {
   free:    { label: 'Free',    color: '#6b7280', bg: 'rgba(107,114,128,0.1)' },
@@ -79,13 +85,30 @@ export function Sidebar() {
           {/* Plan badge */}
           {(() => {
             const badge = PLAN_BADGE[user.plan as PlanType] ?? PLAN_BADGE.free;
+            const days = user.plan !== 'free' ? daysLeft(user.planExpiresAt) : null;
+            const expired = days !== null && days <= 0;
+            const urgent = days !== null && days > 0 && days <= 5;
             return (
-              <Link href={user.plan === 'free' || user.plan === 'basic' ? '/pricing' : '#'}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg w-fit transition-all duration-200 hover:opacity-80"
-                style={{ background: badge.bg, border: `1px solid ${badge.color}22` }}>
-                <Zap size={10} style={{ color: badge.color }} />
-                <span className="text-[10px] font-bold" style={{ color: badge.color }}>{badge.label}</span>
-              </Link>
+              <div className="space-y-1.5">
+                <Link href={user.plan === 'free' || user.plan === 'basic' ? '/pricing' : '#'}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg w-fit transition-all duration-200 hover:opacity-80"
+                  style={{ background: badge.bg, border: `1px solid ${badge.color}22` }}>
+                  <Zap size={10} style={{ color: badge.color }} />
+                  <span className="text-[10px] font-bold" style={{ color: badge.color }}>{badge.label}</span>
+                </Link>
+                {days !== null && (
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg"
+                    style={{
+                      background: expired ? 'rgba(239,68,68,0.12)' : urgent ? 'rgba(251,146,60,0.12)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${expired ? 'rgba(239,68,68,0.3)' : urgent ? 'rgba(251,146,60,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                    }}>
+                    <Clock size={9} style={{ color: expired ? '#ef4444' : urgent ? '#fb923c' : '#6b7280' }} />
+                    <span className="text-[10px] font-semibold" style={{ color: expired ? '#ef4444' : urgent ? '#fb923c' : '#9ca3af' }}>
+                      {expired ? 'Plan vencido' : days === 1 ? 'Te queda 1 día' : `Te quedan ${days} días`}
+                    </span>
+                  </div>
+                )}
+              </div>
             );
           })()}
           <div className="flex items-center justify-between gap-2">

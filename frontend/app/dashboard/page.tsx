@@ -76,6 +76,9 @@ export default function Dashboard() {
     }
   };
 
+  const user = getUser();
+  const planExpired = !!user?.planExpiresAt && new Date(user.planExpiresAt) < new Date();
+
   useEffect(() => {
     if (!isAuthenticated()) { router.replace('/login'); return; }
     const u = getUser();
@@ -131,7 +134,31 @@ export default function Dashboard() {
 
   if (!authed) return null;
 
-  const user = getUser();
+  if (planExpired) return (
+    <div className="min-h-screen bg-[#020209] flex">
+      <Sidebar />
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="max-w-md w-full text-center rounded-2xl p-10 space-y-5"
+          style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto"
+            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}>
+            <Lock size={28} className="text-red-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Tu plan ha vencido</h2>
+          <p className="text-gray-500 text-sm leading-relaxed">
+            Tu suscripción expiró. Contáctanos por WhatsApp para renovar y seguir accediendo a todos los productos.
+          </p>
+          <a href="https://wa.me/18299607483?text=Hola%2C+quiero+renovar+mi+plan+de+MOMENTUM"
+            target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white transition-all"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)', boxShadow: '0 0 20px rgba(139,92,246,0.3)' }}>
+            Renovar plan →
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+
   const isBasic = user?.plan === 'basic';
 
   const glassPanel = { background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.06)' };

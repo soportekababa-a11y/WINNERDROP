@@ -2,10 +2,11 @@ import { Controller, Get, Param, Query, UseGuards, Request, ForbiddenException }
 import { ProductsService } from './products.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
-type ReqUser = { id: string; plan: string; selectedCountry: string | null };
+type ReqUser = { id: string; plan: string; selectedCountry: string | null; planExpiresAt: Date | null };
 
 function effectiveCountry(user: ReqUser, requested?: string): string | undefined {
   if (user.plan === 'free') throw new ForbiddenException('PLAN_REQUIRED');
+  if (user.planExpiresAt && new Date(user.planExpiresAt) < new Date()) throw new ForbiddenException('PLAN_EXPIRED');
   if (user.plan === 'basic') return user.selectedCountry ?? requested;
   return requested;
 }
