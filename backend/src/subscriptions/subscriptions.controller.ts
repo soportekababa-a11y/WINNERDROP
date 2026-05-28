@@ -52,6 +52,16 @@ export class SubscriptionsController {
     return this.subs.listUsers();
   }
 
+  @Post('admin/renew')
+  @HttpCode(200)
+  adminRenew(
+    @Headers('x-admin-secret') secret: string,
+    @Body() dto: { email: string; days?: number },
+  ) {
+    this.subs.verifyAdminSecret(secret);
+    return this.subs.renewUser(dto.email, dto.days ?? 30);
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   getMyPlan(@Request() req: any) {

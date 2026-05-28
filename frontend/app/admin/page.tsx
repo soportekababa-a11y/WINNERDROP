@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
 import { MomentumIcon, MomentumWordmark } from '@/components/momentum-logo';
-import { UserPlus, Users, RefreshCw, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { UserPlus, Users, RefreshCw, CheckCircle2, AlertCircle, Loader2, RotateCcw } from 'lucide-react';
 
 const COUNTRIES = ['RD', 'GT', 'EC', 'CR', 'CO'];
 const PLATFORMS = ['effi', 'dropi'];
@@ -51,6 +51,7 @@ export default function AdminPage() {
 
   // Plan change
   const [changingPlan, setChangingPlan] = useState<string | null>(null);
+  const [renewingUser, setRenewingUser] = useState<string | null>(null);
 
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
@@ -99,6 +100,25 @@ export default function AdminPage() {
     } finally {
       setChangingPlan(null);
     }
+  }
+
+  async function handleRenew(userId: string, email: string) {
+    setRenewingUser(userId);
+    try {
+      await api(secret).post('/subscriptions/admin/renew', { email, days: 30 });
+      loadUsers();
+    } finally {
+      setRenewingUser(null);
+    }
+  }
+
+  function fmtExpiry(dateStr: string | null) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.ceil((d.getTime() - now.getTime()) / 86400000);
+    const label = d.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: '2-digit' });
+    return { label, expired: diffDays < 0, soon: diffDays >= 0 && diffDays <= 5, days: diffDays };
   }
 
   const glass = { background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' };
@@ -232,6 +252,16 @@ export default function AdminPage() {
                       {u.selectedCountry && `${u.selectedCountry} · `}{u.selectedPlatform && `${u.selectedPlatform} · `}
                       Creado: {new Date(u.createdAt).toLocaleDateString('es-DO')}
                     </p>
+                    {(() => {
+                      const exp = fmtExpiry(u.planExpiresAt);
+                      if (!exp) return null;
+                      const color = exp.expired ? '#f87171' : exp.soon ? '#fbbf24' : '#34d399';
+                      return (
+                        <p className="text-[10px] mt-0.5 font-semibold" style={{ color }}>
+                          {exp.expired ? `Expiró: ${exp.label}` : `Vence: ${exp.label} (${exp.days}d)`}
+                        </p>
+                      );
+                    })()}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg"
@@ -246,6 +276,15 @@ export default function AdminPage() {
                       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#9ca3af' }}>
                       {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
+                    <button
+                      onClick={() => handleRenew(u.id, u.email)}
+                      disabled={renewingUser === u.id}
+                      title="+30 días"
+                      className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg font-semibold disabled:opacity-40 transition-colors"
+                      style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#34d399' }}>
+                      {renewingUser === u.id ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
+                      +30d
+                    </button>
                     {changingPlan === u.id && <Loader2 size={12} className="animate-spin text-violet-400" />}
                   </div>
                 </div>

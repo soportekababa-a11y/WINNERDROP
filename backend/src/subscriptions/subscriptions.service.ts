@@ -55,8 +55,20 @@ export class SubscriptionsService {
     if (existing) throw new ConflictException(`Email ya existe: ${email}`);
     const hashed = await bcrypt.hash(password, 10);
     const user = await this.users.create(email, hashed, name);
-    const updated = await this.users.updatePlan(user.id, plan, undefined, selectedCountry, selectedPlatform);
-    return { id: updated!.id, email: updated!.email, name: updated!.name, plan: updated!.plan };
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+    const updated = await this.users.updatePlan(user.id, plan, expiresAt, selectedCountry, selectedPlatform);
+    return { id: updated!.id, email: updated!.email, name: updated!.name, plan: updated!.plan, planExpiresAt: updated!.planExpiresAt };
+  }
+
+  async renewUser(email: string, days = 30) {
+    const user = await this.users.findByEmail(email);
+    if (!user) throw new NotFoundException(`Usuario no encontrado: ${email}`);
+    const base = user.planExpiresAt && user.planExpiresAt > new Date() ? user.planExpiresAt : new Date();
+    const newExpiry = new Date(base);
+    newExpiry.setDate(newExpiry.getDate() + days);
+    const updated = await this.users.updatePlan(user.id, user.plan, newExpiry);
+    return { email: updated!.email, plan: updated!.plan, planExpiresAt: updated!.planExpiresAt };
   }
 
   listUsers() {

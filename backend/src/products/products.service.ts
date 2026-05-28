@@ -9,6 +9,7 @@ const COUNTRY_TZ: Record<string, { tz: string; utcOffset: number }> = {
   GT: { tz: 'America/Guatemala',     utcOffset: 6 },
   EC: { tz: 'America/Guayaquil',     utcOffset: 5 },
   CR: { tz: 'America/Costa_Rica',    utcOffset: 6 },
+  CO: { tz: 'America/Bogota',        utcOffset: 5 },
 };
 
 function getTzCfg(country?: string) {
