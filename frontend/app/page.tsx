@@ -20,6 +20,7 @@ const FEATURES = [
 const PLANS = [
   {
     id: 'Básico',
+    price: 20,
     color: '#60a5fa',
     gradient: 'rgba(96,165,250,0.07)',
     border: 'rgba(96,165,250,0.2)',
@@ -27,6 +28,7 @@ const PLANS = [
   },
   {
     id: 'Pro',
+    price: 29,
     color: '#a78bfa',
     gradient: 'rgba(139,92,246,0.12)',
     border: 'rgba(139,92,246,0.35)',
@@ -35,6 +37,7 @@ const PLANS = [
   },
   {
     id: 'Premium',
+    price: 46,
     color: '#fbbf24',
     gradient: 'rgba(251,191,36,0.07)',
     border: 'rgba(251,191,36,0.25)',
@@ -129,7 +132,7 @@ export default function Landing() {
         <p className="text-center text-gray-600 text-sm mb-12">Activación por WhatsApp · en minutos</p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-14">
-          {PLANS.map(({ id, color, gradient, border, popular, features }) => (
+          {PLANS.map(({ id, price, color, gradient, border, popular, features }) => (
             <div key={id} className="rounded-2xl p-6 flex flex-col gap-5 relative"
               style={{ background: gradient, border: `1px solid ${border}` }}>
               {popular && (
@@ -141,6 +144,10 @@ export default function Landing() {
               <div className="flex items-center gap-2">
                 {id === 'Premium' ? <Crown size={16} style={{ color }} /> : <Zap size={16} style={{ color }} />}
                 <p className="text-lg font-bold" style={{ color }}>{id}</p>
+              </div>
+              <div className="flex items-end gap-1">
+                <span className="text-4xl font-black text-white">${price}</span>
+                <span className="text-gray-500 text-sm mb-1">/mes</span>
               </div>
               <ul className="space-y-2 flex-1">
                 {features.map(f => (

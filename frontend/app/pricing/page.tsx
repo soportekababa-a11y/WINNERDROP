@@ -8,7 +8,7 @@ const PLANS = [
   {
     id: 'basic',
     name: 'Básico',
-    price: 'RD$X/mes',
+    price: '$22/mes',
     Icon: Zap,
     color: '#60a5fa',
     gradient: 'rgba(96,165,250,0.08)',
