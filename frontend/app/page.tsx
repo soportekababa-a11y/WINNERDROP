@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { MomentumIcon, MomentumWordmark } from '@/components/momentum-logo';
 import { Check, MessageCircle, TrendingUp, Globe, Zap, BarChart2, Search, Bot, Crown } from 'lucide-react';
 
-const WA_NUMBER = '1XXXXXXXXXX';
+const WA_NUMBER = '18299607483';
 const waLink = (plan: string) =>
   `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Hola, quiero suscribirme al plan ${plan} de MOMENTUM`)}`;
 

@@ -55,7 +55,7 @@ const PLANS = [
   },
 ];
 
-const WA_NUMBER = '1XXXXXXXXXX';
+const WA_NUMBER = '18299607483';
 
 export default function PricingPage() {
   const router = useRouter();
