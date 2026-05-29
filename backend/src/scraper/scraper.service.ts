@@ -117,7 +117,21 @@ export class ScraperService implements OnModuleDestroy {
   }
 
   private async launchBrowser() {
-    const executablePath = process.env.CHROMIUM_PATH || undefined;
+    const { existsSync } = await import('fs');
+    const candidates = [
+      process.env.CHROMIUM_PATH,
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/usr/bin/google-chrome',
+      '/snap/bin/chromium',
+    ].filter(Boolean) as string[];
+
+    let executablePath: string | undefined;
+    for (const p of candidates) {
+      if (existsSync(p)) { executablePath = p; break; }
+    }
+
+    this.logger.log(`Chromium: ${executablePath ?? 'bundled'}`);
     this.browser = await chromium.launch({ headless: true, executablePath });
   }
 
