@@ -20,7 +20,7 @@ const FEATURES = [
 const PLANS = [
   {
     id: 'Básico',
-    price: 20,
+    price: 18,
     color: '#60a5fa',
     gradient: 'rgba(96,165,250,0.07)',
     border: 'rgba(96,165,250,0.2)',
@@ -28,7 +28,7 @@ const PLANS = [
   },
   {
     id: 'Pro',
-    price: 29,
+    price: 25,
     color: '#a78bfa',
     gradient: 'rgba(139,92,246,0.12)',
     border: 'rgba(139,92,246,0.35)',
@@ -37,7 +37,7 @@ const PLANS = [
   },
   {
     id: 'Premium',
-    price: 46,
+    price: 45,
     color: '#fbbf24',
     gradient: 'rgba(251,191,36,0.07)',
     border: 'rgba(251,191,36,0.25)',
