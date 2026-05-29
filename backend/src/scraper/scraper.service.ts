@@ -136,6 +136,7 @@ export class ScraperService implements OnModuleDestroy {
 
     for (const { code, storeName } of COUNTRIES) {
       await this.loginCountry(code, storeName, email!, password!);
+      await new Promise(r => setTimeout(r, 3000)); // space out logins so Effi doesn't throttle
     }
 
     this.logger.log(`Login completo: ${this.contexts.size}/${COUNTRIES.length} países activos`);
@@ -146,13 +147,24 @@ export class ScraperService implements OnModuleDestroy {
     if (existing) await existing.close().catch(() => {});
     this.contexts.delete(code);
 
-    try {
-      this.logger.log(`Iniciando sesión para país: ${code}`);
-      const context = await this.browser!.newContext({ userAgent: this.userAgent() });
-      await this.loginContext(context, email, password, storeName);
-      this.contexts.set(code, context);
-    } catch (err) {
-      this.logger.error(`Login fallido para ${code} — país omitido en este ciclo`, err);
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      let context: import('playwright').BrowserContext | null = null;
+      try {
+        this.logger.log(`Iniciando sesión para país: ${code}${attempt > 1 ? ` (intento ${attempt})` : ''}`);
+        context = await this.browser!.newContext({ userAgent: this.userAgent() });
+        await this.loginContext(context, email, password, storeName);
+        this.contexts.set(code, context);
+        return;
+      } catch (err) {
+        await context?.close().catch(() => {});
+        if (attempt < MAX_ATTEMPTS) {
+          this.logger.warn(`Login ${code} intento ${attempt} fallido, reintentando en 5s...`);
+          await new Promise(r => setTimeout(r, 5000));
+        } else {
+          this.logger.error(`Login fallido para ${code} tras ${MAX_ATTEMPTS} intentos — omitido`, err);
+        }
+      }
     }
   }
 
