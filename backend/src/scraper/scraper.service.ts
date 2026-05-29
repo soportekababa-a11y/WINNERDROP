@@ -70,36 +70,30 @@ export class ScraperService implements OnModuleDestroy {
 
   private async startWithRetry() {
     const RETRY_DELAY_MS = 60 * 1000;
+
+    // Launch browser — retry until success
     while (true) {
       try {
         await this.launchBrowser();
-        await this.loginAllCountries();
-        await this.runCycle();
         break;
       } catch (err) {
-        this.logger.error(`Error en arranque inicial, reintentando en ${RETRY_DELAY_MS / 1000}s...`, err);
-        for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
-        this.contexts.clear();
+        this.logger.error(`No se pudo lanzar el browser, reintentando en ${RETRY_DELAY_MS / 1000}s...`, err);
         await this.browser?.close().catch(() => {});
         this.browser = null;
         await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
       }
     }
 
+    // Login each country independently — failed countries are skipped, not fatal
+    await this.loginAllCountries();
+
+    // First scrape cycle — only run if at least one country logged in
+    if (this.contexts.size > 0) {
+      await this.runCycle().catch(err => this.logger.error('Error en primer ciclo', err));
+    }
+
     this.intervalHandle = setInterval(async () => {
-      try {
-        await this.runCycle();
-      } catch (err) {
-        this.logger.error('Error en ciclo, re-loginando...', err);
-        try {
-          for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
-          this.contexts.clear();
-          await this.loginAllCountries();
-          await this.runCycle();
-        } catch (e) {
-          this.logger.error('Re-login fallido', e);
-        }
-      }
+      await this.runCycle();
     }, SCRAPE_INTERVAL_MS);
   }
 
@@ -140,10 +134,24 @@ export class ScraperService implements OnModuleDestroy {
     const password = this.config.get<string>('EFFI_PASSWORD');
 
     for (const { code, storeName } of COUNTRIES) {
+      await this.loginCountry(code, storeName, email!, password!);
+    }
+
+    this.logger.log(`Login completo: ${this.contexts.size}/${COUNTRIES.length} países activos`);
+  }
+
+  private async loginCountry(code: string, storeName: string | null, email: string, password: string) {
+    const existing = this.contexts.get(code);
+    if (existing) await existing.close().catch(() => {});
+    this.contexts.delete(code);
+
+    try {
       this.logger.log(`Iniciando sesión para país: ${code}`);
       const context = await this.browser!.newContext({ userAgent: this.userAgent() });
-      await this.loginContext(context, email!, password!, storeName);
+      await this.loginContext(context, email, password, storeName);
       this.contexts.set(code, context);
+    } catch (err) {
+      this.logger.error(`Login fallido para ${code} — país omitido en este ciclo`, err);
     }
   }
 
@@ -230,12 +238,16 @@ export class ScraperService implements OnModuleDestroy {
     const start = Date.now();
     let totalProducts = 0;
     let totalPages = 0;
+    const email = this.config.get<string>('EFFI_EMAIL')!;
+    const password = this.config.get<string>('EFFI_PASSWORD')!;
 
-    for (const { code } of COUNTRIES) {
-      const context = this.contexts.get(code);
+    for (const { code, storeName } of COUNTRIES) {
+      let context = this.contexts.get(code);
       if (!context) {
-        this.logger.warn(`Sin contexto para país ${code}, omitiendo`);
-        continue;
+        this.logger.warn(`[${code}] Sin sesión, intentando login...`);
+        await this.loginCountry(code, storeName, email, password);
+        context = this.contexts.get(code);
+        if (!context) { this.logger.error(`[${code}] Login fallido, omitiendo`); continue; }
       }
 
       this.logger.log(`Iniciando ciclo para país: ${code}`);
@@ -263,8 +275,13 @@ export class ScraperService implements OnModuleDestroy {
 
         totalProducts += products.length;
         totalPages += pages;
+      } catch (err) {
+        this.logger.error(`[${code}] Error en ciclo, re-logineando para próximo ciclo`, err);
+        await page.close().catch(() => {});
+        await this.loginCountry(code, storeName, email, password);
+        continue;
       } finally {
-        await page.close();
+        await page.close().catch(() => {});
       }
     }
 
@@ -394,9 +411,9 @@ export class ScraperService implements OnModuleDestroy {
       const isNewDay = product.salesBaselineDate !== today;
 
       if (isNewDay) {
-        // Day rolled over: yesterday = what we accumulated all of yesterday
-        product.salesYesterday = product.salesToday;
-        product.salesBaseline = product.totalSalesAccum;
+        // Use raw.salesAccum - salesBaseline so even scraper downtime doesn't lose data
+        product.salesYesterday = Math.max(0, raw.salesAccum - product.salesBaseline);
+        product.salesBaseline = raw.salesAccum;
         product.salesBaselineDate = today;
       }
 
