@@ -41,6 +41,7 @@ export class ScraperService implements OnModuleDestroy {
   private intervalHandle: NodeJS.Timeout | null = null;
   private lastScrapeStats = { total: 0, pages: 0, durationMs: 0, finishedAt: null as Date | null };
   private progress = { currentPage: 0, totalPages: 0, accumulated: 0, country: '' };
+  private lastCleanupDate = '';
 
   constructor(
     private config: ConfigService,
@@ -285,6 +286,7 @@ export class ScraperService implements OnModuleDestroy {
       }
     }
 
+    await this.cleanupOldSnapshots();
     await this.productsService.refreshDailyCache();
 
     this.lastScrapeStats = {
@@ -437,6 +439,27 @@ export class ScraperService implements OnModuleDestroy {
         stock: raw.stock,
       }),
     );
+  }
+
+  private async cleanupOldSnapshots() {
+    const today = new Date().toISOString().slice(0, 10);
+    if (this.lastCleanupDate === today) return;
+
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 60);
+      const result = await this.snapshotRepo
+        .createQueryBuilder()
+        .delete()
+        .where('"capturedAt" < :cutoff', { cutoff })
+        .execute();
+      if (result.affected && result.affected > 0) {
+        this.logger.log(`Snapshots limpiados: ${result.affected} registros de más de 60 días`);
+      }
+      this.lastCleanupDate = today;
+    } catch (err) {
+      this.logger.error('Error limpiando snapshots viejos', err);
+    }
   }
 }
 
