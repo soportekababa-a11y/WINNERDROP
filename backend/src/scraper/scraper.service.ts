@@ -108,25 +108,14 @@ export class ScraperService implements OnModuleDestroy {
     this.logger.log('Scraper detenido');
   }
 
-  private jitter(min: number, max: number) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  }
-
   private userAgent() {
-    const agents = [
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    ];
-    return agents[Math.floor(Math.random() * agents.length)];
+    return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36';
   }
 
   private async launchBrowser() {
     const { existsSync } = await import('fs');
     const candidates = [
       process.env.CHROMIUM_PATH,
-      '/usr/bin/google-chrome-stable',
       '/usr/bin/chromium-browser',
       '/usr/bin/chromium',
       '/usr/bin/google-chrome',
@@ -164,19 +153,7 @@ export class ScraperService implements OnModuleDestroy {
       let context: import('playwright').BrowserContext | null = null;
       try {
         this.logger.log(`Iniciando sesión para país: ${code}${attempt > 1 ? ` (intento ${attempt})` : ''}`);
-        const viewports = [
-          { width: 1920, height: 1080 },
-          { width: 1440, height: 900 },
-          { width: 1366, height: 768 },
-          { width: 1536, height: 864 },
-        ];
-        const vp = viewports[Math.floor(Math.random() * viewports.length)];
-        context = await this.browser!.newContext({
-          userAgent: this.userAgent(),
-          viewport: vp,
-          locale: 'es-419',
-          timezoneId: 'America/Santo_Domingo',
-        });
+        context = await this.browser!.newContext({ userAgent: this.userAgent() });
         await this.loginContext(context, email, password, storeName);
         this.contexts.set(code, context);
         return;
@@ -201,20 +178,9 @@ export class ScraperService implements OnModuleDestroy {
     const page = await context.newPage();
     try {
       await page.goto(EFFI_LOGIN_URL, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(this.jitter(600, 1200));
-
-      const emailInput = page.locator('input[type="email"], input[placeholder*="Email"], input[placeholder*="email"]');
-      await emailInput.click();
-      await page.waitForTimeout(this.jitter(200, 500));
-      await emailInput.type(email, { delay: this.jitter(40, 90) });
-      await page.waitForTimeout(this.jitter(300, 700));
-
-      const passInput = page.locator('input[type="password"]');
-      await passInput.click();
-      await page.waitForTimeout(this.jitter(200, 400));
-      await passInput.type(password, { delay: this.jitter(40, 90) });
-      await page.waitForTimeout(this.jitter(400, 900));
-
+      await page.locator('input[type="email"], input[placeholder*="Email"], input[placeholder*="email"]').fill(email);
+      await page.locator('input[type="password"]').fill(password);
+      // Click submit — use .first() to avoid ambiguity if multiple "Ingresar" buttons exist
       await page.locator('button[type="submit"], button:has-text("Ingresar")').first().click();
 
       // Wait for company selector page at /ingreso/validar_usuario
