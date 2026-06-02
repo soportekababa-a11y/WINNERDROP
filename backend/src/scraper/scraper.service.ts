@@ -42,6 +42,7 @@ export class ScraperService implements OnModuleDestroy {
   private lastScrapeStats = { total: 0, pages: 0, durationMs: 0, finishedAt: null as Date | null };
   private progress = { currentPage: 0, totalPages: 0, accumulated: 0, country: '' };
   private lastCleanupDate = '';
+  private isCycleRunning = false;
 
   constructor(
     private config: ConfigService,
@@ -271,82 +272,113 @@ export class ScraperService implements OnModuleDestroy {
   }
 
   private async runCycle() {
+    if (this.isCycleRunning) {
+      this.logger.warn('Ciclo anterior aún en ejecución — omitiendo');
+      return;
+    }
+    this.isCycleRunning = true;
+
     const start = Date.now();
     let totalProducts = 0;
     let totalPages = 0;
     const email = this.config.get<string>('EFFI_EMAIL')!;
     const password = this.config.get<string>('EFFI_PASSWORD')!;
 
-    if (!await this.ensureBrowserAlive()) {
-      this.logger.error('Browser no disponible tras reinicio — ciclo omitido');
-      return;
-    }
-
-    for (const { code, storeName } of COUNTRIES) {
-      let context = this.contexts.get(code);
-      if (!context) {
-        this.logger.warn(`[${code}] Sin sesión, intentando login...`);
-        await this.loginCountry(code, storeName, email, password);
-        context = this.contexts.get(code);
-        if (!context) { this.logger.error(`[${code}] Login fallido, omitiendo`); continue; }
+    try {
+      if (!await this.ensureBrowserAlive()) {
+        this.logger.error('Browser no disponible — ciclo omitido');
+        return;
       }
 
-      this.logger.log(`Iniciando ciclo para país: ${code}`);
-      let page: import('playwright').Page | null = null;
-      try {
-        page = await context.newPage();
-        const { products, pages } = await this.scrapeAllPages(page, code);
-        this.logger.log(`[${code}] Scraping completo: ${products.length} productos en ${pages} páginas`);
-
-        for (const raw of products) {
-          await this.upsertProductAndSnapshot(raw, code);
-        }
-
-        if (products.length > 100) {
-          const scrapedIds = products.map(p => p.effiId);
-          const deactivated = await this.productRepo
-            .createQueryBuilder()
-            .update()
-            .set({ isActive: false })
-            .where('effiId NOT IN (:...ids) AND isActive = true AND country = :country', { ids: scrapedIds, country: code })
-            .execute();
-          if (deactivated.affected && deactivated.affected > 0) {
-            this.logger.log(`[${code}] Productos desactivados: ${deactivated.affected}`);
+      for (const { code, storeName } of COUNTRIES) {
+        // Ensure active session for this country
+        if (!this.contexts.has(code)) {
+          this.logger.warn(`[${code}] Sin sesión — intentando login...`);
+          await this.loginCountry(code, storeName, email, password);
+          if (!this.contexts.has(code)) {
+            this.logger.error(`[${code}] Login fallido — se omite, se reintenta en próximo ciclo`);
+            continue;
           }
         }
 
-        totalProducts += products.length;
-        totalPages += pages;
-      } catch (err) {
-        const errMsg = String(err);
-        const browserDied = this.isBrowserDead() || errMsg.includes('has been closed') || errMsg.includes('Target closed');
-        if (browserDied) {
-          this.logger.error(`[${code}] Browser murió durante ciclo — se reiniciará en el próximo ciclo`, err);
-          await this.browser?.close().catch(() => {});
-          this.browser = null;
-          for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
-          this.contexts.clear();
-          break;
+        const context = this.contexts.get(code)!;
+        this.logger.log(`[${code}] Iniciando scrape`);
+        let page: import('playwright').Page | null = null;
+
+        try {
+          page = await context.newPage();
+          const { products, pages } = await this.scrapeAllPages(page, code);
+          this.logger.log(`[${code}] ${products.length} productos en ${pages} páginas`);
+
+          let saved = 0;
+          for (const raw of products) {
+            try {
+              await this.upsertProductAndSnapshot(raw, code);
+              saved++;
+            } catch (dbErr) {
+              this.logger.error(`[${code}] Error guardando ${raw.effiId}`, dbErr);
+            }
+          }
+
+          if (products.length > 100) {
+            const scrapedIds = products.map(p => p.effiId);
+            await this.productRepo
+              .createQueryBuilder()
+              .update()
+              .set({ isActive: false })
+              .where('"effiId" NOT IN (:...ids) AND "isActive" = true AND country = :country', { ids: scrapedIds, country: code })
+              .execute()
+              .catch(err => this.logger.error(`[${code}] Error desactivando productos viejos`, err));
+          }
+
+          this.logger.log(`[${code}] Guardados: ${saved}/${products.length}`);
+          totalProducts += saved;
+          totalPages += pages;
+
+        } catch (err) {
+          const errMsg = String(err);
+          const browserDied = this.isBrowserDead()
+            || errMsg.includes('has been closed')
+            || errMsg.includes('Target closed')
+            || errMsg.includes('browser has been closed');
+
+          if (browserDied) {
+            this.logger.error(`[${code}] Browser muerto durante ciclo — reiniciando en próximo ciclo`);
+            await this.browser?.close().catch(() => {});
+            this.browser = null;
+            for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
+            this.contexts.clear();
+            break; // stop processing other countries, next cycle will re-launch
+          }
+
+          // Non-fatal country error: close stale context, re-login, continue to next country
+          this.logger.error(`[${code}] Error — se omite y se reintenta próximo ciclo`, err);
+          const staleCtx = this.contexts.get(code);
+          if (staleCtx) { await staleCtx.close().catch(() => {}); this.contexts.delete(code); }
+          await this.loginCountry(code, storeName, email, password);
+
+        } finally {
+          await page?.close().catch(() => {});
         }
-        this.logger.error(`[${code}] Error en ciclo, re-logineando para próximo ciclo`, err);
-        await this.loginCountry(code, storeName, email, password);
-        continue;
-      } finally {
-        await page?.close().catch(() => {});
       }
+
+      await this.cleanupOldSnapshots();
+      await this.productsService.refreshDailyCache().catch(err =>
+        this.logger.error('Error refrescando cache diario', err)
+      );
+
+      this.lastScrapeStats = {
+        total: totalProducts,
+        pages: totalPages,
+        durationMs: Date.now() - start,
+        finishedAt: new Date(),
+      };
+
+      this.logger.log(`Ciclo completo en ${Math.round((Date.now() - start) / 1000)}s — ${totalProducts} productos`);
+
+    } finally {
+      this.isCycleRunning = false;
     }
-
-    await this.cleanupOldSnapshots();
-    await this.productsService.refreshDailyCache();
-
-    this.lastScrapeStats = {
-      total: totalProducts,
-      pages: totalPages,
-      durationMs: Date.now() - start,
-      finishedAt: new Date(),
-    };
-
-    this.logger.log(`Ciclo completo (todos los países) en ${Math.round((Date.now() - start) / 1000)}s`);
   }
 
   private async scrapeAllPages(page: Page, country: string): Promise<{ products: RawProduct[]; pages: number }> {
