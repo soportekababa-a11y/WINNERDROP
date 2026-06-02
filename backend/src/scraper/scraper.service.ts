@@ -463,8 +463,15 @@ export class ScraperService implements OnModuleDestroy {
       const isNewDay = product.salesBaselineDate !== today;
 
       if (isNewDay) {
-        // Use raw.salesAccum - salesBaseline so even scraper downtime doesn't lose data
-        product.salesYesterday = Math.max(0, raw.salesAccum - product.salesBaseline);
+        const lastDate = new Date(product.salesBaselineDate + 'T12:00:00');
+        const todayDate = new Date(today + 'T12:00:00');
+        const dayGap = Math.round((todayDate.getTime() - lastDate.getTime()) / 86_400_000);
+        // Only trust salesYesterday when gap == 1 day; multi-day gaps give inflated values
+        if (dayGap === 1) {
+          product.salesYesterday = Math.max(0, raw.salesAccum - product.salesBaseline);
+        } else {
+          product.salesYesterday = 0;
+        }
         product.salesBaseline = raw.salesAccum;
         product.salesBaselineDate = today;
       }
