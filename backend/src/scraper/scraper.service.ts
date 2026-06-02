@@ -240,6 +240,10 @@ export class ScraperService implements OnModuleDestroy {
       }
 
       this.logger.log(`Sesión activa${storeName ? ` [${storeName}]` : ' [RD]'}`);
+
+      // Navigate to blank before closing to let the renderer release heavy page resources
+      // without crashing. Effi's app JS can cause the renderer to die on abrupt page.close().
+      await page.goto('about:blank').catch(() => {});
     } finally {
       await page.close();
     }
