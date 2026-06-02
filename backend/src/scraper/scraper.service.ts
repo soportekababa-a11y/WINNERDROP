@@ -232,12 +232,12 @@ export class ScraperService implements OnModuleDestroy {
       // Click Ingresar on the company selector form
       await page.locator('button:has-text("Ingresar")').click();
 
-      // Click Ingresar on the company selector form was already clicked above
       // Wait for navigation away from /ingreso paths
       await page.waitForURL(url => !url.href.includes('/ingreso'), { timeout: 20000 });
 
-      // Navigate to catalog — keeps Chrome renderer active and verifies session works
-      await page.goto(EFFI_CATALOG_URL, { waitUntil: 'networkidle', timeout: 30000 });
+      // Navigate to catalog with domcontentloaded (lighter than networkidle — avoids Chrome OOM on cold cache)
+      await page.goto(EFFI_CATALOG_URL, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.waitForTimeout(2000); // let renderer stabilize
 
       if (page.url().includes('/ingreso')) {
         throw new Error(`Login fallido — redirigido a ${page.url()}`);
