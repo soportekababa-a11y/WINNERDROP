@@ -137,7 +137,7 @@ export class ScraperService implements OnModuleDestroy {
 
     for (const { code, storeName } of COUNTRIES) {
       await this.loginCountry(code, storeName, email!, password!);
-      await new Promise(r => setTimeout(r, 3000)); // space out logins so Effi doesn't throttle
+      await new Promise(r => setTimeout(r, 12000)); // allow Chrome renderer to stabilize between contexts
     }
 
     this.logger.log(`Login completo: ${this.contexts.size}/${COUNTRIES.length} países activos`);
