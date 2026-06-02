@@ -11,6 +11,7 @@ const EFFI_LOGIN_URL = 'https://effi.com.co/ingreso';
 const EFFI_CATALOG_URL = 'https://effi.com.co/app/articulo_dropshipping';
 const SCRAPE_INTERVAL_MS = 30 * 60 * 1000;
 const PRODUCTS_PER_PAGE = 40;
+const SESSION_DIR = '/opt/winnerdrop/sessions';
 
 const COUNTRY_TZ: Record<string, string> = {
   RD: 'America/Santo_Domingo',
@@ -131,6 +132,40 @@ export class ScraperService implements OnModuleDestroy {
     this.browser = await chromium.launch({ headless: true, executablePath });
   }
 
+  private sessionPath(code: string) {
+    return `${SESSION_DIR}/session-${code}.json`;
+  }
+
+  private async saveSession(code: string, context: BrowserContext) {
+    try {
+      const { writeFile, mkdir } = await import('fs/promises');
+      await mkdir(SESSION_DIR, { recursive: true });
+      const state = await context.storageState();
+      await writeFile(this.sessionPath(code), JSON.stringify(state));
+      this.logger.log(`[${code}] Sesión guardada en disco`);
+    } catch (err) {
+      this.logger.warn(`[${code}] No se pudo guardar sesión`, err);
+    }
+  }
+
+  private async loadSession(code: string): Promise<object | null> {
+    try {
+      const { readFile } = await import('fs/promises');
+      const raw = await readFile(this.sessionPath(code), 'utf-8');
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  async clearSession(code: string) {
+    try {
+      const { unlink } = await import('fs/promises');
+      await unlink(this.sessionPath(code));
+      this.logger.log(`[${code}] Sesión guardada borrada (forzar re-login)`);
+    } catch {}
+  }
+
   private async loginAllCountries() {
     const email = this.config.get<string>('EFFI_EMAIL');
     const password = this.config.get<string>('EFFI_PASSWORD');
@@ -151,8 +186,10 @@ export class ScraperService implements OnModuleDestroy {
 
       await this.loginCountry(code, storeName, email!, password!);
 
-      if (code !== COUNTRIES[COUNTRIES.length - 1].code) {
-        this.logger.log(`[${code}] Login completo — esperando 30s antes del siguiente país...`);
+      const isLast = code === COUNTRIES[COUNTRIES.length - 1].code;
+      if (!isLast && this.contexts.has(code)) {
+        // Only wait if the login succeeded — no point waiting after a failure
+        this.logger.log(`[${code}] Sesión lista — esperando 30s antes del siguiente país`);
         await new Promise(r => setTimeout(r, 30000));
       }
     }
@@ -165,13 +202,41 @@ export class ScraperService implements OnModuleDestroy {
     if (existing) await existing.close().catch(() => {});
     this.contexts.delete(code);
 
+    // Try restoring from saved session first — avoids hitting Effi login rate-limits
+    const savedState = await this.loadSession(code);
+    if (savedState) {
+      try {
+        this.logger.log(`[${code}] Restaurando sesión guardada...`);
+        const context = await this.browser!.newContext({ userAgent: this.userAgent(), storageState: savedState as any });
+        const page = await context.newPage();
+        try {
+          await page.goto(EFFI_CATALOG_URL, { waitUntil: 'domcontentloaded', timeout: 20000 });
+          await page.waitForTimeout(1500);
+          if (!page.url().includes('/ingreso')) {
+            this.logger.log(`[${code}] Sesión restaurada OK`);
+            this.contexts.set(code, context);
+            return;
+          }
+          this.logger.warn(`[${code}] Sesión guardada expiró — haciendo login completo`);
+        } finally {
+          await page.close().catch(() => {});
+        }
+        await context.close().catch(() => {});
+      } catch (err) {
+        this.logger.warn(`[${code}] Fallo al restaurar sesión — haciendo login completo`, err);
+      }
+      await this.clearSession(code);
+    }
+
+    // Full login
     const MAX_ATTEMPTS = 3;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       let context: import('playwright').BrowserContext | null = null;
       try {
-        this.logger.log(`Iniciando sesión para país: ${code}${attempt > 1 ? ` (intento ${attempt})` : ''}`);
+        this.logger.log(`[${code}] Login completo${attempt > 1 ? ` (intento ${attempt})` : ''}...`);
         context = await this.browser!.newContext({ userAgent: this.userAgent() });
         await this.loginContext(context, email, password, storeName);
+        await this.saveSession(code, context);
         this.contexts.set(code, context);
         return;
       } catch (err) {
@@ -369,8 +434,14 @@ export class ScraperService implements OnModuleDestroy {
             break; // stop processing other countries, next cycle will re-launch
           }
 
-          // Non-fatal country error: close stale context, re-login, continue to next country
-          this.logger.error(`[${code}] Error — se omite y se reintenta próximo ciclo`, err);
+          // Session expired: Effi redirected to /ingreso during scraping
+          const sessionExpired = errMsg.includes('/ingreso') || errMsg.includes('Login fallido');
+          if (sessionExpired) {
+            this.logger.warn(`[${code}] Sesión expiró durante scraping — borrando sesión guardada y re-logineando`);
+            await this.clearSession(code);
+          } else {
+            this.logger.error(`[${code}] Error — se omite y se reintenta próximo ciclo`, err);
+          }
           const staleCtx = this.contexts.get(code);
           if (staleCtx) { await staleCtx.close().catch(() => {}); this.contexts.delete(code); }
           await this.loginCountry(code, storeName, email, password);
@@ -405,6 +476,11 @@ export class ScraperService implements OnModuleDestroy {
 
     await page.goto(EFFI_CATALOG_URL, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1500);
+
+    // Detect session expiry — Effi redirected us back to login
+    if (page.url().includes('/ingreso')) {
+      throw new Error(`Login fallido — sesión expiró, redirigido a ${page.url()}`);
+    }
 
     const totalText = await page.locator('text=/\\d+ Artículos/').textContent().catch(() => '');
     const totalMatch = (totalText ?? '').match(/([\d,]+)\s+Artículos/);
