@@ -139,11 +139,7 @@ export class ScraperService implements OnModuleDestroy {
     }
 
     this.logger.log(`Chromium: ${executablePath ?? 'bundled'}`);
-    this.browser = await chromium.launch({
-      headless: true,
-      executablePath,
-      args: ['--disable-blink-features=AutomationControlled'],
-    });
+    this.browser = await chromium.launch({ headless: true, executablePath });
   }
 
   private async loginAllCountries() {
