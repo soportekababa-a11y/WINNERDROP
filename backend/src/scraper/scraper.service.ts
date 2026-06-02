@@ -474,8 +474,8 @@ export class ScraperService implements OnModuleDestroy {
     const all: RawProduct[] = [];
     let pageNum = 1;
 
-    await page.goto(EFFI_CATALOG_URL, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(1500);
+    await page.goto(EFFI_CATALOG_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(2000);
 
     // Detect session expiry — Effi redirected us back to login
     if (page.url().includes('/ingreso')) {
@@ -494,7 +494,7 @@ export class ScraperService implements OnModuleDestroy {
       const url = pageNum === 1 ? EFFI_CATALOG_URL : `${EFFI_CATALOG_URL}?page=${pageNum}`;
 
       if (pageNum > 1) {
-        await page.goto(url, { waitUntil: 'networkidle' });
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForTimeout(1000);
       }
 
