@@ -214,11 +214,14 @@ export class ScraperService implements OnModuleDestroy {
           await page.waitForTimeout(1500);
           if (!page.url().includes('/ingreso')) {
             this.logger.log(`[${code}] Sesión restaurada OK`);
+            await page.goto('about:blank').catch(() => {}); // unload Effi JS before close
+            await page.close().catch(() => {});
             this.contexts.set(code, context);
             return;
           }
           this.logger.warn(`[${code}] Sesión guardada expiró — haciendo login completo`);
         } finally {
+          await page.goto('about:blank').catch(() => {});
           await page.close().catch(() => {});
         }
         await context.close().catch(() => {});
@@ -326,6 +329,7 @@ export class ScraperService implements OnModuleDestroy {
       }
 
       this.logger.log(`Sesión activa${storeName ? ` [${storeName}]` : ' [RD]'}`);
+      await page.goto('about:blank').catch(() => {});
     } finally {
       await page.close();
     }
@@ -473,6 +477,17 @@ export class ScraperService implements OnModuleDestroy {
   private async scrapeAllPages(page: Page, country: string): Promise<{ products: RawProduct[]; pages: number }> {
     const all: RawProduct[] = [];
     let pageNum = 1;
+
+    // Block images, fonts, media — product data is in HTML, not visual resources.
+    // This prevents Chrome's renderer from crashing under resource load pressure.
+    await page.route('**', (route) => {
+      const rt = route.request().resourceType();
+      if (['image', 'media', 'font', 'stylesheet'].includes(rt)) {
+        route.abort().catch(() => {});
+      } else {
+        route.continue().catch(() => {});
+      }
+    });
 
     await page.goto(EFFI_CATALOG_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2000);
