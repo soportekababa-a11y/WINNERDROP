@@ -232,11 +232,8 @@ export class ScraperService implements OnModuleDestroy {
       // Click Ingresar on the company selector form
       await page.locator('button:has-text("Ingresar")').click();
 
-      // Wait for navigation away from /ingreso paths
+      // Wait for navigation away from /ingreso — sufficient proof of successful login
       await page.waitForURL(url => !url.href.includes('/ingreso'), { timeout: 20000 });
-
-      // Navigate to catalog to confirm session is active
-      await page.goto(EFFI_CATALOG_URL, { waitUntil: 'networkidle', timeout: 30000 });
 
       if (page.url().includes('/ingreso')) {
         throw new Error(`Login fallido — redirigido a ${page.url()}`);
