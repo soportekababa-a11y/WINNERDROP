@@ -137,7 +137,7 @@ export class ScraperService implements OnModuleDestroy {
 
     for (const { code, storeName } of COUNTRIES) {
       await this.loginCountry(code, storeName, email!, password!);
-      await new Promise(r => setTimeout(r, 12000)); // allow Chrome renderer to stabilize between contexts
+      await new Promise(r => setTimeout(r, 3000));
     }
 
     this.logger.log(`Login completo: ${this.contexts.size}/${COUNTRIES.length} países activos`);
@@ -232,18 +232,18 @@ export class ScraperService implements OnModuleDestroy {
       // Click Ingresar on the company selector form
       await page.locator('button:has-text("Ingresar")').click();
 
-      // Wait for navigation away from /ingreso — sufficient proof of successful login
+      // Click Ingresar on the company selector form was already clicked above
+      // Wait for navigation away from /ingreso paths
       await page.waitForURL(url => !url.href.includes('/ingreso'), { timeout: 20000 });
+
+      // Navigate to catalog — keeps Chrome renderer active and verifies session works
+      await page.goto(EFFI_CATALOG_URL, { waitUntil: 'networkidle', timeout: 30000 });
 
       if (page.url().includes('/ingreso')) {
         throw new Error(`Login fallido — redirigido a ${page.url()}`);
       }
 
       this.logger.log(`Sesión activa${storeName ? ` [${storeName}]` : ' [RD]'}`);
-
-      // Navigate to blank before closing to let the renderer release heavy page resources
-      // without crashing. Effi's app JS can cause the renderer to die on abrupt page.close().
-      await page.goto('about:blank').catch(() => {});
     } finally {
       await page.close();
     }
