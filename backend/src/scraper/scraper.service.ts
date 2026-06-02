@@ -247,12 +247,40 @@ export class ScraperService implements OnModuleDestroy {
     }
   }
 
+  private isBrowserDead(): boolean {
+    return !this.browser || !this.browser.isConnected();
+  }
+
+  private async ensureBrowserAlive(): Promise<boolean> {
+    if (!this.isBrowserDead()) return true;
+
+    this.logger.warn('Browser muerto — reiniciando Chromium y re-logineando...');
+    await this.browser?.close().catch(() => {});
+    this.browser = null;
+    for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
+    this.contexts.clear();
+
+    try {
+      await this.launchBrowser();
+      await this.loginAllCountries();
+      return this.contexts.size > 0;
+    } catch (err) {
+      this.logger.error('No se pudo reiniciar el browser', err);
+      return false;
+    }
+  }
+
   private async runCycle() {
     const start = Date.now();
     let totalProducts = 0;
     let totalPages = 0;
     const email = this.config.get<string>('EFFI_EMAIL')!;
     const password = this.config.get<string>('EFFI_PASSWORD')!;
+
+    if (!await this.ensureBrowserAlive()) {
+      this.logger.error('Browser no disponible tras reinicio — ciclo omitido');
+      return;
+    }
 
     for (const { code, storeName } of COUNTRIES) {
       let context = this.contexts.get(code);
@@ -264,8 +292,9 @@ export class ScraperService implements OnModuleDestroy {
       }
 
       this.logger.log(`Iniciando ciclo para país: ${code}`);
-      const page = await context.newPage();
+      let page: import('playwright').Page | null = null;
       try {
+        page = await context.newPage();
         const { products, pages } = await this.scrapeAllPages(page, code);
         this.logger.log(`[${code}] Scraping completo: ${products.length} productos en ${pages} páginas`);
 
@@ -289,12 +318,21 @@ export class ScraperService implements OnModuleDestroy {
         totalProducts += products.length;
         totalPages += pages;
       } catch (err) {
+        const errMsg = String(err);
+        const browserDied = this.isBrowserDead() || errMsg.includes('has been closed') || errMsg.includes('Target closed');
+        if (browserDied) {
+          this.logger.error(`[${code}] Browser murió durante ciclo — se reiniciará en el próximo ciclo`, err);
+          await this.browser?.close().catch(() => {});
+          this.browser = null;
+          for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
+          this.contexts.clear();
+          break;
+        }
         this.logger.error(`[${code}] Error en ciclo, re-logineando para próximo ciclo`, err);
-        await page.close().catch(() => {});
         await this.loginCountry(code, storeName, email, password);
         continue;
       } finally {
-        await page.close().catch(() => {});
+        await page?.close().catch(() => {});
       }
     }
 
