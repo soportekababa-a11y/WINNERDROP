@@ -136,8 +136,25 @@ export class ScraperService implements OnModuleDestroy {
     const password = this.config.get<string>('EFFI_PASSWORD');
 
     for (const { code, storeName } of COUNTRIES) {
+      // Revive browser if it died during the previous country's login
+      if (this.isBrowserDead()) {
+        this.logger.warn(`[${code}] Browser muerto antes de login — relanzando...`);
+        await this.browser?.close().catch(() => {});
+        this.browser = null;
+        try {
+          await this.launchBrowser();
+        } catch (err) {
+          this.logger.error(`[${code}] No se pudo relanzar browser — omitiendo país`, err);
+          continue;
+        }
+      }
+
       await this.loginCountry(code, storeName, email!, password!);
-      await new Promise(r => setTimeout(r, 3000));
+
+      if (code !== COUNTRIES[COUNTRIES.length - 1].code) {
+        this.logger.log(`[${code}] Login completo — esperando 30s antes del siguiente país...`);
+        await new Promise(r => setTimeout(r, 30000));
+      }
     }
 
     this.logger.log(`Login completo: ${this.contexts.size}/${COUNTRIES.length} países activos`);
