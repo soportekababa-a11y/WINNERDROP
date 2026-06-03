@@ -386,8 +386,11 @@ export class ScraperService implements OnModuleDestroy {
         return;
       }
 
+      // Phase 1: scrape ALL countries into memory first
+      const allScraped: Array<{ raw: RawProduct; code: string }> = [];
+      const scrapedIdsByCountry = new Map<string, string[]>();
+
       for (const { code, storeName } of COUNTRIES) {
-        // Ensure active session for this country
         if (!this.contexts.has(code)) {
           this.logger.warn(`[${code}] Sin sesión — intentando login...`);
           await this.loginCountry(code, storeName, email, password);
@@ -405,30 +408,8 @@ export class ScraperService implements OnModuleDestroy {
           page = await context.newPage();
           const { products, pages } = await this.scrapeAllPages(page, code);
           this.logger.log(`[${code}] ${products.length} productos en ${pages} páginas`);
-
-          let saved = 0;
-          for (const raw of products) {
-            try {
-              await this.upsertProductAndSnapshot(raw, code);
-              saved++;
-            } catch (dbErr) {
-              this.logger.error(`[${code}] Error guardando ${raw.effiId}`, dbErr);
-            }
-          }
-
-          if (products.length > 100) {
-            const scrapedIds = products.map(p => p.effiId);
-            await this.productRepo
-              .createQueryBuilder()
-              .update()
-              .set({ isActive: false })
-              .where('"effiId" NOT IN (:...ids) AND "isActive" = true AND country = :country', { ids: scrapedIds, country: code })
-              .execute()
-              .catch(err => this.logger.error(`[${code}] Error desactivando productos viejos`, err));
-          }
-
-          this.logger.log(`[${code}] Guardados: ${saved}/${products.length}`);
-          totalProducts += saved;
+          products.forEach(raw => allScraped.push({ raw, code }));
+          scrapedIdsByCountry.set(code, products.map(p => p.effiId));
           totalPages += pages;
 
         } catch (err) {
@@ -444,10 +425,9 @@ export class ScraperService implements OnModuleDestroy {
             this.browser = null;
             for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
             this.contexts.clear();
-            break; // stop processing other countries, next cycle will re-launch
+            break;
           }
 
-          // Session expired: Effi redirected to /ingreso during scraping
           const sessionExpired = errMsg.includes('/ingreso') || errMsg.includes('Login fallido');
           if (sessionExpired) {
             this.logger.warn(`[${code}] Sesión expiró durante scraping — borrando sesión guardada y re-logineando`);
@@ -461,6 +441,30 @@ export class ScraperService implements OnModuleDestroy {
 
         } finally {
           await page?.close().catch(() => {});
+        }
+      }
+
+      // Phase 2: write ALL countries to DB at the same time (same businessDay() snapshot)
+      this.logger.log(`Todos los países scrapeados — actualizando BD con businessDay=${businessDay()}`);
+      for (const { raw, code } of allScraped) {
+        try {
+          await this.upsertProductAndSnapshot(raw, code);
+          totalProducts++;
+        } catch (dbErr) {
+          this.logger.error(`[${code}] Error guardando ${raw.effiId}`, dbErr);
+        }
+      }
+
+      // Deactivate removed products per country
+      for (const [code, ids] of scrapedIdsByCountry.entries()) {
+        if (ids.length > 100) {
+          await this.productRepo
+            .createQueryBuilder()
+            .update()
+            .set({ isActive: false })
+            .where('"effiId" NOT IN (:...ids) AND "isActive" = true AND country = :country', { ids, country: code })
+            .execute()
+            .catch(err => this.logger.error(`[${code}] Error desactivando productos viejos`, err));
         }
       }
 
