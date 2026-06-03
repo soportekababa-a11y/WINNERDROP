@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { MessageCircle, Store, CheckCircle2, XCircle, AlertCircle, Trash2, Save, RefreshCw, Key, Smartphone, Wifi, WifiOff } from 'lucide-react';
+import { MessageCircle, Store, CheckCircle2, XCircle, AlertCircle, Trash2, Save, RefreshCw, Key, Smartphone, Wifi, WifiOff, Play, Square } from 'lucide-react';
 import { getToken, isAuthenticated } from '@/lib/auth';
 import { Sidebar } from '@/components/sidebar';
 
@@ -73,6 +73,24 @@ export default function AutoConfirmPage() {
   const [initiating, setInitiating] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [msgUsage, setMsgUsage] = useState<{ used: number; limit: number } | null>(null);
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  function playAudio(name: string) {
+    if (playingAudio === name) {
+      audioRef.current?.pause();
+      setPlayingAudio(null);
+      return;
+    }
+    const token = getToken();
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    const a = new Audio(`/api/proxy/autoconfirm/audio/${name}?_t=${Date.now()}`);
+    a.onended = () => setPlayingAudio(null);
+    a.onerror = () => setPlayingAudio(null);
+    audioRef.current = a;
+    setPlayingAudio(name);
+    a.play().catch(() => setPlayingAudio(null));
+  }
 
   const WA_PACKS = [
     { msgs: 300,      price: 5,  label: '300 mensajes/mes',    unlimited: false },
@@ -450,7 +468,7 @@ export default function AutoConfirmPage() {
                   onChange={e => setTemplate(e.target.value)}
                   placeholder="¡Hola {{nombre}}! Tu pedido #{{numero}} en {{tienda}} fue recibido. 🛍️"
                 />
-                <div className="flex gap-2 pt-0.5">
+                <div className="flex flex-wrap gap-2 pt-0.5 items-center">
                   {(['text_only', 'text_and_audio'] as const).map(mode => (
                     <button key={mode} onClick={() => setAudioInitialMode(mode)}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
@@ -460,6 +478,12 @@ export default function AutoConfirmPage() {
                       {mode === 'text_only' ? '💬 Solo mensaje' : '💬🔊 Mensaje + audio'}
                     </button>
                   ))}
+                  {audioInitialMode === 'text_and_audio' && (
+                    <button onClick={() => playAudio('audio1.ogg')}
+                      className="flex items-center gap-1 text-xs font-medium text-violet-400 hover:text-violet-300 transition-colors ml-1">
+                      {playingAudio === 'audio1.ogg' ? <><Square size={10} /> Parar</> : <><Play size={10} /> Escuchar</>}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -487,7 +511,13 @@ export default function AutoConfirmPage() {
                   />
                 )}
                 {audioConfirmMode === 'audio' && (
-                  <p className="text-xs text-gray-600 px-1">Se enviará el audio <span className="text-emerald-500">confirmacion.ogg</span> pregrabado.</p>
+                  <div className="flex items-center gap-3 px-1">
+                    <p className="text-xs text-gray-600">Se enviará el audio de confirmación pregrabado.</p>
+                    <button onClick={() => playAudio('confirmacion.ogg')}
+                      className="flex items-center gap-1 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
+                      {playingAudio === 'confirmacion.ogg' ? <><Square size={10} /> Parar</> : <><Play size={10} /> Escuchar</>}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -515,7 +545,13 @@ export default function AutoConfirmPage() {
                   />
                 )}
                 {audioCancelMode === 'audio' && (
-                  <p className="text-xs text-gray-600 px-1">Se enviará el audio <span className="text-red-500">cancelacion.ogg</span> pregrabado.</p>
+                  <div className="flex items-center gap-3 px-1">
+                    <p className="text-xs text-gray-600">Se enviará el audio de cancelación pregrabado.</p>
+                    <button onClick={() => playAudio('cancelacion.ogg')}
+                      className="flex items-center gap-1 text-xs font-medium text-red-400 hover:text-red-300 transition-colors">
+                      {playingAudio === 'cancelacion.ogg' ? <><Square size={10} /> Parar</> : <><Play size={10} /> Escuchar</>}
+                    </button>
+                  </div>
                 )}
               </div>
 

@@ -1,7 +1,11 @@
-import { Controller, Get, Post, Put, Delete, Body, Req, Res, Query, UseGuards, HttpCode, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Req, Res, Query, UseGuards, HttpCode, Headers, Param } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AutoconfirmService } from './autoconfirm.service';
+import * as path from 'path';
+import * as fs from 'fs';
+
+const AUDIO_DIR = '/opt/winnerdrop/audios';
 
 @Controller('autoconfirm')
 export class AutoconfirmController {
@@ -147,5 +151,21 @@ export class AutoconfirmController {
   @Get('msg-usage')
   getMsgUsage(@Req() req: any) {
     return this.svc.getMsgUsage(req.user.id);
+  }
+
+  // ─── Audio preview ─────────────────────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Get('audio/:name')
+  serveAudio(@Param('name') name: string, @Res() res: Response) {
+    const safe = path.basename(name);
+    const m4a = path.join(AUDIO_DIR, safe.replace('.ogg', '.m4a'));
+    const ogg = path.join(AUDIO_DIR, safe.endsWith('.m4a') ? safe : safe.replace(/(\.[^.]+)?$/, '.ogg'));
+    const filePath = fs.existsSync(m4a) ? m4a : fs.existsSync(ogg) ? ogg : null;
+    if (!filePath) return res.status(404).json({ message: 'Audio no encontrado' });
+    const mime = filePath.endsWith('.m4a') ? 'audio/mp4' : 'audio/ogg';
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', 'inline');
+    fs.createReadStream(filePath).pipe(res);
   }
 }
