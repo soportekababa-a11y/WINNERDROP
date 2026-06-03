@@ -9,20 +9,20 @@ import { ProductsService } from '../products/products.service';
 
 const EFFI_LOGIN_URL = 'https://effi.com.co/ingreso';
 const EFFI_CATALOG_URL = 'https://effi.com.co/app/articulo_dropshipping';
-const SCRAPE_INTERVAL_MS = 60 * 60 * 1000;
 const PRODUCTS_PER_PAGE = 40;
 const SESSION_DIR = '/opt/winnerdrop/sessions';
+// Business day resets at 3:00 AM RD (UTC-4) = 7:00 AM UTC.
+// Scraper runs at 2:00 AM RD (6:00 AM UTC) so it always runs within the closing business day.
+const DAILY_RUN_UTC_HOUR = 6; // 2:00 AM RD
 
-const COUNTRY_TZ: Record<string, string> = {
-  RD: 'America/Santo_Domingo',
-  GT: 'America/Guatemala',
-  EC: 'America/Guayaquil',
-  CR: 'America/Costa_Rica',
-  CO: 'America/Bogota',
-};
-
-function todayForCountry(country: string): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: COUNTRY_TZ[country] ?? 'America/Santo_Domingo' });
+function businessDay(): string {
+  const now = new Date();
+  // If before 7 AM UTC (= 3 AM RD), we are still in the previous business day
+  const adjusted = new Date(now);
+  if (now.getUTCHours() < 7) {
+    adjusted.setUTCDate(adjusted.getUTCDate() - 1);
+  }
+  return adjusted.toISOString().slice(0, 10);
 }
 
 const COUNTRIES: Array<{ code: string; storeName: string | null }> = [
@@ -95,13 +95,27 @@ export class ScraperService implements OnModuleDestroy {
       await this.runCycle().catch(err => this.logger.error('Error en primer ciclo', err));
     }
 
-    this.intervalHandle = setInterval(async () => {
-      await this.runCycle();
-    }, SCRAPE_INTERVAL_MS);
+    this.scheduleNextDailyRun();
+  }
+
+  private scheduleNextDailyRun() {
+    const now = new Date();
+    const next = new Date();
+    next.setUTCHours(DAILY_RUN_UTC_HOUR, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) {
+      next.setUTCDate(next.getUTCDate() + 1);
+    }
+    const delayMs = next.getTime() - now.getTime();
+    const hours = Math.round(delayMs / 3600000 * 10) / 10;
+    this.logger.log(`Próximo ciclo diario: ${next.toISOString()} (en ${hours}h)`);
+    this.intervalHandle = setTimeout(async () => {
+      await this.runCycle().catch(err => this.logger.error('Error en ciclo diario', err));
+      this.scheduleNextDailyRun();
+    }, delayMs);
   }
 
   async stop() {
-    if (this.intervalHandle) clearInterval(this.intervalHandle);
+    if (this.intervalHandle) clearTimeout(this.intervalHandle);
     this.isRunning = false;
     for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
     this.contexts.clear();
@@ -578,7 +592,7 @@ export class ScraperService implements OnModuleDestroy {
   private async upsertProductAndSnapshot(raw: RawProduct, country: string) {
     let product = await this.productRepo.findOne({ where: { effiId: raw.effiId, country } });
 
-    const today = todayForCountry(country);
+    const today = businessDay();
 
     if (!product) {
       product = this.productRepo.create({
