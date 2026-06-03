@@ -331,25 +331,12 @@ export default function AutoConfirmPage() {
             </div>
             {connectError && <p className="text-xs text-red-400 flex items-center gap-1.5"><XCircle size={12} /> {connectError}</p>}
             <button
-              onClick={connectWithOAuth}
-              disabled={connecting || !shopInput}
+              onClick={connectWithToken}
+              disabled={connecting || !shopInput || !clientIdInput || !clientSecretInput}
               className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50 flex items-center justify-center gap-2"
               style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
             >
-              {connecting ? <><RefreshCw size={14} className="animate-spin" /> Redirigiendo...</> : <><Key size={14} /> Conectar con Shopify</>}
-            </button>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-              <span className="text-xs text-gray-600">o con token directo</span>
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-            </div>
-            <button
-              onClick={connectWithToken}
-              disabled={connecting || !shopInput || !clientIdInput || !clientSecretInput}
-              className="w-full py-2 rounded-xl text-xs font-medium text-gray-400 disabled:opacity-30 flex items-center justify-center gap-2 border"
-              style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}
-            >
-              Conectar con credenciales
+              {connecting ? <><RefreshCw size={14} className="animate-spin" /> Conectando...</> : 'Conectar tienda →'}
             </button>
           </div>
 
