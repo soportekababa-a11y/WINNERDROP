@@ -247,8 +247,11 @@ export class WhatsappService implements OnModuleDestroy {
         this.logger.warn(`[WA] Audio no encontrado: ${audioPath}`);
         return;
       }
-      const audio = fs.readFileSync(audioPath);
-      await sock.sendMessage(jid, { audio, mimetype: 'audio/ogg; codecs=opus', ptt: false });
+      await sock.sendMessage(jid, {
+        audio: { url: audioPath },
+        mimetype: 'audio/ogg; codecs=opus',
+        ptt: true,
+      });
     } catch (err: any) {
       this.logger.warn(`[WA] Error enviando audio: ${err.message}`);
     }
