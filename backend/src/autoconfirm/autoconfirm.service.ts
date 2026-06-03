@@ -39,7 +39,7 @@ export class AutoconfirmService {
     const used = await this.logRepo
       .createQueryBuilder('log')
       .innerJoin(ShopifyStore, 'store', 'store.id = log.storeId')
-      .where('store.userId = :userId', { userId })
+      .where('store."userId"::text = :userId', { userId })
       .andWhere('log.status = :status', { status: 'sent' })
       .andWhere('log.createdAt >= :periodStart', { periodStart })
       .getCount();
