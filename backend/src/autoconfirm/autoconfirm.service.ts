@@ -36,13 +36,17 @@ export class AutoconfirmService {
     const elapsed = Math.floor((now - anchorMs) / (30 * 24 * 60 * 60 * 1000));
     const periodStart = new Date(anchorMs + elapsed * 30 * 24 * 60 * 60 * 1000);
 
-    const used = await this.logRepo
-      .createQueryBuilder('log')
-      .innerJoin(ShopifyStore, 'store', 'store.id = log.storeId')
-      .where('store."userId" = CAST(:userId AS uuid)', { userId })
-      .andWhere('log.status = :status', { status: 'sent' })
-      .andWhere('log.createdAt >= :periodStart', { periodStart })
-      .getCount();
+    const stores = await this.storeRepo.find({ where: { userId } });
+    const storeIds = stores.map(s => s.id);
+    let used = 0;
+    if (storeIds.length > 0) {
+      used = await this.logRepo
+        .createQueryBuilder('log')
+        .where('log.storeId IN (:...storeIds)', { storeIds })
+        .andWhere('log.status = :status', { status: 'sent' })
+        .andWhere('log.createdAt >= :periodStart', { periodStart })
+        .getCount();
+    }
     return { used, limit, periodStart };
   }
 
