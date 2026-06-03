@@ -26,9 +26,9 @@ export class AutoconfirmController {
   ) {
     try {
       await this.svc.handleOAuthCallback(shop, code, state);
-      return res.redirect('http://116.203.82.110/autoconfirm?connected=1');
+      return res.redirect('https://kababard.online/autoconfirm?connected=1');
     } catch (err: any) {
-      return res.redirect(`http://116.203.82.110/autoconfirm?error=${encodeURIComponent(err.message)}`);
+      return res.redirect(`https://kababard.online/autoconfirm?error=${encodeURIComponent(err.message)}`);
     }
   }
 

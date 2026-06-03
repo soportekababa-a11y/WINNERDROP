@@ -57,7 +57,7 @@ export class AutoconfirmService {
     let domain = shopDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
     if (!domain.includes('.myshopify.com')) domain = `${domain}.myshopify.com`;
     const clientId = this.config.get<string>('SHOPIFY_CLIENT_ID', '');
-    const redirectUri = this.config.get<string>('SHOPIFY_REDIRECT_URI', 'http://116.203.82.110/autoconfirm/callback');
+    const redirectUri = this.config.get<string>('SHOPIFY_REDIRECT_URI', 'https://kababard.online/autoconfirm/callback');
     const nonce = crypto.randomBytes(16).toString('hex');
     this.oauthStates.set(nonce, userId);
     setTimeout(() => this.oauthStates.delete(nonce), 10 * 60 * 1000); // expire in 10min
@@ -117,7 +117,7 @@ export class AutoconfirmService {
   }
 
   private async registerWebhook(store: ShopifyStore): Promise<void> {
-    const webhookUrl = this.config.get<string>('SHOPIFY_WEBHOOK_URL', `http://116.203.82.110/api/proxy/autoconfirm/shopify/webhook`);
+    const webhookUrl = this.config.get<string>('SHOPIFY_WEBHOOK_URL', `https://kababard.online/api/proxy/autoconfirm/shopify/webhook`);
 
     if (store.webhookId) {
       await fetch(`https://${store.shopDomain}/admin/api/2025-01/webhooks/${store.webhookId}.json`, {
