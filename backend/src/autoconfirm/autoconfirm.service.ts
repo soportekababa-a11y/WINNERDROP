@@ -92,7 +92,7 @@ export class AutoconfirmService {
     const tokenRes = await fetch(`https://${domain}/admin/oauth/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }),
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
     });
     if (!tokenRes.ok) {
       const status = tokenRes.status;
