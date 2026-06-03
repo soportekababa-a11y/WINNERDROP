@@ -76,20 +76,36 @@ export default function AutoConfirmPage() {
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  function playAudio(name: string) {
+  async function playAudio(name: string) {
     if (playingAudio === name) {
       audioRef.current?.pause();
+      if (audioRef.current?.src) URL.revokeObjectURL(audioRef.current.src);
+      audioRef.current = null;
       setPlayingAudio(null);
       return;
     }
-    const token = getToken();
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    const a = new Audio(`/api/proxy/autoconfirm/audio/${name}?_t=${Date.now()}`);
-    a.onended = () => setPlayingAudio(null);
-    a.onerror = () => setPlayingAudio(null);
-    audioRef.current = a;
-    setPlayingAudio(name);
-    a.play().catch(() => setPlayingAudio(null));
+    if (audioRef.current) {
+      audioRef.current.pause();
+      if (audioRef.current.src) URL.revokeObjectURL(audioRef.current.src);
+      audioRef.current = null;
+    }
+    try {
+      const token = getToken();
+      const res = await fetch(`/api/proxy/autoconfirm/audio/${name}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      a.onended = () => { URL.revokeObjectURL(url); setPlayingAudio(null); };
+      a.onerror = () => { URL.revokeObjectURL(url); setPlayingAudio(null); };
+      audioRef.current = a;
+      setPlayingAudio(name);
+      await a.play();
+    } catch {
+      setPlayingAudio(null);
+    }
   }
 
   const WA_PACKS = [
