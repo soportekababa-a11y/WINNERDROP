@@ -139,7 +139,7 @@ export class ProductsService {
 
   async getProductsWithDailyGrid(
     limit = 40,
-    sortBy: 'today' | 'total' | 'growth' | 'winners' = 'today',
+    sortBy: 'today' | 'total' | 'growth' | 'winners' | 'yesterday' = 'yesterday',
     days = 14,
     category?: string,
     search?: string,
@@ -247,6 +247,8 @@ export class ProductsService {
       qb.orderBy('CASE WHEN p.salesYesterday > 0 THEN (p.salesToday - p.salesYesterday)::float / p.salesYesterday ELSE p.salesToday END', 'DESC');
     } else if (sortBy === 'total') {
       qb.orderBy('p.totalSalesAccum', 'DESC');
+    } else if (sortBy === 'yesterday') {
+      qb.orderBy('p.salesYesterday', 'DESC');
     } else {
       qb.orderBy('p.salesToday', 'DESC');
     }

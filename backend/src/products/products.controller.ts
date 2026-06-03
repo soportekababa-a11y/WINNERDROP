@@ -56,7 +56,7 @@ export class ProductsController {
     const c = effectiveCountry(req.user, country);
     return this.productsService.getProductsWithDailyGrid(
       limit ? parseInt(limit) : 40,
-      (sort as 'today' | 'total' | 'growth' | 'winners') ?? 'today',
+      (sort as 'today' | 'total' | 'growth' | 'winners' | 'yesterday') ?? 'yesterday',
       days ? parseInt(days) : 14,
       category,
       search,
