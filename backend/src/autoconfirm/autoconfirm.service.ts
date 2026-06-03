@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
 
-const SHOPIFY_SCOPES = 'read_orders,write_orders';
+const SHOPIFY_SCOPES = 'read_orders,write_orders,read_draft_orders,write_draft_orders,read_customers,write_customers,read_fulfillments,write_fulfillments,read_products,read_inventory,read_locations,read_script_tags,write_script_tags';
 import { ShopifyStore } from './entities/shopify-store.entity';
 import { OrderLog } from './entities/order-log.entity';
 import { User } from '../users/user.entity';
