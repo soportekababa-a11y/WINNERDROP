@@ -57,6 +57,7 @@ export default function AutoConfirmPage() {
   const [logs, setLogs] = useState<OrderLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [shopInput, setShopInput] = useState('');
+  const [tokenInput, setTokenInput] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -154,6 +155,22 @@ export default function AutoConfirmPage() {
         body: JSON.stringify({ shopDomain: shopInput.trim() }),
       });
       window.location.href = data.url;
+    } catch (err: any) {
+      setConnectError(err.message || 'Error conectando tienda');
+      setConnecting(false);
+    }
+  }
+
+  async function connectWithToken() {
+    if (!shopInput.trim() || !tokenInput.trim()) return;
+    setConnecting(true);
+    setConnectError('');
+    try {
+      await apiFetch('/autoconfirm/shopify/connect', {
+        method: 'POST',
+        body: JSON.stringify({ shopDomain: shopInput.trim(), accessToken: tokenInput.trim() }),
+      });
+      await loadStore();
     } catch (err: any) {
       setConnectError(err.message || 'Error conectando tienda');
       setConnecting(false);
@@ -290,28 +307,37 @@ export default function AutoConfirmPage() {
                   placeholder="mi-tienda.myshopify.com"
                   value={shopInput}
                   onChange={e => setShopInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && connectWithOAuth()}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-gray-500">Admin API Access Token</label>
+                <input
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50 font-mono"
+                  placeholder="shpat_xxxxxxxxxxxxxxxxxxxx"
+                  value={tokenInput}
+                  onChange={e => setTokenInput(e.target.value)}
                 />
               </div>
             </div>
             {connectError && <p className="text-xs text-red-400 flex items-center gap-1.5"><XCircle size={12} /> {connectError}</p>}
             <button
-              onClick={connectWithOAuth}
-              disabled={connecting || !shopInput}
+              onClick={connectWithToken}
+              disabled={connecting || !shopInput || !tokenInput}
               className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50 flex items-center justify-center gap-2"
               style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
             >
-              {connecting ? <><RefreshCw size={14} className="animate-spin" /> Redirigiendo...</> : <><Key size={14} /> Conectar con Shopify</>}
+              {connecting ? <><RefreshCw size={14} className="animate-spin" /> Conectando...</> : 'Conectar tienda →'}
             </button>
           </div>
 
           <div className="rounded-2xl p-5 space-y-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <p className="text-xs font-medium text-gray-400">¿Cómo conectar?</p>
+            <p className="text-xs font-medium text-gray-400">¿Cómo obtener el token?</p>
             <div className="space-y-1.5 text-xs text-gray-500">
-              <p><span className="text-gray-300 font-medium">1.</span> Escribe el dominio de tu tienda arriba</p>
-              <p><span className="text-gray-300 font-medium">2.</span> Clic en <span className="text-gray-300">"Conectar con Shopify"</span> → te redirige a tu tienda</p>
-              <p><span className="text-gray-300 font-medium">3.</span> Autoriza la app MOMENTUM en Shopify</p>
-              <p><span className="text-gray-300 font-medium">4.</span> Vuelves aquí automáticamente — listo ✓</p>
+              <p><span className="text-gray-300 font-medium">1.</span> En tu Shopify Admin ve a <span className="text-gray-300">Settings → Apps → Develop apps</span></p>
+              <p><span className="text-gray-300 font-medium">2.</span> Click <span className="text-gray-300">"Create an app"</span> → nombre cualquiera</p>
+              <p><span className="text-gray-300 font-medium">3.</span> Tab <span className="text-gray-300">Configuration → Admin API</span> → activar <code className="text-violet-400">read_orders</code> y <code className="text-violet-400">write_orders</code></p>
+              <p><span className="text-gray-300 font-medium">4.</span> Click <span className="text-gray-300">"Install app"</span> → tab <span className="text-gray-300">API credentials → "Reveal token once"</span></p>
+              <p><span className="text-gray-300 font-medium">5.</span> Pega el token arriba y conecta</p>
             </div>
           </div>
         </div>
