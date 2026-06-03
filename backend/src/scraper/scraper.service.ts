@@ -90,11 +90,6 @@ export class ScraperService implements OnModuleDestroy {
     // Login each country independently — failed countries are skipped, not fatal
     await this.loginAllCountries();
 
-    // First scrape cycle — only run if at least one country logged in
-    if (this.contexts.size > 0) {
-      await this.runCycle().catch(err => this.logger.error('Error en primer ciclo', err));
-    }
-
     this.scheduleNextDailyRun();
   }
 
