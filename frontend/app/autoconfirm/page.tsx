@@ -13,6 +13,9 @@ interface ShopifyStore {
   messageTemplate: string;
   confirmMessage: string;
   cancelMessage: string;
+  audioInitialMode: string;
+  audioConfirmMode: string;
+  audioCancelMode: string;
   createdAt: string;
 }
 
@@ -60,6 +63,9 @@ export default function AutoConfirmPage() {
   const [template, setTemplate] = useState('');
   const [confirmMsg, setConfirmMsg] = useState('');
   const [cancelMsg, setCancelMsg] = useState('');
+  const [audioInitialMode, setAudioInitialMode] = useState('text_only');
+  const [audioConfirmMode, setAudioConfirmMode] = useState('text');
+  const [audioCancelMode, setAudioCancelMode] = useState('text');
   const [waStatus, setWaStatus] = useState<WaStatus>('disconnected');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [initiating, setInitiating] = useState(false);
@@ -114,6 +120,9 @@ export default function AutoConfirmPage() {
         setTemplate(data.messageTemplate);
         setConfirmMsg(data.confirmMessage || '');
         setCancelMsg(data.cancelMessage || '');
+        setAudioInitialMode(data.audioInitialMode || 'text_only');
+        setAudioConfirmMode(data.audioConfirmMode || 'text');
+        setAudioCancelMode(data.audioCancelMode || 'text');
         loadLogs();
         // Check WA status
         const waData = await apiFetch('/autoconfirm/whatsapp/status').catch(() => ({ status: 'disconnected' }));
@@ -186,7 +195,7 @@ export default function AutoConfirmPage() {
     try {
       await apiFetch('/autoconfirm/template', {
         method: 'PUT',
-        body: JSON.stringify({ messageTemplate: template, confirmMessage: confirmMsg, cancelMessage: cancelMsg }),
+        body: JSON.stringify({ messageTemplate: template, confirmMessage: confirmMsg, cancelMessage: cancelMsg, audioInitialMode, audioConfirmMode, audioCancelMode }),
       });
     } finally {
       setSaving(false);
@@ -392,9 +401,11 @@ export default function AutoConfirmPage() {
             </div>
 
             {/* ─── Template editor ─── */}
-            <div className="rounded-2xl p-5 space-y-4" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="rounded-2xl p-5 space-y-5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
               <h2 className="text-sm font-medium text-white">Mensajes automáticos</h2>
-              <div className="space-y-1.5">
+
+              {/* Mensaje inicial */}
+              <div className="space-y-2">
                 <label className="text-xs text-gray-400 font-medium">📩 Mensaje inicial al recibir el pedido</label>
                 <textarea
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50 resize-none"
@@ -403,27 +414,75 @@ export default function AutoConfirmPage() {
                   onChange={e => setTemplate(e.target.value)}
                   placeholder="¡Hola {{nombre}}! Tu pedido #{{numero}} en {{tienda}} fue recibido. 🛍️"
                 />
+                <div className="flex gap-2 pt-0.5">
+                  {(['text_only', 'text_and_audio'] as const).map(mode => (
+                    <button key={mode} onClick={() => setAudioInitialMode(mode)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      style={audioInitialMode === mode
+                        ? { background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.5)', color: '#c4b5fd' }
+                        : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#6b7280' }}>
+                      {mode === 'text_only' ? '💬 Solo mensaje' : '💬🔊 Mensaje + audio'}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs text-emerald-400 font-medium">✅ Mensaje cuando el cliente confirma</label>
-                <textarea
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/30 focus:border resize-none"
-                  rows={3}
-                  value={confirmMsg}
-                  onChange={e => setConfirmMsg(e.target.value)}
-                  placeholder="✅ ¡Perfecto {{nombre}}! Tu pedido #{{numero}} ha sido confirmado. Pronto te llegará. 🚀"
-                />
+
+              {/* Mensaje confirmación */}
+              <div className="space-y-2">
+                <label className="text-xs text-emerald-400 font-medium">✅ Cuando el cliente confirma</label>
+                <div className="flex gap-2">
+                  {(['text', 'audio'] as const).map(mode => (
+                    <button key={mode} onClick={() => setAudioConfirmMode(mode)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      style={audioConfirmMode === mode
+                        ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#6ee7b7' }
+                        : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#6b7280' }}>
+                      {mode === 'text' ? '💬 Mensaje de texto' : '🔊 Audio pregrabado'}
+                    </button>
+                  ))}
+                </div>
+                {audioConfirmMode === 'text' && (
+                  <textarea
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/30 focus:border resize-none"
+                    rows={2}
+                    value={confirmMsg}
+                    onChange={e => setConfirmMsg(e.target.value)}
+                    placeholder="✅ ¡Perfecto {{nombre}}! Tu pedido #{{numero}} ha sido confirmado. Pronto te llegará. 🚀"
+                  />
+                )}
+                {audioConfirmMode === 'audio' && (
+                  <p className="text-xs text-gray-600 px-1">Se enviará el audio <span className="text-emerald-500">confirmacion.ogg</span> pregrabado.</p>
+                )}
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs text-red-400 font-medium">❌ Mensaje cuando el cliente cancela</label>
-                <textarea
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500/30 focus:border resize-none"
-                  rows={3}
-                  value={cancelMsg}
-                  onChange={e => setCancelMsg(e.target.value)}
-                  placeholder="❌ Tu pedido #{{numero}} ha sido cancelado. Si tienes dudas escríbenos. 😊"
-                />
+
+              {/* Mensaje cancelación */}
+              <div className="space-y-2">
+                <label className="text-xs text-red-400 font-medium">❌ Cuando el cliente cancela</label>
+                <div className="flex gap-2">
+                  {(['text', 'audio'] as const).map(mode => (
+                    <button key={mode} onClick={() => setAudioCancelMode(mode)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      style={audioCancelMode === mode
+                        ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5' }
+                        : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#6b7280' }}>
+                      {mode === 'text' ? '💬 Mensaje de texto' : '🔊 Audio pregrabado'}
+                    </button>
+                  ))}
+                </div>
+                {audioCancelMode === 'text' && (
+                  <textarea
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500/30 focus:border resize-none"
+                    rows={2}
+                    value={cancelMsg}
+                    onChange={e => setCancelMsg(e.target.value)}
+                    placeholder="❌ Tu pedido #{{numero}} ha sido cancelado. Si tienes dudas escríbenos. 😊"
+                  />
+                )}
+                {audioCancelMode === 'audio' && (
+                  <p className="text-xs text-gray-600 px-1">Se enviará el audio <span className="text-red-500">cancelacion.ogg</span> pregrabado.</p>
+                )}
               </div>
+
               <p className="text-xs text-gray-600">Variables: <code className="text-violet-400">{'{{nombre}}'}</code> <code className="text-violet-400">{'{{numero}}'}</code> <code className="text-violet-400">{'{{tienda}}'}</code> <code className="text-violet-400">{'{{productos}}'}</code> <code className="text-violet-400">{'{{ciudad}}'}</code> <code className="text-violet-400">{'{{precio}}'}</code></p>
               <button
                 onClick={saveTemplate}

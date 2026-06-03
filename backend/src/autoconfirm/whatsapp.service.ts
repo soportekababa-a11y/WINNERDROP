@@ -16,6 +16,8 @@ interface WaSession {
   labels?: Array<{ id: string; name: string; color: number }>;
 }
 
+const AUDIO_DIR = '/opt/winnerdrop/audios';
+
 interface PendingConfirmation {
   logId: string;
   shopifyOrderId: string;
@@ -28,7 +30,9 @@ interface PendingConfirmation {
   labelPendingId?: string;
   labelConfirmedId?: string;
   labelCancelledId?: string;
-  pollMessage?: any; // IWebMessageInfo returned by sendMessage — needed to decrypt votes
+  audioConfirmMode?: string;
+  audioCancelMode?: string;
+  pollMessage?: any;
 }
 
 @Injectable()
@@ -236,6 +240,20 @@ export class WhatsappService implements OnModuleDestroy {
     }
   }
 
+  private async sendAudio(sock: any, jid: string, filename: string): Promise<void> {
+    try {
+      const audioPath = path.join(AUDIO_DIR, filename);
+      if (!fs.existsSync(audioPath)) {
+        this.logger.warn(`[WA] Audio no encontrado: ${audioPath}`);
+        return;
+      }
+      const audio = fs.readFileSync(audioPath);
+      await sock.sendMessage(jid, { audio, mimetype: 'audio/ogg; codecs=opus', ptt: true });
+    } catch (err: any) {
+      this.logger.warn(`[WA] Error enviando audio: ${err.message}`);
+    }
+  }
+
   private async markOrderConfirmed(p: PendingConfirmation, sock: any, jid: string) {
     await this.logRepo.update(p.logId, { confirmationStatus: 'confirmed' });
     await fetch(`https://${p.shopDomain}/admin/api/2025-01/orders/${p.shopifyOrderId}.json`, {
@@ -243,8 +261,12 @@ export class WhatsappService implements OnModuleDestroy {
       headers: { 'X-Shopify-Access-Token': p.accessToken, 'Content-Type': 'application/json' },
       body: JSON.stringify({ order: { id: p.shopifyOrderId, tags: 'confirmed-whatsapp' } }),
     }).catch(() => null);
-    const txt = p.confirmMessage || '✅ ¡Perfecto! Tu pedido ha sido confirmado. Pronto te llegará. 🚀';
-    await sock.sendMessage(jid, { text: txt }).catch(() => null);
+    if (p.audioConfirmMode === 'audio') {
+      await this.sendAudio(sock, jid, 'confirmacion.ogg');
+    } else {
+      const txt = p.confirmMessage || '✅ ¡Perfecto! Tu pedido ha sido confirmado. Pronto te llegará. 🚀';
+      await sock.sendMessage(jid, { text: txt }).catch(() => null);
+    }
     await this.swapChatLabel(p.storeId, jid, p.labelPendingId, p.labelConfirmedId);
   }
 
@@ -255,8 +277,12 @@ export class WhatsappService implements OnModuleDestroy {
       headers: { 'X-Shopify-Access-Token': p.accessToken, 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'customer' }),
     });
-    const txt = p.cancelMessage || '❌ Tu pedido ha sido cancelado. Si tienes dudas escríbenos. 😊';
-    await sock.sendMessage(jid, { text: txt }).catch(() => null);
+    if (p.audioCancelMode === 'audio') {
+      await this.sendAudio(sock, jid, 'cancelacion.ogg');
+    } else {
+      const txt = p.cancelMessage || '❌ Tu pedido ha sido cancelado. Si tienes dudas escríbenos. 😊';
+      await sock.sendMessage(jid, { text: txt }).catch(() => null);
+    }
     await this.swapChatLabel(p.storeId, jid, p.labelPendingId, p.labelCancelledId);
     if (res.ok) {
       this.logger.log(`[WA] Orden cancelada en Shopify: ${p.shopifyOrderId}`);
@@ -284,6 +310,9 @@ export class WhatsappService implements OnModuleDestroy {
     labelPendingId?: string,
     labelConfirmedId?: string,
     labelCancelledId?: string,
+    audioInitialMode = 'text_only',
+    audioConfirmMode = 'text',
+    audioCancelMode = 'text',
   ): Promise<void> {
     const session = this.sessions.get(storeId);
     if (!session?.sock || session.status !== 'connected') {
@@ -292,7 +321,6 @@ export class WhatsappService implements OnModuleDestroy {
 
     const jid = phone.replace(/\D/g, '') + '@s.whatsapp.net';
 
-    // Store pending confirmation (expires in 24h) — pollMessage filled after send
     this.pending.set(jid, {
       logId,
       shopifyOrderId,
@@ -305,6 +333,8 @@ export class WhatsappService implements OnModuleDestroy {
       labelPendingId,
       labelConfirmedId,
       labelCancelledId,
+      audioConfirmMode,
+      audioCancelMode,
     });
 
     // Send poll; save returned message so votes can be decrypted later
@@ -322,6 +352,10 @@ export class WhatsappService implements OnModuleDestroy {
       const pollId = sentMsg.key?.id;
       if (pollId) this.pendingByPollId.set(pollId, entry);
       this.logger.log(`[WA] Poll enviado id=${pollId}`);
+    }
+
+    if (audioInitialMode === 'text_and_audio') {
+      await this.sendAudio(session.sock, jid, 'audio1.ogg');
     }
 
     if (labelPendingId) {

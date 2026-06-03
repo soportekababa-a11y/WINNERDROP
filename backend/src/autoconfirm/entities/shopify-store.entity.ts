@@ -53,6 +53,18 @@ export class ShopifyStore {
   @Column({ nullable: true })
   labelCancelledId: string;
 
+  // 'text_only' | 'text_and_audio'
+  @Column({ default: 'text_only' })
+  audioInitialMode: string;
+
+  // 'text' | 'audio'
+  @Column({ default: 'text' })
+  audioConfirmMode: string;
+
+  // 'text' | 'audio'
+  @Column({ default: 'text' })
+  audioCancelMode: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

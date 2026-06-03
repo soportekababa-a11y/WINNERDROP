@@ -202,6 +202,9 @@ export class AutoconfirmService {
           store.labelPendingId ?? undefined,
           store.labelConfirmedId ?? undefined,
           store.labelCancelledId ?? undefined,
+          store.audioInitialMode ?? 'text_only',
+          store.audioConfirmMode ?? 'text',
+          store.audioCancelMode ?? 'text',
         );
         log.status = 'sent';
       } else {
