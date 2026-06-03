@@ -92,13 +92,13 @@ export class AutoconfirmService {
     const tokenRes = await fetch(`https://${domain}/admin/oauth/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'client_credentials' }),
     });
     if (!tokenRes.ok) {
       const status = tokenRes.status;
-      if (status === 401 || status === 403) throw new BadRequestException('Credenciales inválidas — verifica Client ID y Client Secret');
-      if (status === 404) throw new BadRequestException('Dominio incorrecto — verifica el nombre de la tienda');
-      throw new BadRequestException(`Error Shopify ${status} — verifica los datos ingresados`);
+      if (status === 401 || status === 403) throw new BadRequestException('Acceso no autorizado — asegúrate de que los permisos estén publicados (no en borrador) en la app de Shopify');
+      if (status === 404) throw new BadRequestException('Dominio incorrecto — verifica el nombre de la tienda (debe ser xxx.myshopify.com)');
+      throw new BadRequestException(`Error Shopify ${status} — verifica dominio, Client ID y Client Secret`);
     }
     const { access_token } = await tokenRes.json() as { access_token: string };
     return this.connectStore(userId, shopDomain, access_token);
