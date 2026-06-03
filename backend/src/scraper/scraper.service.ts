@@ -12,8 +12,10 @@ const EFFI_CATALOG_URL = 'https://effi.com.co/app/articulo_dropshipping';
 const PRODUCTS_PER_PAGE = 40;
 const SESSION_DIR = '/opt/winnerdrop/sessions';
 // Business day resets at 3:00 AM RD (UTC-4) = 7:00 AM UTC.
-// Scraper runs at 2:00 AM RD (6:00 AM UTC) so it always runs within the closing business day.
-const DAILY_RUN_UTC_HOUR = 6; // 2:00 AM RD
+// Scraper starts at 1:00 AM RD (5:00 AM UTC) — finishes scraping ~2:40 AM RD,
+// then waits until exactly 3:00 AM RD (7:00 AM UTC) before writing to DB.
+const DAILY_RUN_UTC_HOUR = 5;      // 1:00 AM RD — start scraping
+const DAILY_WRITE_UTC_HOUR = 7;    // 3:00 AM RD — write to DB
 
 function businessDay(): string {
   const now = new Date();
@@ -442,6 +444,17 @@ export class ScraperService implements OnModuleDestroy {
         } finally {
           await page?.close().catch(() => {});
         }
+      }
+
+      // Wait until 3:00 AM RD (7:00 AM UTC) before writing — ensures consistent day boundary
+      const now = new Date();
+      const writeAt = new Date();
+      writeAt.setUTCHours(DAILY_WRITE_UTC_HOUR, 0, 0, 0);
+      if (writeAt <= now) writeAt.setUTCDate(writeAt.getUTCDate() + 1);
+      const waitMs = writeAt.getTime() - now.getTime();
+      if (waitMs > 0) {
+        this.logger.log(`Scrape completo — esperando ${Math.round(waitMs / 60000)} min hasta ${writeAt.toISOString()} (3:00 AM RD) para escribir BD`);
+        await new Promise(r => setTimeout(r, waitMs));
       }
 
       // Phase 2: write ALL countries to DB at the same time (same businessDay() snapshot)
