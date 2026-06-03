@@ -56,7 +56,8 @@ export class AutoconfirmController {
     const rawBody = (req as any).rawBody as Buffer | string | undefined;
     const rawStr = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : (rawBody ?? '');
     if (hmac && rawStr) {
-      const valid = this.svc.verifyWebhookHmac(rawStr, hmac);
+      const store = shopDomain ? await this.svc.getStoreByDomain(shopDomain) : null;
+      const valid = this.svc.verifyWebhookHmac(rawStr, hmac, store?.clientSecret ?? undefined);
       if (!valid) return res.status(401).json({ message: 'Invalid HMAC' });
     }
     const order = req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body) ? req.body : (rawStr ? JSON.parse(rawStr) : null);

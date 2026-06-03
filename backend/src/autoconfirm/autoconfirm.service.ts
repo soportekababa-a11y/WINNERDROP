@@ -101,12 +101,12 @@ export class AutoconfirmService {
       throw new BadRequestException(`Error Shopify ${status} — verifica dominio, Client ID y Client Secret`);
     }
     const { access_token } = await tokenRes.json() as { access_token: string };
-    return this.connectStore(userId, shopDomain, access_token);
+    return this.connectStore(userId, shopDomain, access_token, clientSecret);
   }
 
   // ─── Connect store via access token ──────────────────────────────────────
 
-  async connectStore(userId: string, shopDomain: string, accessToken: string): Promise<ShopifyStore> {
+  async connectStore(userId: string, shopDomain: string, accessToken: string, clientSecret?: string): Promise<ShopifyStore> {
     let domain = shopDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
     if (!domain.includes('.myshopify.com')) domain = `${domain}.myshopify.com`;
 
@@ -128,10 +128,11 @@ export class AutoconfirmService {
       store.userId = userId;
       store.shopDomain = domain;
       store.accessToken = accessToken;
+      if (clientSecret) store.clientSecret = clientSecret;
       store.isActive = true;
       store.webhookId = null!;
     } else {
-      store = this.storeRepo.create({ userId, shopDomain: domain, accessToken });
+      store = this.storeRepo.create({ userId, shopDomain: domain, accessToken, ...(clientSecret ? { clientSecret } : {}) });
     }
     await this.storeRepo.save(store);
     await this.registerWebhook(store);
@@ -166,9 +167,9 @@ export class AutoconfirmService {
 
   // ─── Webhook handler ─────────────────────────────────────────────────────
 
-  verifyWebhookHmac(rawBody: string, hmacHeader: string): boolean {
-    const secret = this.config.get<string>('SHOPIFY_CLIENT_SECRET', '');
-    if (!secret) return true; // skip verification if secret not set
+  verifyWebhookHmac(rawBody: string, hmacHeader: string, storeSecret?: string): boolean {
+    const secret = storeSecret || this.config.get<string>('SHOPIFY_CLIENT_SECRET', '');
+    if (!secret) return true;
     const computed = crypto.createHmac('sha256', secret).update(rawBody, 'utf8').digest('base64');
     try {
       return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(hmacHeader));
@@ -257,6 +258,10 @@ export class AutoconfirmService {
 
   async getStore(userId: string): Promise<ShopifyStore | null> {
     return this.storeRepo.findOne({ where: { userId, isActive: true } });
+  }
+
+  async getStoreByDomain(shopDomain: string): Promise<ShopifyStore | null> {
+    return this.storeRepo.findOne({ where: { shopDomain, isActive: true } });
   }
 
   async disconnectStore(userId: string): Promise<void> {

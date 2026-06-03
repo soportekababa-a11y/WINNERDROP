@@ -15,6 +15,9 @@ export class ShopifyStore {
   accessToken: string;
 
   @Column({ nullable: true })
+  clientSecret: string;
+
+  @Column({ nullable: true })
   webhookId: string;
 
   @Column({ default: true })
