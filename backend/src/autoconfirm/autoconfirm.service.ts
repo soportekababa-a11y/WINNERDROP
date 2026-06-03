@@ -121,8 +121,9 @@ export class AutoconfirmService {
       throw new BadRequestException(`Error Shopify ${status} — verifica dominio y token`);
     }
 
-    let store = await this.storeRepo.findOne({ where: { userId } });
-    if (!store) store = await this.storeRepo.findOne({ where: { shopDomain: domain } });
+    // Priority: find by domain first (canonical), then by userId
+    let store = await this.storeRepo.findOne({ where: { shopDomain: domain } });
+    if (!store) store = await this.storeRepo.findOne({ where: { userId } });
     if (store) {
       store.userId = userId;
       store.shopDomain = domain;
