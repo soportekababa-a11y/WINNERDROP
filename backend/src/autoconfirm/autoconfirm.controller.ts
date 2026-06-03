@@ -32,12 +32,15 @@ export class AutoconfirmController {
     }
   }
 
-  // ─── Connect Shopify (direct token — legacy) ───────────────────────────────
+  // ─── Connect Shopify via client credentials (modern flow) ─────────────────
 
   @UseGuards(JwtAuthGuard)
   @Post('shopify/connect')
-  connectStore(@Req() req: any, @Body() body: { shopDomain: string; accessToken: string }) {
-    return this.svc.connectStore(req.user.id, body.shopDomain, body.accessToken);
+  connectStore(@Req() req: any, @Body() body: { shopDomain: string; accessToken?: string; clientId?: string; clientSecret?: string }) {
+    if (body.clientId && body.clientSecret) {
+      return this.svc.connectStoreWithCredentials(req.user.id, body.shopDomain, body.clientId, body.clientSecret);
+    }
+    return this.svc.connectStore(req.user.id, body.shopDomain, body.accessToken!);
   }
 
   // ─── Shopify webhook ───────────────────────────────────────────────────────

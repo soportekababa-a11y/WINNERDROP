@@ -57,7 +57,8 @@ export default function AutoConfirmPage() {
   const [logs, setLogs] = useState<OrderLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [shopInput, setShopInput] = useState('');
-  const [tokenInput, setTokenInput] = useState('');
+  const [clientIdInput, setClientIdInput] = useState('');
+  const [clientSecretInput, setClientSecretInput] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -162,13 +163,13 @@ export default function AutoConfirmPage() {
   }
 
   async function connectWithToken() {
-    if (!shopInput.trim() || !tokenInput.trim()) return;
+    if (!shopInput.trim() || !clientIdInput.trim() || !clientSecretInput.trim()) return;
     setConnecting(true);
     setConnectError('');
     try {
       await apiFetch('/autoconfirm/shopify/connect', {
         method: 'POST',
-        body: JSON.stringify({ shopDomain: shopInput.trim(), accessToken: tokenInput.trim() }),
+        body: JSON.stringify({ shopDomain: shopInput.trim(), clientId: clientIdInput.trim(), clientSecret: clientSecretInput.trim() }),
       });
       await loadStore();
     } catch (err: any) {
@@ -310,12 +311,21 @@ export default function AutoConfirmPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs text-gray-500">Admin API Access Token</label>
+                <label className="text-xs text-gray-500">Client ID de la app</label>
                 <input
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50 font-mono"
-                  placeholder="shpat_xxxxxxxxxxxxxxxxxxxx"
-                  value={tokenInput}
-                  onChange={e => setTokenInput(e.target.value)}
+                  placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  value={clientIdInput}
+                  onChange={e => setClientIdInput(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-gray-500">Client Secret (shpss_...)</label>
+                <input
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50 font-mono"
+                  placeholder="shpss_xxxxxxxxxxxxxxxxxxxx"
+                  value={clientSecretInput}
+                  onChange={e => setClientSecretInput(e.target.value)}
                 />
               </div>
             </div>
@@ -335,22 +345,22 @@ export default function AutoConfirmPage() {
             </div>
             <button
               onClick={connectWithToken}
-              disabled={connecting || !shopInput || !tokenInput}
+              disabled={connecting || !shopInput || !clientIdInput || !clientSecretInput}
               className="w-full py-2 rounded-xl text-xs font-medium text-gray-400 disabled:opacity-30 flex items-center justify-center gap-2 border"
               style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}
             >
-              Conectar con shpat_ token
+              Conectar con credenciales
             </button>
           </div>
 
           <div className="rounded-2xl p-5 space-y-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <p className="text-xs font-medium text-gray-400">¿Cómo obtener el token?</p>
+            <p className="text-xs font-medium text-gray-400">¿Cómo obtener las credenciales?</p>
             <div className="space-y-1.5 text-xs text-gray-500">
-              <p><span className="text-gray-300 font-medium">1.</span> En tu Shopify Admin ve a <span className="text-gray-300">Settings → Apps → Develop apps</span></p>
-              <p><span className="text-gray-300 font-medium">2.</span> Click <span className="text-gray-300">"Create an app"</span> → nombre cualquiera</p>
-              <p><span className="text-gray-300 font-medium">3.</span> Tab <span className="text-gray-300">Configuration → Admin API</span> → activar <code className="text-violet-400">read_orders</code> y <code className="text-violet-400">write_orders</code></p>
-              <p><span className="text-gray-300 font-medium">4.</span> Click <span className="text-gray-300">"Install app"</span> → tab <span className="text-gray-300">API credentials → "Reveal token once"</span></p>
-              <p><span className="text-gray-300 font-medium">5.</span> Pega el token arriba y conecta</p>
+              <p><span className="text-gray-300 font-medium">1.</span> Shopify Admin → <span className="text-gray-300">Configuración → Apps → Desarrollar apps</span></p>
+              <p><span className="text-gray-300 font-medium">2.</span> <span className="text-gray-300">"Crear app"</span> → nombre cualquiera</p>
+              <p><span className="text-gray-300 font-medium">3.</span> Tab <span className="text-gray-300">Configuración → API Admin</span> → activar permisos → Guardar</p>
+              <p><span className="text-gray-300 font-medium">4.</span> <span className="text-gray-300">"Instalar app"</span></p>
+              <p><span className="text-gray-300 font-medium">5.</span> Tab <span className="text-gray-300">Credenciales de API</span> → copiar <code className="text-violet-400">Client ID</code> y <code className="text-violet-400">Client Secret (shpss_...)</code></p>
             </div>
           </div>
         </div>
