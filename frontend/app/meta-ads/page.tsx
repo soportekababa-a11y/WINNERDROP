@@ -48,7 +48,7 @@ const COUNTRIES = [
 
 interface AdFile { file: File; preview: string; type: 'image' | 'video' }
 
-type Step = 'connect' | 'setup' | 'home' | 'type' | 'form' | 'strategy' | 'ads' | 'creating' | 'done' | 'metrics-select' | 'metrics-analysis' | 'campaigns' | 'scale-select' | 'scale-options' | 'scale-executing' | 'scale-done';
+type Step = 'connect' | 'setup' | 'home' | 'type' | 'form' | 'strategy' | 'ads' | 'creating' | 'done' | 'metrics-select' | 'metrics-analysis' | 'campaigns' | 'scale-select' | 'scale-intent' | 'scale-options' | 'scale-executing' | 'scale-done';
 
 export default function MetaAdsPage() {
   const router = useRouter();
@@ -574,7 +574,7 @@ export default function MetaAdsPage() {
                   ) : (
                     <div className="space-y-2">
                       {campaigns.map((c: any) => (
-                        <button key={c.id} onClick={() => loadScaleOptions(c)}
+                        <button key={c.id} onClick={() => { setSelectedCampaign(c); setStep('scale-intent'); }}
                           className="w-full text-left rounded-xl px-4 py-4 flex items-center justify-between transition-all hover:border-yellow-500/40"
                           style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
                           <div>
@@ -586,6 +586,58 @@ export default function MetaAdsPage() {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* STEP: SCALE INTENT */}
+              {step === 'scale-intent' && (
+                <div className="space-y-5">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setStep('scale-select')} className="text-xs text-gray-500 hover:text-white">← Campañas</button>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">{selectedCampaign?.name}</p>
+                    <h2 className="text-lg font-semibold text-white mt-0.5">¿Qué quieres hacer?</h2>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {[
+                      {
+                        icon: '🚀',
+                        label: 'Escalar',
+                        badge: 'Ya está funcionando',
+                        desc: 'Tienes resultados positivos y quieres aumentar el volumen. La IA te muestra las mejores formas de escalar sin romper lo que funciona.',
+                        color: 'yellow',
+                        action: () => loadScaleOptions(selectedCampaign),
+                      },
+                      {
+                        icon: '🧪',
+                        label: 'Testear algo nuevo',
+                        badge: 'Probar y descubrir',
+                        desc: 'Quieres probar un nuevo creativo, ángulo de copy o audiencia diferente manteniendo lo que ya tienes activo.',
+                        color: 'violet',
+                        action: () => { setCampaignMode('testeo'); setStep('type'); },
+                      },
+                    ].map(item => {
+                      const bg: Record<string, string> = { yellow: 'rgba(234,179,8,0.08)', violet: 'rgba(139,92,246,0.08)' };
+                      const border: Record<string, string> = { yellow: 'rgba(234,179,8,0.25)', violet: 'rgba(139,92,246,0.25)' };
+                      const badgeColor: Record<string, string> = { yellow: '#fbbf24', violet: '#a78bfa' };
+                      const badgeBg: Record<string, string> = { yellow: 'rgba(251,191,36,0.12)', violet: 'rgba(139,92,246,0.12)' };
+                      return (
+                        <button key={item.label} onClick={item.action}
+                          className="text-left p-6 rounded-2xl space-y-3 transition-all hover:scale-[1.02]"
+                          style={{ background: bg[item.color], border: `1px solid ${border[item.color]}` }}>
+                          <span className="text-3xl">{item.icon}</span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-base font-bold text-white">{item.label}</p>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: badgeBg[item.color], color: badgeColor[item.color] }}>{item.badge}</span>
+                            </div>
+                            <p className="text-xs text-gray-400 leading-relaxed">{item.desc}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
