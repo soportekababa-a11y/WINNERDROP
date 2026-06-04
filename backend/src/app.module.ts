@@ -14,6 +14,9 @@ import { UsersModule } from './users/users.module';
 import { CompetitorSpyModule } from './competitor-spy/competitor-spy.module';
 import { AutoconfirmModule } from './autoconfirm/autoconfirm.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { MetaAdsModule } from './meta-ads/meta-ads.module';
+import { MetaConnection } from './meta-ads/entities/meta-connection.entity';
+import { MetaCampaign } from './meta-ads/entities/meta-campaign.entity';
 
 @Module({
   imports: [
@@ -27,7 +30,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
         username: config.get('DB_USERNAME', 'postgres'),
         password: config.get('DB_PASSWORD'),
         database: config.get('DB_DATABASE', 'winnerdrop'),
-        entities: [Product, Snapshot, User, ShopifyStore, OrderLog],
+        entities: [Product, Snapshot, User, ShopifyStore, OrderLog, MetaConnection, MetaCampaign],
         synchronize: true,
         logging: false,
       }),
@@ -39,6 +42,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
     CompetitorSpyModule,
     AutoconfirmModule,
     SubscriptionsModule,
+    MetaAdsModule,
   ],
 })
 export class AppModule implements OnModuleInit {

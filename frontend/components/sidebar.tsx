@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Calculator, LayoutDashboard, LogOut, MessageCircle, Settings, Zap, Clock } from 'lucide-react';
+import { Calculator, LayoutDashboard, LogOut, MessageCircle, Settings, Zap, Clock, Facebook } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getUser, clearAuth, PlanType } from '@/lib/auth';
 import { MomentumIcon, MomentumWordmark } from '@/components/momentum-logo';
@@ -24,6 +24,7 @@ const NAV = [
   { href: '/dashboard', label: 'Winner', icon: LayoutDashboard, desc: 'Dashboard' },
   { href: '/calculator', label: 'Rentabilidad', icon: Calculator, desc: 'Calculadora' },
   { href: '/autoconfirm', label: 'AutoConfirm', icon: MessageCircle, desc: 'Bot WhatsApp' },
+  { href: '/meta-ads', label: 'Meta Ads IA', icon: Facebook, desc: 'Crear campañas' },
 ];
 
 export function Sidebar() {

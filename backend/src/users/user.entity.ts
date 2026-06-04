@@ -42,6 +42,9 @@ export class User {
   @Column({ default: 50 })
   msgMonthlyLimit: number;
 
+  @Column({ default: 0 })
+  metaCredits: number;
+
   @Column({ default: true })
   isActive: boolean;
 
