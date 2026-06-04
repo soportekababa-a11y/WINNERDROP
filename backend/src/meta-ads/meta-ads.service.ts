@@ -167,54 +167,46 @@ export class MetaAdsService {
       productName: string;
       landingPage: string;
       country: string;
-      excludeCities: string[];
       dailyBudget: number;
+      budgetType: string;
+      pixelId?: string;
+      conversionEvent?: string;
       startTime: string;
-      campaignMode?: string;
-      budgetType?: string;
-      angleMode?: string;
-      customAngle?: string;
-      adSetsCount?: string;
+      excludeCities?: string[];
+      instagramAccountId?: string;
+      audienceAdSets: Array<{ name: string; isBroad: boolean; interests: Array<{ id: string; name: string }> }>;
+      copys: Array<{ primaryText: string; headline: string; description: string; callToAction: string }>;
     },
     files: Express.Multer.File[],
   ): Promise<any> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('Usuario no encontrado');
-
     const credits = (user as any).metaCredits ?? 0;
     if (credits < 1) throw new ForbiddenException('Sin créditos. Recarga para continuar.');
-
     const conn = await this.getConnection(userId);
     if (!conn.adAccountId) throw new BadRequestException('Selecciona una cuenta publicitaria primero');
     if (!conn.pageId) throw new BadRequestException('Selecciona una página de Facebook primero');
-
     if (!files || files.length === 0) throw new BadRequestException('Sube al menos un anuncio');
 
-    // Generate campaign structure with Claude
-    const aiResult = await this.generateWithClaude(files, dto);
+    const metaResult = await this.createOnMeta(conn, dto, files);
 
-    // Create campaign on Meta
-    const metaResult = await this.createOnMeta(conn, dto, aiResult, files);
-
-    // Deduct credit
     await this.userRepo.update(userId, { metaCredits: credits - 1 } as any);
 
-    // Save to DB
     const campaign = this.campaignRepo.create({
       userId,
       metaConnectionId: conn.id,
       fbCampaignId: metaResult.campaignId,
-      fbAdSetId: metaResult.adSetId,
-      name: aiResult.campaignName,
+      fbAdSetId: metaResult.adSetIds?.[0] ?? '',
+      name: `${dto.productName} - ${dto.country}`,
       objective: dto.campaignType,
       status: 'PAUSED',
       dailyBudget: dto.dailyBudget,
       country: dto.country,
-      aiData: JSON.stringify(aiResult),
+      aiData: JSON.stringify({ adSets: dto.audienceAdSets, copys: dto.copys }),
     });
     await this.campaignRepo.save(campaign);
 
-    return { success: true, campaign: metaResult, aiData: aiResult, credits: credits - 1 };
+    return { success: true, campaign: metaResult, credits: credits - 1 };
   }
 
   // ─── Claude ──────────────────────────────────────────────────────────────
@@ -322,199 +314,163 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
 
   // ─── Meta API ─────────────────────────────────────────────────────────────
 
-  private async createOnMeta(conn: MetaConnection, dto: any, aiData: any, files: Express.Multer.File[]): Promise<any> {
+  private async createOnMeta(conn: MetaConnection, dto: any, files: Express.Multer.File[]): Promise<any> {
     const token = conn.accessToken;
     const adAccountId = conn.adAccountId;
     const pageId = conn.pageId;
 
     const objectiveMap: Record<string, string> = {
-      VENTAS: 'OUTCOME_SALES',
-      TRAFICO: 'OUTCOME_TRAFFIC',
-      LEADS: 'OUTCOME_LEADS',
-      MENSAJES: 'OUTCOME_ENGAGEMENT',
-      RECONOCIMIENTO: 'OUTCOME_AWARENESS',
+      VENTAS: 'OUTCOME_SALES', TRAFICO: 'OUTCOME_TRAFFIC',
+      LEADS: 'OUTCOME_LEADS', MENSAJES: 'OUTCOME_ENGAGEMENT', RECONOCIMIENTO: 'OUTCOME_AWARENESS',
     };
     const objective = objectiveMap[dto.campaignType] ?? 'OUTCOME_SALES';
 
+    // Determine optimization goal + promoted object
+    const goalMap: Record<string, string> = {
+      OUTCOME_SALES: 'OFFSITE_CONVERSIONS', OUTCOME_TRAFFIC: 'LANDING_PAGE_VIEWS',
+      OUTCOME_LEADS: 'LEAD_GENERATION', OUTCOME_ENGAGEMENT: 'LINK_CLICKS', OUTCOME_AWARENESS: 'REACH',
+    };
+    let optimizationGoal = goalMap[objective] ?? 'LINK_CLICKS';
+    let promotedObject: any = undefined;
+
+    if (dto.pixelId) {
+      const eventType = optimizationGoal === 'LEAD_GENERATION' ? 'LEAD' : 'PURCHASE';
+      promotedObject = { pixel_id: dto.pixelId, custom_event_type: dto.conversionEvent ?? eventType };
+    } else if (optimizationGoal === 'OFFSITE_CONVERSIONS' || optimizationGoal === 'LEAD_GENERATION') {
+      try {
+        const pixRes = await fetch(`${GRAPH}/${adAccountId}/adspixels?fields=id&limit=1&access_token=${token}`).then(r => r.json()) as any;
+        const pixel = pixRes.data?.[0];
+        if (pixel?.id) {
+          promotedObject = { pixel_id: pixel.id, custom_event_type: optimizationGoal === 'LEAD_GENERATION' ? 'LEAD' : 'PURCHASE' };
+        } else {
+          optimizationGoal = 'LANDING_PAGE_VIEWS';
+        }
+      } catch { optimizationGoal = 'LANDING_PAGE_VIEWS'; }
+    }
+
     // 1. Create campaign
     const campaignRes = await this.metaPost(`/${adAccountId}/campaigns`, {
-      name: aiData.campaignName ?? `${dto.productName} - ${dto.country}`,
+      name: `${dto.productName} - ${dto.country}`,
       objective,
       status: 'PAUSED',
       special_ad_categories: [],
       is_adset_budget_sharing_enabled: false,
     }, token);
-    if (campaignRes.error) {
-      this.logger.error(`[Meta] Campaign error: ${JSON.stringify(campaignRes.error)}`);
-      throw new BadRequestException(`Meta: ${campaignRes.error.message}`);
-    }
+    if (campaignRes.error) throw new BadRequestException(`Meta: ${campaignRes.error.message}`);
     const campaignId = campaignRes.id;
 
-    // 2. Create ad set
-    const startTime = dto.startTime === 'now'
-      ? Math.floor(Date.now() / 1000)
-      : Math.floor(new Date(dto.startTime).getTime() / 1000);
-
-    const countryCodeMap: Record<string, string> = {
-      RD: 'DO', GT: 'GT', EC: 'EC', CR: 'CR', CO: 'CO',
-      MX: 'MX', US: 'US', ES: 'ES', PE: 'PE', CL: 'CL', AR: 'AR',
-    };
+    const startTime = dto.startTime === 'now' ? Math.floor(Date.now() / 1000) : Math.floor(new Date(dto.startTime).getTime() / 1000);
+    const countryCodeMap: Record<string, string> = { RD: 'DO', GT: 'GT', EC: 'EC', CR: 'CR', CO: 'CO', MX: 'MX', US: 'US', ES: 'ES', PE: 'PE', CL: 'CL', AR: 'AR' };
     const isoCountry = countryCodeMap[dto.country] ?? dto.country;
 
-    // Build safe targeting
-    // With advantage_audience=1 (Advantage+), only geo_locations + age_min are allowed as
-    // audience controls. age_max and genders become invalid parameters.
-    const isBroad = dto.angleMode === 'broad' || dto.angleMode !== 'interests';
-    const safeTargeting: any = {
-      geo_locations: { countries: [isoCountry] },
-      targeting_automation: { advantage_audience: isBroad ? 1 : 0 },
-    };
-    if (!isBroad) {
-      safeTargeting.age_min = aiData.targeting?.age_min ?? 18;
-      safeTargeting.age_max = aiData.targeting?.age_max ?? 55;
-      safeTargeting.genders = aiData.targeting?.genders ?? [1, 2];
-    }
-    if (dto.excludeCities?.length) {
-      safeTargeting.geo_locations.excluded_geo_locations = {
-        cities: dto.excludeCities.map((c: string) => ({ key: c })),
-      };
-    }
-
-    // If interests requested, resolve real IDs from Meta search API
-    const interestNames: string[] = (aiData.targeting?.interests ?? []).map((i: any) => i.name ?? i).filter(Boolean);
-    if (interestNames.length > 0 && dto.angleMode !== 'broad') {
-      const resolvedInterests: { id: string; name: string }[] = [];
-      for (const name of interestNames.slice(0, 5)) {
-        try {
-          const res = await fetch(
-            `${GRAPH}/search?type=adinterest&q=${encodeURIComponent(name)}&limit=1&access_token=${token}`
-          ).then(r => r.json()) as any;
-          if (res.data?.[0]?.id) resolvedInterests.push({ id: res.data[0].id, name: res.data[0].name });
-        } catch { /* skip failed interest */ }
-      }
-      if (resolvedInterests.length > 0) {
-        safeTargeting.interests = resolvedInterests;
-      }
-    }
-
-    // Map objective → correct optimization goal
-    const goalMap: Record<string, string> = {
-      OUTCOME_SALES:       'OFFSITE_CONVERSIONS',
-      OUTCOME_TRAFFIC:     'LANDING_PAGE_VIEWS',
-      OUTCOME_LEADS:       'LEAD_GENERATION',
-      OUTCOME_ENGAGEMENT:  'CONVERSATIONS',
-      OUTCOME_AWARENESS:   'REACH',
-    };
-    let optimizationGoal = goalMap[objective] ?? 'LINK_CLICKS';
-
-    // OFFSITE_CONVERSIONS and LEAD_GENERATION require a pixel — fetch first available
-    let promotedObject: any = undefined;
-    if (optimizationGoal === 'OFFSITE_CONVERSIONS' || optimizationGoal === 'LEAD_GENERATION') {
-      try {
-        const pixRes = await fetch(
-          `${GRAPH}/${adAccountId}/adspixels?fields=id,name&limit=1&access_token=${token}`
-        ).then(r => r.json()) as any;
-        const pixel = pixRes.data?.[0];
-        if (pixel?.id) {
-          const eventType = optimizationGoal === 'LEAD_GENERATION' ? 'LEAD' : 'PURCHASE';
-          promotedObject = { pixel_id: pixel.id, custom_event_type: eventType };
-        } else {
-          // No pixel — fall back to traffic-style to avoid Meta API error
-          optimizationGoal = optimizationGoal === 'LEAD_GENERATION' ? 'LINK_CLICKS' : 'LANDING_PAGE_VIEWS';
-          this.logger.warn('[Meta] No pixel found — falling back to ' + optimizationGoal);
-        }
-      } catch {
-        optimizationGoal = 'LANDING_PAGE_VIEWS';
-      }
-    }
-
-    const adSetBody: any = {
-      name: aiData.adSetName ?? `Conjunto - ${dto.productName}`,
-      campaign_id: campaignId,
-      daily_budget: Math.round(dto.dailyBudget * 100),
-      billing_event: 'IMPRESSIONS',
-      optimization_goal: optimizationGoal,
-      bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-      targeting: safeTargeting,
-      start_time: startTime,
-      status: 'PAUSED',
-    };
-    if (promotedObject) adSetBody.promoted_object = promotedObject;
-
-    const adSetRes = await this.metaPost(`/${adAccountId}/adsets`, adSetBody, token);
-    if (adSetRes.error) {
-      this.logger.error(`[Meta] AdSet error: ${JSON.stringify(adSetRes.error)}`);
-      throw new BadRequestException(`Meta ad set: ${adSetRes.error.message}`);
-    }
-    const adSetId = adSetRes.id;
-
-    // 3. Create ads (one per creative)
-    const adIds: string[] = [];
-    const ads = aiData.ads ?? [];
+    // 2. Upload all creatives once (reuse across ad sets)
+    const creativeIds: string[] = [];
+    const copys: any[] = dto.copys ?? [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const adCopy = ads[i] ?? ads[0] ?? {};
-
-      let creativeId: string;
+      const copy = copys[i] ?? copys[0] ?? { primaryText: '', headline: dto.productName, description: '', callToAction: 'SHOP_NOW' };
+      let creativeId: string | undefined;
 
       if (file.mimetype.startsWith('image/')) {
-        // Upload image
-        const imgRes = await this.metaPost(`/${adAccountId}/adimages`, {
-          bytes: file.buffer.toString('base64'),
-        }, token);
-        if (imgRes.error) { this.logger.warn(`Image upload error: ${imgRes.error.message}`); continue; }
+        const imgRes = await this.metaPost(`/${adAccountId}/adimages`, { bytes: file.buffer.toString('base64') }, token);
+        if (imgRes.error) { this.logger.warn(`Image upload: ${imgRes.error.message}`); continue; }
         const imgHash = Object.values(imgRes.images as Record<string, any>)[0]?.hash;
-
-        // Create creative
         const creativeRes = await this.metaPost(`/${adAccountId}/adcreatives`, {
-          name: adCopy.name ?? `Creativo ${i + 1}`,
+          name: `Creativo ${i + 1}`,
           object_story_spec: {
             page_id: pageId,
             link_data: {
               image_hash: imgHash,
               link: dto.landingPage,
-              message: adCopy.primaryText ?? '',
-              name: adCopy.headline ?? dto.productName,
-              description: adCopy.description ?? '',
-              call_to_action: { type: adCopy.callToAction ?? 'SHOP_NOW', value: { link: dto.landingPage } },
+              message: copy.primaryText,
+              name: copy.headline,
+              description: copy.description ?? '',
+              call_to_action: { type: copy.callToAction ?? 'SHOP_NOW', value: { link: dto.landingPage } },
             },
           },
+          ...(dto.instagramAccountId ? { instagram_actor_id: dto.instagramAccountId } : {}),
         }, token);
-        if (creativeRes.error) { this.logger.warn(`Creative error: ${creativeRes.error.message}`); continue; }
+        if (creativeRes.error) { this.logger.warn(`Creative: ${creativeRes.error.message}`); continue; }
         creativeId = creativeRes.id;
       } else {
-        // Video upload — must use multipart/form-data, not base64 JSON
         const vidRes = await this.uploadVideo(adAccountId, file, dto.productName, token);
-        if (vidRes.error) { this.logger.warn(`Video upload error: ${vidRes.error.message}`); continue; }
-
+        if (vidRes.error) { this.logger.warn(`Video upload: ${vidRes.error.message}`); continue; }
         const creativeRes = await this.metaPost(`/${adAccountId}/adcreatives`, {
-          name: adCopy.name ?? `Creativo video ${i + 1}`,
+          name: `Creativo video ${i + 1}`,
           object_story_spec: {
             page_id: pageId,
             video_data: {
               video_id: vidRes.id,
-              message: adCopy.primaryText ?? '',
-              title: adCopy.headline ?? dto.productName,
-              call_to_action: { type: adCopy.callToAction ?? 'SHOP_NOW', value: { link: dto.landingPage } },
+              message: copy.primaryText,
+              title: copy.headline,
+              call_to_action: { type: copy.callToAction ?? 'SHOP_NOW', value: { link: dto.landingPage } },
             },
           },
+          ...(dto.instagramAccountId ? { instagram_actor_id: dto.instagramAccountId } : {}),
         }, token);
-        if (creativeRes.error) { this.logger.warn(`Creative video error: ${creativeRes.error.message}`); continue; }
+        if (creativeRes.error) { this.logger.warn(`Creative video: ${creativeRes.error.message}`); continue; }
         creativeId = creativeRes.id;
       }
-
-      // Create ad
-      const adRes = await this.metaPost(`/${adAccountId}/ads`, {
-        name: adCopy.name ?? `Anuncio ${i + 1}`,
-        adset_id: adSetId,
-        creative: { creative_id: creativeId },
-        status: 'PAUSED',
-      }, token);
-      if (!adRes.error) adIds.push(adRes.id);
+      if (creativeId) creativeIds.push(creativeId);
     }
 
-    return { campaignId, adSetId, adIds };
+    if (creativeIds.length === 0) throw new BadRequestException('No se pudieron subir los creativos a Meta');
+
+    // 3. Create ad sets + ads
+    const adSetIds: string[] = [];
+    const allAdIds: string[] = [];
+    const audienceAdSets: any[] = dto.audienceAdSets?.length ? dto.audienceAdSets : [{ name: 'Audiencia Principal', isBroad: true, interests: [] }];
+
+    for (const adSetDef of audienceAdSets) {
+      const targeting: any = {
+        geo_locations: { countries: [isoCountry] },
+        targeting_automation: { advantage_audience: adSetDef.isBroad ? 1 : 0 },
+      };
+      if (!adSetDef.isBroad) {
+        targeting.age_min = 18;
+        targeting.age_max = 55;
+        targeting.genders = [1, 2];
+        if (adSetDef.interests?.length) targeting.interests = adSetDef.interests;
+      }
+      if (dto.excludeCities?.length) {
+        targeting.geo_locations.excluded_geo_locations = { cities: dto.excludeCities.map((c: string) => ({ key: c })) };
+      }
+
+      const adSetBody: any = {
+        name: adSetDef.name,
+        campaign_id: campaignId,
+        daily_budget: Math.round(dto.dailyBudget * 100),
+        billing_event: 'IMPRESSIONS',
+        optimization_goal: optimizationGoal,
+        bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+        targeting,
+        start_time: startTime,
+        status: 'PAUSED',
+      };
+      if (promotedObject) adSetBody.promoted_object = promotedObject;
+
+      const adSetRes = await this.metaPost(`/${adAccountId}/adsets`, adSetBody, token);
+      if (adSetRes.error) {
+        this.logger.error(`[Meta] AdSet error: ${JSON.stringify(adSetRes.error)}`);
+        throw new BadRequestException(`Meta ad set: ${adSetRes.error.message}`);
+      }
+      adSetIds.push(adSetRes.id);
+
+      // Create one ad per creative in this ad set
+      for (let ci = 0; ci < creativeIds.length; ci++) {
+        const adRes = await this.metaPost(`/${adAccountId}/ads`, {
+          name: `Anuncio ${ci + 1} — ${adSetDef.name}`,
+          adset_id: adSetRes.id,
+          creative: { creative_id: creativeIds[ci] },
+          status: 'PAUSED',
+        }, token);
+        if (!adRes.error) allAdIds.push(adRes.id);
+        else this.logger.warn(`Ad creation: ${adRes.error.message}`);
+      }
+    }
+
+    return { campaignId, adSetIds, adIds: allAdIds };
   }
 
   private async metaPost(path: string, body: any, token: string): Promise<any> {
@@ -757,6 +713,135 @@ Formato:
     ).then(r => r.json()) as any;
     if (res.error) return [];
     return res.data ?? [];
+  }
+
+  // ─── New campaign flow endpoints ─────────────────────────────────────────
+
+  async getPixels(userId: string): Promise<any[]> {
+    const conn = await this.getConnection(userId);
+    const res = await fetch(
+      `${GRAPH}/${conn.adAccountId}/adspixels?fields=id,name,last_fired_time&limit=10&access_token=${conn.accessToken}`
+    ).then(r => r.json()) as any;
+    if (res.error) return [];
+    return res.data ?? [];
+  }
+
+  async getPixelEvents(userId: string, pixelId: string): Promise<string[]> {
+    const standard = ['Purchase', 'AddToCart', 'ViewContent', 'Lead', 'CompleteRegistration', 'InitiateCheckout', 'AddPaymentInfo', 'Contact', 'Subscribe'];
+    try {
+      const conn = await this.getConnection(userId);
+      const end = Math.floor(Date.now() / 1000);
+      const start = end - 30 * 86400;
+      const res = await fetch(
+        `${GRAPH}/${pixelId}/stats?aggregation=event_name&start_time=${start}&end_time=${end}&access_token=${conn.accessToken}`
+      ).then(r => r.json()) as any;
+      if (res.error || !res.data?.length) return standard;
+      const fired = res.data.map((e: any) => e.event_name).filter(Boolean);
+      return [...new Set([...fired, ...standard])];
+    } catch { return standard; }
+  }
+
+  async getInstagramAccounts(userId: string): Promise<any[]> {
+    try {
+      const conn = await this.getConnection(userId);
+      if (!conn.pageId) return [];
+      const res = await fetch(
+        `${GRAPH}/${conn.pageId}?fields=instagram_business_account{id,name,username}&access_token=${conn.accessToken}`
+      ).then(r => r.json()) as any;
+      if (res.instagram_business_account?.id) {
+        const ig = res.instagram_business_account;
+        return [{ id: ig.id, name: ig.name ?? ig.username ?? 'Instagram vinculado' }];
+      }
+      return [];
+    } catch { return []; }
+  }
+
+  async researchProduct(userId: string, dto: { productName: string; landingPage: string; priceBefore?: string; priceAfter: string; country: string }): Promise<{ research: string; angle: string }> {
+    const countryNames: Record<string, string> = {
+      RD: 'República Dominicana', GT: 'Guatemala', EC: 'Ecuador',
+      CR: 'Costa Rica', CO: 'Colombia', MX: 'México', US: 'Estados Unidos',
+      ES: 'España', PE: 'Perú', CL: 'Chile', AR: 'Argentina',
+    };
+    const country = countryNames[dto.country] ?? dto.country;
+    try {
+      const resp = await this.anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        messages: [{ role: 'user', content: `Analiza este producto para Meta Ads en ${country}.
+Producto: ${dto.productName}
+URL: ${dto.landingPage}
+Precio: ${dto.priceBefore ? `Antes $${dto.priceBefore} → Ahora` : ''} $${dto.priceAfter}
+Responde SOLO JSON:
+{"research":"resumen en 2 líneas — qué es y a quién ayuda","angle":"ángulo de ventas más efectivo — urgencia/transformación/prueba social/exclusividad/dolor+solución"}` }],
+      });
+      const text = resp.content[0].type === 'text' ? resp.content[0].text : '{}';
+      return JSON.parse(text.replace(/```json?\n?/g, '').replace(/```\n?/g, '').trim());
+    } catch { return { research: dto.productName, angle: 'transformación' }; }
+  }
+
+  async suggestAudience(userId: string, dto: { productName: string; country: string; budgetType: string; adSetsCount: number; productResearch?: string; campaignType: string }): Promise<{ adSets: any[] }> {
+    const conn = await this.getConnection(userId);
+    const token = conn.accessToken;
+    const countryNames: Record<string, string> = { RD: 'República Dominicana', GT: 'Guatemala', EC: 'Ecuador', CR: 'Costa Rica', CO: 'Colombia', MX: 'México' };
+    const country = countryNames[dto.country] ?? dto.country;
+    try {
+      const resp = await this.anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 800,
+        messages: [{ role: 'user', content: `Media buyer experto. Crea ${dto.adSetsCount} conjunto(s) de audiencia para Meta Ads.
+Producto: ${dto.productName}
+${dto.productResearch ? `Info: ${dto.productResearch}` : ''}
+País: ${country}  Estructura: ${dto.budgetType}  Conjuntos: ${dto.adSetsCount}
+Para cada conjunto: broad sin intereses O 3-5 intereses específicos muy relevantes, sin repetir entre conjuntos.
+Responde SOLO JSON: {"adSets":[{"name":"nombre","isBroad":true/false,"interestNames":["interés1"],"rationale":"razón"}]}` }],
+      });
+      const text = resp.content[0].type === 'text' ? resp.content[0].text : '{}';
+      const aiData = JSON.parse(text.replace(/```json?\n?/g, '').replace(/```\n?/g, '').trim());
+      const resolved = [];
+      for (const adSet of (aiData.adSets ?? [])) {
+        const interests: { id: string; name: string }[] = [];
+        if (!adSet.isBroad && adSet.interestNames?.length) {
+          for (const name of (adSet.interestNames as string[]).slice(0, 5)) {
+            try {
+              const r = await fetch(`${GRAPH}/search?type=adinterest&q=${encodeURIComponent(name)}&limit=1&access_token=${token}`).then(x => x.json()) as any;
+              if (r.data?.[0]?.id) interests.push({ id: r.data[0].id, name: r.data[0].name });
+            } catch {}
+          }
+        }
+        resolved.push({ name: adSet.name, isBroad: adSet.isBroad ?? interests.length === 0, interests, rationale: adSet.rationale ?? '' });
+      }
+      return { adSets: resolved.length ? resolved : [{ name: 'Audiencia Amplia', isBroad: true, interests: [], rationale: 'Broad targeting recomendado' }] };
+    } catch { return { adSets: [{ name: 'Audiencia Amplia', isBroad: true, interests: [], rationale: 'Broad targeting recomendado' }] }; }
+  }
+
+  async generateCopy(userId: string, dto: { productName: string; country: string; landingPage: string; priceBefore?: string; priceAfter?: string; campaignType: string; adCount: number; productResearch?: string; angle?: string }): Promise<{ ads: any[] }> {
+    const countryNames: Record<string, string> = { RD: 'República Dominicana', GT: 'Guatemala', EC: 'Ecuador', CR: 'Costa Rica', CO: 'Colombia', MX: 'México', US: 'Estados Unidos', ES: 'España', PE: 'Perú', CL: 'Chile', AR: 'Argentina' };
+    const country = countryNames[dto.country] ?? dto.country;
+    const ctaMap: Record<string, string> = { VENTAS: 'SHOP_NOW', TRAFICO: 'LEARN_MORE', LEADS: 'SIGN_UP', MENSAJES: 'CONTACT_US', RECONOCIMIENTO: 'LEARN_MORE' };
+    const cta = ctaMap[dto.campaignType] ?? 'SHOP_NOW';
+    try {
+      const resp = await this.anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1500,
+        system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }] as any,
+        messages: [{ role: 'user', content: `Genera copies para ${dto.adCount} anuncio(s) en ${country}.
+Producto: ${dto.productName}
+${dto.priceBefore ? `Precio: ~~$${dto.priceBefore}~~ → $${dto.priceAfter}` : dto.priceAfter ? `Precio: $${dto.priceAfter}` : ''}
+${dto.productResearch ? `Info: ${dto.productResearch}` : ''}
+${dto.angle ? `Ángulo: ${dto.angle}` : ''}
+Objetivo: ${dto.campaignType}  Landing: ${dto.landingPage}
+Para cada anuncio: 2 opciones con ángulos MUY diferentes. Usa jerga natural de ${country}.
+Responde SOLO JSON:
+{"ads":[{"option1":{"primaryText":"max 125 chars","headline":"max 40 chars","description":"max 30 chars","callToAction":"${cta}"},"option2":{"primaryText":"diferente max 125 chars","headline":"diferente max 40 chars","description":"max 30 chars","callToAction":"${cta}"}}]}
+Exactamente ${dto.adCount} elemento(s) en el array ads.` }],
+      });
+      const text = resp.content[0].type === 'text' ? resp.content[0].text : '{}';
+      const parsed = JSON.parse(text.replace(/```json?\n?/g, '').replace(/```\n?/g, '').trim());
+      return { ads: parsed.ads ?? [] };
+    } catch {
+      const fallback = { primaryText: `¡${dto.productName} disponible!`, headline: dto.productName, description: 'Ver más', callToAction: cta };
+      return { ads: Array.from({ length: dto.adCount }, () => ({ option1: fallback, option2: { ...fallback, primaryText: `Consigue ${dto.productName} hoy` } })) };
+    }
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────

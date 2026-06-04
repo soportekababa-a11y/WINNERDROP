@@ -1,7 +1,6 @@
-import { Controller, Get, Post, Delete, Body, Req, Res, Query, UseGuards, UseInterceptors, UploadedFiles, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Req, Param, UseGuards, UseInterceptors, UploadedFiles, HttpCode } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { MetaAdsService } from './meta-ads.service';
 
@@ -9,75 +8,77 @@ import { MetaAdsService } from './meta-ads.service';
 export class MetaAdsController {
   constructor(private svc: MetaAdsService) {}
 
-  @UseGuards(JwtAuthGuard)
-  @Get('auth-url')
-  getAuthUrl(@Req() req: any) {
-    return { url: this.svc.getAuthUrl(req.user.id) };
-  }
+  @UseGuards(JwtAuthGuard) @Get('auth-url')
+  getAuthUrl(@Req() req: any) { return { url: this.svc.getAuthUrl(req.user.id) }; }
 
-  @Post('connect')
-  @HttpCode(200)
+  @Post('connect') @HttpCode(200)
   async connect(@Body() body: { code: string; state: string }) {
     await this.svc.handleCallback(body.code, body.state);
     return { ok: true };
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Get('status')
-  getStatus(@Req() req: any) {
-    return this.svc.getStatus(req.user.id);
-  }
+  @UseGuards(JwtAuthGuard) @Get('status')
+  getStatus(@Req() req: any) { return this.svc.getStatus(req.user.id); }
 
-  @UseGuards(JwtAuthGuard)
-  @Delete('disconnect')
-  disconnect(@Req() req: any) {
-    return this.svc.disconnect(req.user.id);
-  }
+  @UseGuards(JwtAuthGuard) @Delete('disconnect')
+  disconnect(@Req() req: any) { return this.svc.disconnect(req.user.id); }
 
-  @UseGuards(JwtAuthGuard)
-  @Get('accounts')
-  getAdAccounts(@Req() req: any) {
-    return this.svc.getAdAccounts(req.user.id);
-  }
+  @UseGuards(JwtAuthGuard) @Get('accounts')
+  getAdAccounts(@Req() req: any) { return this.svc.getAdAccounts(req.user.id); }
 
-  @UseGuards(JwtAuthGuard)
-  @Post('select-account')
+  @UseGuards(JwtAuthGuard) @Post('select-account')
   selectAccount(@Req() req: any, @Body() body: { adAccountId: string; adAccountName: string }) {
     return this.svc.selectAdAccount(req.user.id, body.adAccountId, body.adAccountName);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Get('pages')
-  getPages(@Req() req: any) {
-    return this.svc.getPages(req.user.id);
-  }
+  @UseGuards(JwtAuthGuard) @Get('pages')
+  getPages(@Req() req: any) { return this.svc.getPages(req.user.id); }
 
-  @UseGuards(JwtAuthGuard)
-  @Post('select-page')
+  @UseGuards(JwtAuthGuard) @Post('select-page')
   selectPage(@Req() req: any, @Body() body: { pageId: string; pageName: string }) {
     return this.svc.selectPage(req.user.id, body.pageId, body.pageName);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Get('campaigns')
-  getCampaigns(@Req() req: any) {
-    return this.svc.getCampaigns(req.user.id);
+  @UseGuards(JwtAuthGuard) @Get('pixels')
+  getPixels(@Req() req: any) { return this.svc.getPixels(req.user.id); }
+
+  @UseGuards(JwtAuthGuard) @Get('pixels/:pixelId/events')
+  getPixelEvents(@Req() req: any, @Param('pixelId') pixelId: string) {
+    return this.svc.getPixelEvents(req.user.id, pixelId);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Post('analyze-metrics')
+  @UseGuards(JwtAuthGuard) @Get('instagram')
+  getInstagram(@Req() req: any) { return this.svc.getInstagramAccounts(req.user.id); }
+
+  @UseGuards(JwtAuthGuard) @Post('research-product')
+  researchProduct(@Req() req: any, @Body() body: any) {
+    return this.svc.researchProduct(req.user.id, body);
+  }
+
+  @UseGuards(JwtAuthGuard) @Post('suggest-audience')
+  suggestAudience(@Req() req: any, @Body() body: any) {
+    return this.svc.suggestAudience(req.user.id, body);
+  }
+
+  @UseGuards(JwtAuthGuard) @Post('generate-copy')
+  generateCopy(@Req() req: any, @Body() body: any) {
+    return this.svc.generateCopy(req.user.id, body);
+  }
+
+  @UseGuards(JwtAuthGuard) @Get('campaigns')
+  getCampaigns(@Req() req: any) { return this.svc.getCampaigns(req.user.id); }
+
+  @UseGuards(JwtAuthGuard) @Post('analyze-metrics')
   analyzeMetrics(@Req() req: any, @Body() body: { fbCampaignId: string; campaignId: string }) {
     return this.svc.analyzeMetrics(req.user.id, body.fbCampaignId, body.campaignId);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Post('scale-options')
-  getScaleOptions(@Req() req: any, @Body() body: { fbCampaignId: string; fbAdSetId: string; campaignId: string }) {
+  @UseGuards(JwtAuthGuard) @Post('scale-options')
+  getScaleOptions(@Req() req: any, @Body() body: { fbCampaignId: string; fbAdSetId: string }) {
     return this.svc.getScaleOptions(req.user.id, body.fbCampaignId, body.fbAdSetId);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Post('scale-execute')
+  @UseGuards(JwtAuthGuard) @Post('scale-execute')
   executeScale(@Req() req: any, @Body() body: { fbCampaignId: string; fbAdSetId: string; scaleType: string; params: any }) {
     return this.svc.executeScale(req.user.id, body.fbCampaignId, body.fbAdSetId, body.scaleType, body.params);
   }
@@ -85,25 +86,21 @@ export class MetaAdsController {
   @UseGuards(JwtAuthGuard)
   @Post('campaigns')
   @UseInterceptors(FilesInterceptor('files', 10, { storage: memoryStorage() }))
-  createCampaign(
-    @Req() req: any,
-    @UploadedFiles() files: Express.Multer.File[],
-    @Body() body: any,
-  ) {
-    const dto = {
+  createCampaign(@Req() req: any, @UploadedFiles() files: Express.Multer.File[], @Body() body: any) {
+    return this.svc.createCampaign(req.user.id, {
       campaignType: body.campaignType,
       productName: body.productName,
       landingPage: body.landingPage,
       country: body.country,
-      excludeCities: body.excludeCities ? JSON.parse(body.excludeCities) : [],
       dailyBudget: parseFloat(body.dailyBudget),
+      budgetType: body.budgetType ?? 'ABO',
+      pixelId: body.pixelId || undefined,
+      conversionEvent: body.conversionEvent || undefined,
       startTime: body.startTime ?? 'now',
-      campaignMode: body.campaignMode,
-      budgetType: body.budgetType,
-      angleMode: body.angleMode,
-      customAngle: body.customAngle,
-      adSetsCount: body.adSetsCount,
-    };
-    return this.svc.createCampaign(req.user.id, dto, files);
+      excludeCities: body.excludeCities ? JSON.parse(body.excludeCities) : [],
+      instagramAccountId: body.instagramAccountId || undefined,
+      audienceAdSets: body.audienceAdSets ? JSON.parse(body.audienceAdSets) : [],
+      copys: body.copys ? JSON.parse(body.copys) : [],
+    }, files);
   }
 }
