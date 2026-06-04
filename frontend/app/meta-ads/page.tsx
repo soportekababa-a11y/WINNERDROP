@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Facebook, Plus, X, Play, Square, ChevronRight, Zap, TrendingUp, MessageSquare, Eye, ShoppingCart, Loader2, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
+import { Globe, Plus, X, Play, Square, ChevronRight, Zap, TrendingUp, MessageSquare, Eye, ShoppingCart, Loader2, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 import { getToken, isAuthenticated } from '@/lib/auth';
 import { Sidebar } from '@/components/sidebar';
 
@@ -203,7 +203,7 @@ export default function MetaAdsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl" style={{ background: 'rgba(24,119,242,0.15)', border: '1px solid rgba(24,119,242,0.3)' }}>
-                <Facebook size={22} className="text-blue-400" />
+                <Globe size={22} className="text-blue-400" />
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-white">Meta Ads IA</h1>
@@ -236,7 +236,7 @@ export default function MetaAdsPage() {
               {/* STEP: CONNECT */}
               {step === 'connect' && (
                 <div className="rounded-2xl p-8 text-center space-y-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <Facebook size={48} className="text-blue-400 mx-auto" />
+                  <Globe size={48} className="text-blue-400 mx-auto" />
                   <div>
                     <h2 className="text-lg font-semibold text-white">Conecta tu cuenta de Facebook</h2>
                     <p className="text-sm text-gray-500 mt-1">Necesario para crear campañas en tus cuentas publicitarias</p>
@@ -244,7 +244,7 @@ export default function MetaAdsPage() {
                   <button onClick={connectFacebook}
                     className="mx-auto flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium text-white"
                     style={{ background: 'linear-gradient(135deg, #1877f2, #0c5fc7)' }}>
-                    <Facebook size={16} /> Conectar con Facebook
+                    <Globe size={16} /> Conectar con Facebook
                   </button>
                 </div>
               )}
