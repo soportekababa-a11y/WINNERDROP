@@ -333,9 +333,20 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
     let optimizationGoal = goalMap[objective] ?? 'LINK_CLICKS';
     let promotedObject: any = undefined;
 
+    // Convert pixel event name to Meta API custom_event_type format
+    const eventNameToApiType: Record<string, string> = {
+      Purchase: 'PURCHASE', AddToCart: 'ADD_TO_CART', ViewContent: 'CONTENT_VIEW',
+      Lead: 'LEAD', CompleteRegistration: 'COMPLETE_REGISTRATION',
+      InitiateCheckout: 'INITIATED_CHECKOUT', AddPaymentInfo: 'ADD_PAYMENT_INFO',
+      Contact: 'CONTACT', Subscribe: 'SUBSCRIBE', Search: 'SEARCH',
+      Schedule: 'SCHEDULE', StartTrial: 'START_TRIAL', SubmitApplication: 'SUBMIT_APPLICATION',
+      Donate: 'DONATE', FindLocation: 'FIND_LOCATION', CustomizeProduct: 'CUSTOMIZE_PRODUCT',
+    };
+    const toEventType = (e: string) => eventNameToApiType[e] ?? e.replace(/([A-Z])/g, '_$1').toUpperCase().replace(/^_/, '');
+
     if (dto.pixelId) {
-      const eventType = optimizationGoal === 'LEAD_GENERATION' ? 'LEAD' : 'PURCHASE';
-      promotedObject = { pixel_id: dto.pixelId, custom_event_type: dto.conversionEvent ?? eventType };
+      const fallback = optimizationGoal === 'LEAD_GENERATION' ? 'LEAD' : 'PURCHASE';
+      promotedObject = { pixel_id: dto.pixelId, custom_event_type: toEventType(dto.conversionEvent ?? fallback) };
     } else if (optimizationGoal === 'OFFSITE_CONVERSIONS' || optimizationGoal === 'LEAD_GENERATION') {
       try {
         const pixRes = await fetch(`${GRAPH}/${adAccountId}/adspixels?fields=id&limit=1&access_token=${token}`).then(r => r.json()) as any;
