@@ -722,7 +722,11 @@ Formato:
     const res = await fetch(
       `${GRAPH}/${conn.adAccountId}/adspixels?fields=id,name,last_fired_time&limit=10&access_token=${conn.accessToken}`
     ).then(r => r.json()) as any;
-    if (res.error) return [];
+    if (res.error) {
+      this.logger.warn(`[Pixels] ${conn.adAccountId}: ${JSON.stringify(res.error)}`);
+      return [];
+    }
+    this.logger.log(`[Pixels] Found ${res.data?.length ?? 0} pixels for ${conn.adAccountId}`);
     return res.data ?? [];
   }
 
