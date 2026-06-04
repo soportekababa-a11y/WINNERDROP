@@ -356,13 +356,27 @@ export class ScraperService implements OnModuleDestroy {
 
           this.logger.log(`[${code}] ${products.length} productos — escribiendo a BD`);
           let saved = 0;
+          const yesterdayUpdates: Array<{ id: string; salesYesterday: number }> = [];
           for (const raw of products) {
             try {
-              await this.upsertProductAndSnapshot(raw, code);
+              const pending = await this.upsertProductAndSnapshot(raw, code);
+              if (pending) yesterdayUpdates.push(pending);
               saved++;
             } catch (dbErr) {
               this.logger.error(`[${code}] Error guardando ${raw.effiId}`, dbErr);
             }
+          }
+
+          // Apply salesYesterday all at once — avoids partial state visible mid-cycle
+          if (yesterdayUpdates.length > 0) {
+            this.logger.log(`[${code}] Actualizando ventas ayer: ${yesterdayUpdates.length} productos`);
+            await Promise.all(
+              yesterdayUpdates.map(({ id, salesYesterday }) =>
+                this.productRepo.update(id, { salesYesterday }).catch(err =>
+                  this.logger.error(`[${code}] Error en salesYesterday id=${id}`, err),
+                ),
+              ),
+            );
           }
 
           if (products.length > 100) {
@@ -505,10 +519,17 @@ export class ScraperService implements OnModuleDestroy {
     });
   }
 
-  private async upsertProductAndSnapshot(raw: RawProduct, country: string) {
+  // Returns pending salesYesterday update when the business day rolled over.
+  // Caller batches these and applies them at end of cycle so the dashboard never
+  // shows a partial salesYesterday state mid-scrape.
+  private async upsertProductAndSnapshot(
+    raw: RawProduct,
+    country: string,
+  ): Promise<{ id: string; salesYesterday: number } | null> {
     let product = await this.productRepo.findOne({ where: { effiId: raw.effiId, country } });
 
     const today = businessDay();
+    let pendingYesterday: { id: string; salesYesterday: number } | null = null;
 
     if (!product) {
       product = this.productRepo.create({
@@ -537,7 +558,10 @@ export class ScraperService implements OnModuleDestroy {
         const lastDate = new Date(product.salesBaselineDate + 'T12:00:00');
         const todayDate = new Date(today + 'T12:00:00');
         const dayGap = Math.round((todayDate.getTime() - lastDate.getTime()) / 86_400_000);
-        product.salesYesterday = dayGap === 1 ? Math.max(0, raw.salesAccum - product.salesBaseline) : 0;
+        if (dayGap === 1) {
+          pendingYesterday = { id: product.id, salesYesterday: Math.max(0, raw.salesAccum - product.salesBaseline) };
+        }
+        // salesYesterday NOT written here — applied in bulk at end of cycle
         product.salesBaseline = raw.salesAccum;
         product.salesBaselineDate = today;
       }
@@ -562,6 +586,8 @@ export class ScraperService implements OnModuleDestroy {
         stock: raw.stock,
       }),
     );
+
+    return pendingYesterday;
   }
 
   private async cleanupOldSnapshots() {
