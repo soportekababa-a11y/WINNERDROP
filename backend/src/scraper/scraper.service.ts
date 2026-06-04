@@ -97,6 +97,22 @@ export class ScraperService implements OnModuleDestroy {
 
   private scheduleNextDailyRun() {
     const now = new Date();
+    const todayRun = new Date();
+    todayRun.setUTCHours(DAILY_RUN_UTC_HOUR, 0, 0, 0);
+    const todayWrite = new Date();
+    todayWrite.setUTCHours(DAILY_WRITE_UTC_HOUR, 0, 0, 0);
+
+    // If restart happens within the scraping window (1 AM - 3 AM RD), start immediately
+    const inWindow = now.getTime() >= todayRun.getTime() && now.getTime() < todayWrite.getTime();
+    if (inWindow) {
+      this.logger.log(`Reinicio dentro de ventana de scraping — arrancando ciclo inmediatamente`);
+      setImmediate(async () => {
+        await this.runCycle().catch(err => this.logger.error('Error en ciclo diario', err));
+        this.scheduleNextDailyRun();
+      });
+      return;
+    }
+
     const next = new Date();
     next.setUTCHours(DAILY_RUN_UTC_HOUR, 0, 0, 0);
     if (next.getTime() <= now.getTime()) {
