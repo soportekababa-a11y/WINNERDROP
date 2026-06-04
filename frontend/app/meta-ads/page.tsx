@@ -48,7 +48,7 @@ const COUNTRIES = [
 
 interface AdFile { file: File; preview: string; type: 'image' | 'video' }
 
-type Step = 'connect' | 'setup' | 'type' | 'form' | 'ads' | 'creating' | 'done';
+type Step = 'connect' | 'setup' | 'type' | 'form' | 'strategy' | 'ads' | 'creating' | 'done';
 
 export default function MetaAdsPage() {
   const router = useRouter();
@@ -77,8 +77,18 @@ export default function MetaAdsPage() {
   const [excludeCities, setExcludeCities] = useState<string[]>([]);
   const [cityInput, setCityInput] = useState('');
 
+  // Strategy
+  const [campaignMode, setCampaignMode] = useState(''); // testeo | escalar
+  const [budgetType, setBudgetType] = useState(''); // ABO | CBO
+  const [angleMode, setAngleMode] = useState(''); // ai | custom
+  const [customAngle, setCustomAngle] = useState('');
+  const [adSetsCount, setAdSetsCount] = useState('3');
+
   // Ads
   const [adFiles, setAdFiles] = useState<AdFile[]>([]);
+  const [playingVideo, setPlayingVideo] = useState<number | null>(null);
+  const [mutedVideos, setMutedVideos] = useState<Record<number, boolean>>({});
+  const videoRefs = useRef<Record<number, HTMLVideoElement | null>>({});
   const [creating, setCreating] = useState(false);
   const [result, setResult] = useState<any>(null);
 
@@ -163,6 +173,20 @@ export default function MetaAdsPage() {
     });
   }
 
+  function toggleVideo(idx: number) {
+    const el = videoRefs.current[idx];
+    if (!el) return;
+    if (el.paused) { el.play(); setPlayingVideo(idx); }
+    else { el.pause(); setPlayingVideo(null); }
+  }
+
+  function toggleMute(idx: number) {
+    const el = videoRefs.current[idx];
+    if (!el) return;
+    el.muted = !el.muted;
+    setMutedVideos(prev => ({ ...prev, [idx]: el.muted }));
+  }
+
   async function createCampaign() {
     if (adFiles.length === 0) { setError('Sube al menos un anuncio'); return; }
     setCreating(true);
@@ -177,6 +201,11 @@ export default function MetaAdsPage() {
       form.append('excludeCities', JSON.stringify(excludeCities));
       form.append('dailyBudget', dailyBudget);
       form.append('startTime', startTime === 'custom' ? customDate : 'now');
+      form.append('campaignMode', campaignMode);
+      form.append('budgetType', budgetType);
+      form.append('angleMode', angleMode);
+      if (angleMode === 'custom') form.append('customAngle', customAngle);
+      form.append('adSetsCount', adSetsCount);
       adFiles.forEach(a => form.append('files', a.file));
 
       const res = await apiFetch('/meta-ads/campaigns', { method: 'POST', body: form });
@@ -407,14 +436,124 @@ export default function MetaAdsPage() {
                   </div>
 
                   <button
-                    onClick={() => { if (productName && landingPage && dailyBudget) setStep('ads'); }}
+                    onClick={() => { if (productName && landingPage && dailyBudget) setStep('strategy'); }}
                     disabled={!productName || !landingPage || !dailyBudget}
                     className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50 flex items-center justify-center gap-2"
                     style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
-                    Continuar → Subir anuncios
+                    Continuar → Estrategia
                   </button>
                 </div>
               )}
+
+              {/* STEP: STRATEGY */}
+              {step === 'strategy' && (() => {
+                const budget = parseFloat(dailyBudget) || 0;
+                const recSets = budget < 10 ? 2 : budget < 20 ? 3 : budget < 50 ? 4 : 5;
+                return (
+                  <div className="rounded-2xl p-6 space-y-6" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setStep('form')} className="text-xs text-gray-500 hover:text-white">← Editar datos</button>
+                    </div>
+                    <h2 className="text-base font-semibold text-white">Estrategia de campaña</h2>
+
+                    {/* Modo */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-400">¿Qué quieres hacer?</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { val: 'testeo', label: '🧪 Testear', desc: 'Probar creativos y audiencias para encontrar qué funciona' },
+                          { val: 'escalar', label: '🚀 Escalar', desc: 'Aumentar presupuesto en lo que ya está funcionando' },
+                        ].map(o => (
+                          <button key={o.val} onClick={() => setCampaignMode(o.val)}
+                            className="text-left p-4 rounded-xl space-y-1 transition-all"
+                            style={campaignMode === o.val
+                              ? { background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.5)' }
+                              : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <p className="text-sm font-semibold text-white">{o.label}</p>
+                            <p className="text-xs text-gray-500">{o.desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Presupuesto tipo */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-400">Tipo de presupuesto</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { val: 'ABO', label: 'ABO', desc: 'Presupuesto por conjunto — control total. Recomendado para testeo.' },
+                          { val: 'CBO', label: 'CBO', desc: 'Meta distribuye el presupuesto. Mejor para escalar con datos previos.' },
+                        ].map(o => (
+                          <button key={o.val} onClick={() => setBudgetType(o.val)}
+                            className="text-left p-4 rounded-xl space-y-1 transition-all"
+                            style={budgetType === o.val
+                              ? { background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.5)' }
+                              : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <p className="text-sm font-semibold text-white">{o.label}</p>
+                            <p className="text-xs text-gray-500">{o.desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Conjuntos recomendados */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-400">
+                        Número de conjuntos de anuncios
+                        <span className="ml-2 text-violet-400 font-normal">Recomendado: {recSets} para ${budget}/día</span>
+                      </label>
+                      <div className="flex gap-2">
+                        {[1,2,3,4,5,6].map(n => (
+                          <button key={n} onClick={() => setAdSetsCount(String(n))}
+                            className="w-10 h-10 rounded-xl text-sm font-bold transition-all"
+                            style={adSetsCount === String(n)
+                              ? { background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.5)', color: '#c4b5fd' }
+                              : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#6b7280' }}>
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Ángulo */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-gray-400">¿Quién elige el ángulo del copy?</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { val: 'ai', label: '🤖 Que lo elija la IA', desc: 'La IA elige los mejores ángulos basándose en tu producto y país' },
+                          { val: 'custom', label: '✍️ Lo elijo yo', desc: 'Tú defines el ángulo y enfoque del mensaje' },
+                        ].map(o => (
+                          <button key={o.val} onClick={() => setAngleMode(o.val)}
+                            className="text-left p-4 rounded-xl space-y-1 transition-all"
+                            style={angleMode === o.val
+                              ? { background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.5)' }
+                              : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <p className="text-sm font-semibold text-white">{o.label}</p>
+                            <p className="text-xs text-gray-500">{o.desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                      {angleMode === 'custom' && (
+                        <textarea
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50 resize-none"
+                          rows={2}
+                          placeholder="ej. Enfocarse en el miedo a perder oportunidades, urgencia de tiempo limitado..."
+                          value={customAngle}
+                          onChange={e => setCustomAngle(e.target.value)}
+                        />
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => { if (campaignMode && budgetType && angleMode) setStep('ads'); }}
+                      disabled={!campaignMode || !budgetType || !angleMode || (angleMode === 'custom' && !customAngle)}
+                      className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+                      style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
+                      Continuar → Subir anuncios
+                    </button>
+                  </div>
+                );
+              })()}
 
               {/* STEP: ADS */}
               {step === 'ads' && (
@@ -441,8 +580,28 @@ export default function MetaAdsPage() {
                             {ad.type === 'image' ? (
                               <img src={ad.preview} alt="" className="w-full h-full object-cover" />
                             ) : (
-                              <video src={ad.preview} className="w-full h-full object-cover" muted loop playsInline
-                                ref={el => { if (el) el.play().catch(() => {}); }} />
+                              <div className="relative w-full h-full cursor-pointer" onClick={() => toggleVideo(idx)}>
+                                <video
+                                  src={ad.preview}
+                                  className="w-full h-full object-cover"
+                                  loop playsInline
+                                  muted={mutedVideos[idx] !== false}
+                                  ref={el => { videoRefs.current[idx] = el; }}
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  {playingVideo !== idx && (
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+                                      <Play size={16} className="text-white ml-1" />
+                                    </div>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={e => { e.stopPropagation(); toggleMute(idx); }}
+                                  className="absolute bottom-8 right-2 p-1 rounded-full text-white text-[10px]"
+                                  style={{ background: 'rgba(0,0,0,0.5)' }}>
+                                  {mutedVideos[idx] !== false ? '🔇' : '🔊'}
+                                </button>
+                              </div>
                             )}
                           </div>
                           {/* Type badge */}

@@ -149,6 +149,11 @@ export class MetaAdsService {
       excludeCities: string[];
       dailyBudget: number;
       startTime: string;
+      campaignMode?: string;
+      budgetType?: string;
+      angleMode?: string;
+      customAngle?: string;
+      adSetsCount?: string;
     },
     files: Express.Multer.File[],
   ): Promise<any> {
@@ -219,11 +224,18 @@ export class MetaAdsService {
     };
     const countryName = countryNames[dto.country] || dto.country;
 
+    const adSets = parseInt(dto.adSetsCount ?? '3');
+    const perSetBudget = dto.budgetType === 'ABO' ? Math.floor(dto.dailyBudget / adSets) : dto.dailyBudget;
+
     const userPrompt = `País objetivo: ${countryName}
 Producto: ${dto.productName}
 Landing page: ${dto.landingPage}
 Tipo de campaña: ${dto.campaignType}
-Presupuesto diario: $${dto.dailyBudget} USD
+Presupuesto diario total: $${dto.dailyBudget} USD
+Modo: ${dto.campaignMode === 'testeo' ? 'TESTEO — probar qué funciona' : 'ESCALAR — maximizar resultados'}
+Tipo de presupuesto: ${dto.budgetType ?? 'ABO'}${dto.budgetType === 'ABO' ? ` ($${perSetBudget}/día por conjunto)` : ''}
+Conjuntos de anuncios: ${adSets}
+${dto.angleMode === 'custom' && dto.customAngle ? `Ángulo del copy: ${dto.customAngle}` : 'Ángulo: elige el más efectivo según el producto y país'}
 ${dto.excludeCities?.length ? `Ciudades excluidas: ${dto.excludeCities.join(', ')}` : ''}
 Número de anuncios: ${files.length}
 

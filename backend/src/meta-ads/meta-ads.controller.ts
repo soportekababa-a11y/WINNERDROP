@@ -81,6 +81,11 @@ export class MetaAdsController {
       excludeCities: body.excludeCities ? JSON.parse(body.excludeCities) : [],
       dailyBudget: parseFloat(body.dailyBudget),
       startTime: body.startTime ?? 'now',
+      campaignMode: body.campaignMode,
+      budgetType: body.budgetType,
+      angleMode: body.angleMode,
+      customAngle: body.customAngle,
+      adSetsCount: body.adSetsCount,
     };
     return this.svc.createCampaign(req.user.id, dto, files);
   }
