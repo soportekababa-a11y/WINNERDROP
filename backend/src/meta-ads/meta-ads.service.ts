@@ -390,9 +390,38 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       }
     }
 
-    const optimizationGoal = objective === 'OUTCOME_LEADS' ? 'LEAD_GENERATION' : 'LINK_CLICKS';
+    // Map objective → correct optimization goal
+    const goalMap: Record<string, string> = {
+      OUTCOME_SALES:       'OFFSITE_CONVERSIONS',
+      OUTCOME_TRAFFIC:     'LANDING_PAGE_VIEWS',
+      OUTCOME_LEADS:       'LEAD_GENERATION',
+      OUTCOME_ENGAGEMENT:  'CONVERSATIONS',
+      OUTCOME_AWARENESS:   'REACH',
+    };
+    let optimizationGoal = goalMap[objective] ?? 'LINK_CLICKS';
 
-    const adSetRes = await this.metaPost(`/${adAccountId}/adsets`, {
+    // OFFSITE_CONVERSIONS and LEAD_GENERATION require a pixel — fetch first available
+    let promotedObject: any = undefined;
+    if (optimizationGoal === 'OFFSITE_CONVERSIONS' || optimizationGoal === 'LEAD_GENERATION') {
+      try {
+        const pixRes = await fetch(
+          `${GRAPH}/${adAccountId}/adspixels?fields=id,name&limit=1&access_token=${token}`
+        ).then(r => r.json()) as any;
+        const pixel = pixRes.data?.[0];
+        if (pixel?.id) {
+          const eventType = optimizationGoal === 'LEAD_GENERATION' ? 'LEAD' : 'PURCHASE';
+          promotedObject = { pixel_id: pixel.id, custom_event_type: eventType };
+        } else {
+          // No pixel — fall back to traffic-style to avoid Meta API error
+          optimizationGoal = optimizationGoal === 'LEAD_GENERATION' ? 'LINK_CLICKS' : 'LANDING_PAGE_VIEWS';
+          this.logger.warn('[Meta] No pixel found — falling back to ' + optimizationGoal);
+        }
+      } catch {
+        optimizationGoal = 'LANDING_PAGE_VIEWS';
+      }
+    }
+
+    const adSetBody: any = {
       name: aiData.adSetName ?? `Conjunto - ${dto.productName}`,
       campaign_id: campaignId,
       daily_budget: Math.round(dto.dailyBudget * 100),
@@ -402,7 +431,10 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       targeting: safeTargeting,
       start_time: startTime,
       status: 'PAUSED',
-    }, token);
+    };
+    if (promotedObject) adSetBody.promoted_object = promotedObject;
+
+    const adSetRes = await this.metaPost(`/${adAccountId}/adsets`, adSetBody, token);
     if (adSetRes.error) {
       this.logger.error(`[Meta] AdSet error: ${JSON.stringify(adSetRes.error)}`);
       throw new BadRequestException(`Meta ad set: ${adSetRes.error.message}`);
