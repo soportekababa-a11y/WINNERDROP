@@ -15,7 +15,6 @@ export class MetaAdsController {
     return { url: this.svc.getAuthUrl(req.user.id) };
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('connect')
   @HttpCode(200)
   async connect(@Body() body: { code: string; state: string }) {
