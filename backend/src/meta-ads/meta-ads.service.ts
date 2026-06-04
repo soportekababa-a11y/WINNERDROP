@@ -342,6 +342,7 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       objective,
       status: 'PAUSED',
       special_ad_categories: [],
+      is_adset_budget_sharing_enabled: false,
     }, token);
     if (campaignRes.error) {
       this.logger.error(`[Meta] Campaign error: ${JSON.stringify(campaignRes.error)}`);
