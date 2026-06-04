@@ -448,84 +448,114 @@ export default function MetaAdsPage() {
               {/* STEP: STRATEGY */}
               {step === 'strategy' && (() => {
                 const budget = parseFloat(dailyBudget) || 0;
-                const recSets = budget < 10 ? 2 : budget < 20 ? 3 : budget < 50 ? 4 : 5;
-                return (
-                  <div className="rounded-2xl p-6 space-y-6" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setStep('form')} className="text-xs text-gray-500 hover:text-white">← Editar datos</button>
-                    </div>
-                    <h2 className="text-base font-semibold text-white">Estrategia de campaña</h2>
+                // Expert recommendations based on budget
+                const rec = budget < 15
+                  ? { mode: 'testeo', type: 'ABO', sets: '1', label: 'Bajo presupuesto', tip: '1 conjunto broad + 3 creativos diferentes. No disperses el budget.' }
+                  : budget < 30
+                  ? { mode: 'testeo', type: 'ABO', sets: '2', label: 'Presupuesto medio-bajo', tip: '2 conjuntos: 1 broad + 1 intereses específicos. Mínimo $7/día por conjunto.' }
+                  : budget < 60
+                  ? { mode: 'testeo', type: 'CBO', sets: '3', label: 'Presupuesto medio', tip: 'CBO con 3 conjuntos. Meta distribuye donde convierte mejor.' }
+                  : { mode: 'escalar', type: 'ASC+', sets: '1', label: 'Buen presupuesto', tip: 'ASC+ (Advantage+ Shopping). La estructura que más vende en Meta ahora mismo.' };
 
-                    {/* Modo */}
+                return (
+                  <div className="rounded-2xl p-6 space-y-5" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div className="flex items-center justify-between">
+                      <button onClick={() => setStep('form')} className="text-xs text-gray-500 hover:text-white">← Editar datos</button>
+                      <span className="text-xs text-violet-400">${budget}/día</span>
+                    </div>
+
+                    {/* Expert recommendation banner */}
+                    <div className="rounded-xl p-4 space-y-1" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)' }}>
+                      <p className="text-xs font-semibold text-violet-300">⚡ Recomendación experta para tu presupuesto</p>
+                      <p className="text-xs text-gray-400">{rec.tip}</p>
+                      <button onClick={() => { setCampaignMode(rec.mode); setBudgetType(rec.type); setAdSetsCount(rec.sets); }}
+                        className="mt-1 text-xs font-medium text-violet-400 hover:text-violet-300 underline underline-offset-2">
+                        Aplicar recomendación →
+                      </button>
+                    </div>
+
+                    {/* Objetivo */}
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-400">¿Qué quieres hacer?</label>
-                      <div className="grid grid-cols-2 gap-3">
+                      <label className="text-xs font-semibold text-gray-300">¿En qué momento estás?</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {[
-                          { val: 'testeo', label: '🧪 Testear', desc: 'Probar creativos y audiencias para encontrar qué funciona' },
-                          { val: 'escalar', label: '🚀 Escalar', desc: 'Aumentar presupuesto en lo que ya está funcionando' },
+                          { val: 'testeo', label: '🧪 Testeando', badge: 'Recomendado para empezar', desc: 'Probar creativos, audiencias y ángulos. Encontrar qué convierte antes de invertir más.' },
+                          { val: 'escalar', label: '🚀 Escalando', badge: 'Tienes datos y ventas', desc: 'Ya encontraste qué funciona. Ahora aumentar presupuesto manteniendo el ROAS.' },
                         ].map(o => (
                           <button key={o.val} onClick={() => setCampaignMode(o.val)}
-                            className="text-left p-4 rounded-xl space-y-1 transition-all"
+                            className="text-left p-4 rounded-xl space-y-1.5 transition-all"
                             style={campaignMode === o.val
                               ? { background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.5)' }
                               : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                            <p className="text-sm font-semibold text-white">{o.label}</p>
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-semibold text-white">{o.label}</p>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa' }}>{o.badge}</span>
+                            </div>
                             <p className="text-xs text-gray-500">{o.desc}</p>
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {/* Presupuesto tipo */}
+                    {/* Estructura */}
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-400">Tipo de presupuesto</label>
-                      <div className="grid grid-cols-2 gap-3">
+                      <label className="text-xs font-semibold text-gray-300">Estructura de campaña</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         {[
-                          { val: 'ABO', label: 'ABO', desc: 'Presupuesto por conjunto — control total. Recomendado para testeo.' },
-                          { val: 'CBO', label: 'CBO', desc: 'Meta distribuye el presupuesto. Mejor para escalar con datos previos.' },
+                          { val: 'ABO', label: 'ABO', badge: 'Testeo', desc: 'Presupuesto fijo por conjunto. Control total. Ideal para probar audiencias.', when: 'Testeo con <$50/día' },
+                          { val: 'CBO', label: 'CBO', badge: 'Escalar', desc: 'Meta distribuye el budget automáticamente al conjunto que mejor convierte.', when: 'Escalar con $30-150/día' },
+                          { val: 'ASC+', label: 'ASC+', badge: '🔥 Mejor 2024', desc: 'Advantage+ Shopping. IA de Meta optimiza todo. La estructura que más vende ahora.', when: 'Vender con $50+/día' },
                         ].map(o => (
                           <button key={o.val} onClick={() => setBudgetType(o.val)}
-                            className="text-left p-4 rounded-xl space-y-1 transition-all"
+                            className="text-left p-4 rounded-xl space-y-1.5 transition-all"
                             style={budgetType === o.val
                               ? { background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.5)' }
                               : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                            <p className="text-sm font-semibold text-white">{o.label}</p>
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-bold text-white">{o.label}</p>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-md" style={{ background: o.val === 'ASC+' ? 'rgba(251,191,36,0.15)' : 'rgba(139,92,246,0.15)', color: o.val === 'ASC+' ? '#fbbf24' : '#a78bfa' }}>{o.badge}</span>
+                            </div>
+                            <p className="text-xs text-gray-500">{o.desc}</p>
+                            <p className="text-[10px] text-gray-600 font-medium">{o.when}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Audiencia */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-gray-300">Tipo de audiencia</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                          { val: 'broad', label: '🌐 Broad (Abierta)', badge: 'Funciona mejor 2024', desc: 'Sin intereses. El algoritmo de Meta sabe a quién mostrarle. Convierte mejor en el 80% de casos.' },
+                          { val: 'interests', label: '🎯 Intereses específicos', badge: 'Para nichos', desc: 'Útil en productos de nicho muy específico (fitness, hobbies técnicos, B2B). Más control inicial.' },
+                        ].map(o => (
+                          <button key={o.val} onClick={() => setAngleMode(o.val)}
+                            className="text-left p-4 rounded-xl space-y-1.5 transition-all"
+                            style={angleMode === o.val
+                              ? { background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.5)' }
+                              : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-semibold text-white">{o.label}</p>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(139,92,246,0.15)', color: '#a78bfa' }}>{o.badge}</span>
+                            </div>
                             <p className="text-xs text-gray-500">{o.desc}</p>
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {/* Conjuntos recomendados */}
+                    {/* Ángulo del copy */}
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-400">
-                        Número de conjuntos de anuncios
-                        <span className="ml-2 text-violet-400 font-normal">Recomendado: {recSets} para ${budget}/día</span>
-                      </label>
-                      <div className="flex gap-2">
-                        {[1,2,3,4,5,6].map(n => (
-                          <button key={n} onClick={() => setAdSetsCount(String(n))}
-                            className="w-10 h-10 rounded-xl text-sm font-bold transition-all"
-                            style={adSetsCount === String(n)
-                              ? { background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.5)', color: '#c4b5fd' }
-                              : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#6b7280' }}>
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Ángulo */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-gray-400">¿Quién elige el ángulo del copy?</label>
-                      <div className="grid grid-cols-2 gap-3">
+                      <label className="text-xs font-semibold text-gray-300">Ángulo del copy</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {[
-                          { val: 'ai', label: '🤖 Que lo elija la IA', desc: 'La IA elige los mejores ángulos basándose en tu producto y país' },
-                          { val: 'custom', label: '✍️ Lo elijo yo', desc: 'Tú defines el ángulo y enfoque del mensaje' },
+                          { val: 'ai', label: '🤖 IA elige el mejor ángulo', desc: 'Analiza tu creativo y producto → elige el ángulo que más vende en tu país y nicho.' },
+                          { val: 'custom', label: '✍️ Yo defino el ángulo', desc: 'Tienes un ángulo específico probado. La IA lo usa como base para el copy.' },
                         ].map(o => (
-                          <button key={o.val} onClick={() => setAngleMode(o.val)}
+                          <button key={o.val} onClick={() => setAngleMode(prev => o.val === prev ? prev : o.val)}
                             className="text-left p-4 rounded-xl space-y-1 transition-all"
-                            style={angleMode === o.val
+                            style={(angleMode === o.val || (o.val === 'ai' && !angleMode))
                               ? { background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.5)' }
                               : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
                             <p className="text-sm font-semibold text-white">{o.label}</p>
@@ -537,17 +567,25 @@ export default function MetaAdsPage() {
                         <textarea
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50 resize-none"
                           rows={2}
-                          placeholder="ej. Enfocarse en el miedo a perder oportunidades, urgencia de tiempo limitado..."
+                          placeholder="ej. Urgencia — stock limitado, precio especial solo hoy, transformación en 7 días..."
                           value={customAngle}
                           onChange={e => setCustomAngle(e.target.value)}
                         />
                       )}
                     </div>
 
+                    {/* Info de evaluación */}
+                    <div className="rounded-xl p-3 text-xs text-gray-500 space-y-1" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <p className="text-gray-400 font-medium">📊 Cuándo evaluar resultados:</p>
+                      <p>• No cortes antes de <span className="text-white">72 horas</span> y <span className="text-white">$20+ gastados</span></p>
+                      <p>• Learning phase: necesitas <span className="text-white">50 conversiones/semana</span> para optimización completa</p>
+                      <p>• ROAS objetivo mínimo: <span className="text-white">1.5x</span> para seguir. Sobre <span className="text-white">2.5x</span> escalar 20-30% cada 3 días</p>
+                    </div>
+
                     <button
-                      onClick={() => { if (campaignMode && budgetType && angleMode) setStep('ads'); }}
-                      disabled={!campaignMode || !budgetType || !angleMode || (angleMode === 'custom' && !customAngle)}
-                      className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+                      onClick={() => { if (campaignMode && budgetType) setStep('ads'); }}
+                      disabled={!campaignMode || !budgetType}
+                      className="w-full py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
                       style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
                       Continuar → Subir anuncios
                     </button>

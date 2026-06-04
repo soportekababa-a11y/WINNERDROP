@@ -10,14 +10,35 @@ import { User } from '../users/user.entity';
 
 const GRAPH = 'https://graph.facebook.com/v19.0';
 
-const SYSTEM_PROMPT = `Eres un experto en Meta Ads con 10 años de experiencia en ecommerce latinoamericano.
-Analizas el creativo (imagen/video) y los datos del producto para generar una campaña profesional.
-SIEMPRE usas la jerga y expressions del país especificado.
-SIEMPRE devuelves JSON válido sin markdown ni explicaciones adicionales.
-Para testeo: ABO, presupuesto dividido equitativamente entre conjuntos.
-Intereses: específicos y relevantes, evita intereses genéricos.
-Copy: directo, persuasivo, con urgencia. Máximo 125 caracteres para texto principal.
-Título: máximo 40 caracteres. CTA: acción concreta.`;
+const SYSTEM_PROMPT = `Eres un Media Buyer experto en Meta Ads con dominio total de lo que funciona en 2024-2026 para ecommerce latinoamericano. Piensas como performance marketer con foco en ROAS y ventas reales.
+
+CONOCIMIENTO ACTUALIZADO META 2024-2026:
+- ASC+ (Advantage+ Shopping) es la estructura que más vende actualmente. Meta optimiza con su IA todo: audiencias, creativos, placements. SIEMPRE recomendarla para ventas.
+- Broad targeting (sin intereses) funciona mejor que intereses en el 80% de casos. Meta's AI ya sabe a quién mostrarle.
+- ABO para testeo (control total por conjunto). CBO para escalar (Meta distribuye el budget donde convierte).
+- Campaña de 1 conjunto con creative testing (3-5 anuncios diferentes) es el setup de testeo más rentable actualmente.
+- Estructura ganadora testeo: 1 campaña ABO → 1 conjunto broad + 1 conjunto retargeting si hay pixel con data.
+- Estructura escalar: ASC+ con presupuesto diario, dejar correr 7 días mínimo antes de evaluar.
+- Copy que vende en LATAM: urgencia real ("Solo hoy", "Últimas unidades"), prueba social ("Miles de clientes"), transformación ("De X a Y en Z días").
+- Video > imagen siempre. UGC-style (natural, sin producción) supera video producido en conversiones.
+- Para bajo presupuesto (<$15/día): 1 campaña, 1 conjunto broad, 3 anuncios diferentes. No dispersar.
+- Para medio presupuesto ($15-50/día): CBO con 2-3 conjuntos + retargeting separado.
+- Para alto presupuesto ($50+/día): ASC+ principal + retargeting por separado.
+- Evaluación: no cortes antes de 72 horas y $20+ gastados. Deja que salga del learning phase (50 conversiones/semana).
+- Intereses cuando usar: nichos muy específicos (fitness extremo, hobbies técnicos). Para productos masivos: BROAD.
+- Placements: Advantage+ placements siempre. Reels está convirtiendo muy bien en 2024.
+- CTA más efectivos para ventas: SHOP_NOW, LEARN_MORE (para productos que necesitan explicación), SIGN_UP para leads.
+
+REGLAS DE COPY LATAM:
+- Usar expresiones locales del país (no traducción literal del español neutro).
+- RD: "Bróder", "Brutal", "To' lo día", precios en pesos dominicanos referenciados.
+- CO: "Parce", "Bacano", "Chevere".
+- MX: "Güey", "Está cañón", "No manches".
+- Urgencia sin ser spam: escasez real, beneficio concreto, transformación clara.
+- Prueba social cuando aplique: números específicos ("más de 2,000 pedidos").
+
+FORMATO DE RESPUESTA: SOLO JSON válido, sin markdown, sin explicaciones.`;
+
 
 @Injectable()
 export class MetaAdsService {
@@ -224,20 +245,31 @@ export class MetaAdsService {
     };
     const countryName = countryNames[dto.country] || dto.country;
 
-    const adSets = parseInt(dto.adSetsCount ?? '3');
-    const perSetBudget = dto.budgetType === 'ABO' ? Math.floor(dto.dailyBudget / adSets) : dto.dailyBudget;
+    const adSets = parseInt(dto.adSetsCount ?? '1');
+    const isABO = dto.budgetType === 'ABO';
+    const perSetBudget = isABO ? Math.floor(dto.dailyBudget / adSets) : dto.dailyBudget;
+    const isASC = dto.budgetType === 'ASC+';
 
-    const userPrompt = `País objetivo: ${countryName}
+    const userPrompt = `BRIEF DE CAMPAÑA:
+País objetivo: ${countryName}
 Producto: ${dto.productName}
 Landing page: ${dto.landingPage}
-Tipo de campaña: ${dto.campaignType}
-Presupuesto diario total: $${dto.dailyBudget} USD
-Modo: ${dto.campaignMode === 'testeo' ? 'TESTEO — probar qué funciona' : 'ESCALAR — maximizar resultados'}
-Tipo de presupuesto: ${dto.budgetType ?? 'ABO'}${dto.budgetType === 'ABO' ? ` ($${perSetBudget}/día por conjunto)` : ''}
-Conjuntos de anuncios: ${adSets}
-${dto.angleMode === 'custom' && dto.customAngle ? `Ángulo del copy: ${dto.customAngle}` : 'Ángulo: elige el más efectivo según el producto y país'}
+Objetivo: ${dto.campaignType}
+Presupuesto diario: $${dto.dailyBudget} USD
+Estructura elegida: ${dto.budgetType ?? 'ABO'}${isABO ? ` → $${perSetBudget}/día por conjunto` : isASC ? ' → Advantage+ Shopping, Meta optimiza todo automáticamente' : ''}
+Modo: ${dto.campaignMode === 'testeo' ? 'TESTEO — encontrar qué convierte' : 'ESCALAR — maximizar ROAS con lo que funciona'}
+Audiencia: ${dto.angleMode === 'broad' ? 'BROAD — sin intereses, algoritmo de Meta optimiza solo' : 'CON INTERESES — audiencia específica por nicho'}
+${dto.angleMode === 'custom' && dto.customAngle ? `Ángulo del copy (definido por cliente): ${dto.customAngle}` : 'Ángulo del copy: elige el ángulo más persuasivo y efectivo para vender este producto en ' + countryName}
 ${dto.excludeCities?.length ? `Ciudades excluidas: ${dto.excludeCities.join(', ')}` : ''}
-Número de anuncios: ${files.length}
+Número de anuncios a crear: ${files.length}
+
+INSTRUCCIONES ESPECÍFICAS:
+- Si es BROAD: targeting sin intereses específicos (array vacío o solo 1-2 muy relevantes).
+- Si es ASC+: genera estructura para Advantage+ Shopping Campaign.
+- Copy debe usar jerga natural de ${countryName}, no español neutro.
+- Genera exactamente ${files.length} objeto(s) en el array "ads".
+- Cada anuncio debe tener un ángulo diferente si son múltiples creativos.
+- Ángulos que venden: urgencia, transformación, prueba social, miedo a perder, exclusividad.
 
 Genera la estructura completa de campaña. Devuelve SOLO este JSON:
 {
