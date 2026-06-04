@@ -362,11 +362,13 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
     const isoCountry = countryCodeMap[dto.country] ?? dto.country;
 
     // Build safe targeting — resolve real interest IDs from Meta API
+    const isBroad = dto.angleMode === 'broad' || dto.angleMode !== 'interests';
     const safeTargeting: any = {
       age_min: aiData.targeting?.age_min ?? 18,
       age_max: aiData.targeting?.age_max ?? 55,
       genders: aiData.targeting?.genders ?? [1, 2],
       geo_locations: { countries: [isoCountry] },
+      targeting_automation: { advantage_audience: isBroad ? 1 : 0 },
     };
     if (dto.excludeCities?.length) {
       safeTargeting.geo_locations.excluded_geo_locations = {
