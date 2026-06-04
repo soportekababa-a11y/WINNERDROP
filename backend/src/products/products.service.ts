@@ -185,7 +185,7 @@ export class ProductsService {
              GROUP BY s."productId", DATE(s."capturedAt" - INTERVAL ${intervalExpr})
            ) daily
            GROUP BY daily."productId"
-           HAVING SUM(CASE WHEN daily.day_sales > 0 THEN 1 ELSE 0 END) >= 2
+           HAVING SUM(CASE WHEN daily.day_sales > 0 THEN 1 ELSE 0 END) >= 3
          ) w ON w.pid = p.id
          WHERE ${conds.join(' AND ')}
          ORDER BY w.days_active DESC, w.total_week DESC

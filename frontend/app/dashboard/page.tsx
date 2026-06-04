@@ -29,9 +29,9 @@ const PRODUCTO_OPTIONS: { value: ProductoFilter; label: string }[] = [
 ];
 
 function filterToParams(f: ProductoFilter): { hot: boolean; sort: 'today' | 'total' | 'growth' | 'winners' | 'yesterday'; limit: number } {
-  if (f === 'hoy')    return { hot: false, sort: 'today', limit: PAGE_SIZE };
-  if (f === 'winners') return { hot: false, sort: 'winners',   limit: PAGE_SIZE };
-  return                      { hot: false, sort: 'total',     limit: PAGE_SIZE };
+  if (f === 'hoy')     return { hot: false, sort: 'today',   limit: 10 };
+  if (f === 'winners') return { hot: false, sort: 'winners', limit: 5 };
+  return                      { hot: false, sort: 'today',   limit: PAGE_SIZE };
 }
 
 function SkeletonCard() {
