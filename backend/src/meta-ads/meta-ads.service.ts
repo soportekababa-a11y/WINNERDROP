@@ -357,7 +357,7 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
     };
     const isoCountry = countryCodeMap[dto.country] ?? dto.country;
 
-    // Use safe broad targeting — strip fake interest IDs from Claude
+    // Build safe targeting — resolve real interest IDs from Meta API
     const safeTargeting: any = {
       age_min: aiData.targeting?.age_min ?? 18,
       age_max: aiData.targeting?.age_max ?? 55,
@@ -368,6 +368,23 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       safeTargeting.geo_locations.excluded_geo_locations = {
         cities: dto.excludeCities.map((c: string) => ({ key: c })),
       };
+    }
+
+    // If interests requested, resolve real IDs from Meta search API
+    const interestNames: string[] = (aiData.targeting?.interests ?? []).map((i: any) => i.name ?? i).filter(Boolean);
+    if (interestNames.length > 0 && dto.angleMode !== 'broad') {
+      const resolvedInterests: { id: string; name: string }[] = [];
+      for (const name of interestNames.slice(0, 5)) {
+        try {
+          const res = await fetch(
+            `${GRAPH}/search?type=adinterest&q=${encodeURIComponent(name)}&limit=1&access_token=${token}`
+          ).then(r => r.json()) as any;
+          if (res.data?.[0]?.id) resolvedInterests.push({ id: res.data[0].id, name: res.data[0].name });
+        } catch { /* skip failed interest */ }
+      }
+      if (resolvedInterests.length > 0) {
+        safeTargeting.interests = resolvedInterests;
+      }
     }
 
     const optimizationGoal = objective === 'OUTCOME_LEADS' ? 'LEAD_GENERATION' : 'LINK_CLICKS';
