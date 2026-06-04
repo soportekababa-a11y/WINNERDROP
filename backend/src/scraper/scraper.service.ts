@@ -232,6 +232,19 @@ export class ScraperService implements OnModuleDestroy {
     // Full login
     const MAX_ATTEMPTS = 3;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      // Relaunch browser if it died during a previous attempt
+      if (this.isBrowserDead()) {
+        this.logger.warn(`[${code}] Browser muerto antes de intento ${attempt} — relanzando...`);
+        await this.browser?.close().catch(() => {});
+        this.browser = null;
+        try {
+          await this.launchBrowser();
+        } catch (err) {
+          this.logger.error(`[${code}] No se pudo relanzar browser — abortando login`, err);
+          return;
+        }
+      }
+
       let context: import('playwright').BrowserContext | null = null;
       try {
         this.logger.log(`[${code}] Login completo${attempt > 1 ? ` (intento ${attempt})` : ''}...`);
@@ -318,9 +331,18 @@ export class ScraperService implements OnModuleDestroy {
       // Wait for navigation away from /ingreso paths
       await page.waitForURL(url => !url.href.includes('/ingreso'), { timeout: 20000 });
 
-      // Navigate to catalog with domcontentloaded (lighter than networkidle — avoids Chrome OOM on cold cache)
+      // Block heavy resources before loading catalog — same as scrapeAllPages.
+      // Without this, Chrome OOMs on Effi's catalog page and crashes the browser.
+      await page.route('**', (route) => {
+        const rt = route.request().resourceType();
+        if (['image', 'media', 'font', 'stylesheet'].includes(rt)) {
+          route.abort().catch(() => {});
+        } else {
+          route.continue().catch(() => {});
+        }
+      });
       await page.goto(EFFI_CATALOG_URL, { waitUntil: 'domcontentloaded', timeout: 20000 });
-      await page.waitForTimeout(2000); // let renderer stabilize
+      await page.waitForTimeout(1000);
 
       if (page.url().includes('/ingreso')) {
         throw new Error(`Login fallido — redirigido a ${page.url()}`);
