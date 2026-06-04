@@ -48,7 +48,7 @@ const COUNTRIES = [
 
 interface AdFile { file: File; preview: string; type: 'image' | 'video' }
 
-type Step = 'connect' | 'setup' | 'home' | 'type' | 'form' | 'strategy' | 'ads' | 'creating' | 'done' | 'metrics' | 'campaigns';
+type Step = 'connect' | 'setup' | 'home' | 'type' | 'form' | 'strategy' | 'ads' | 'creating' | 'done' | 'metrics-select' | 'metrics-analysis' | 'campaigns' | 'scale-select' | 'scale-options' | 'scale-executing' | 'scale-done';
 
 export default function MetaAdsPage() {
   const router = useRouter();
@@ -77,11 +77,17 @@ export default function MetaAdsPage() {
   const [excludeCities, setExcludeCities] = useState<string[]>([]);
   const [cityInput, setCityInput] = useState('');
 
-  // Metrics & campaigns list
+  // Metrics & campaigns
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
-  const [metaMetrics, setMetaMetrics] = useState<any[]>([]);
-  const [loadingMetrics, setLoadingMetrics] = useState(false);
+  const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
+  const [campaignMetrics, setCampaignMetrics] = useState<any>(null);
+  const [metricsAnalysis, setMetricsAnalysis] = useState('');
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+  // Scale
+  const [scaleOptions, setScaleOptions] = useState<any[]>([]);
+  const [selectedScale, setSelectedScale] = useState<any>(null);
+  const [scaleResult, setScaleResult] = useState<any>(null);
 
   async function loadCampaigns() {
     setLoadingCampaigns(true);
@@ -89,10 +95,64 @@ export default function MetaAdsPage() {
     finally { setLoadingCampaigns(false); }
   }
 
-  async function loadMetrics() {
-    setLoadingMetrics(true);
-    try { setMetaMetrics(await apiFetch('/meta-ads/metrics')); } catch { /* ignore */ }
-    finally { setLoadingMetrics(false); }
+  async function analyzeMetrics(campaign: any) {
+    setSelectedCampaign(campaign);
+    setLoadingAnalysis(true);
+    setMetricsAnalysis('');
+    setCampaignMetrics(null);
+    setStep('metrics-analysis');
+    try {
+      const res = await apiFetch(`/meta-ads/analyze-metrics`, {
+        method: 'POST',
+        body: JSON.stringify({ fbCampaignId: campaign.fbCampaignId, campaignId: campaign.id }),
+      });
+      setCampaignMetrics(res.metrics);
+      setMetricsAnalysis(res.analysis);
+    } catch (e: any) {
+      setMetricsAnalysis(e.message || 'Error analizando métricas');
+    } finally {
+      setLoadingAnalysis(false);
+    }
+  }
+
+  async function loadScaleOptions(campaign: any) {
+    setSelectedCampaign(campaign);
+    setLoadingAnalysis(true);
+    setScaleOptions([]);
+    setStep('scale-options');
+    try {
+      const res = await apiFetch(`/meta-ads/scale-options`, {
+        method: 'POST',
+        body: JSON.stringify({ fbCampaignId: campaign.fbCampaignId, fbAdSetId: campaign.fbAdSetId, campaignId: campaign.id }),
+      });
+      setScaleOptions(res.options ?? []);
+    } catch (e: any) {
+      setError(e.message || 'Error');
+    } finally {
+      setLoadingAnalysis(false);
+    }
+  }
+
+  async function executeScale(option: any) {
+    setSelectedScale(option);
+    setStep('scale-executing');
+    try {
+      const res = await apiFetch('/meta-ads/scale-execute', {
+        method: 'POST',
+        body: JSON.stringify({
+          fbCampaignId: selectedCampaign?.fbCampaignId,
+          fbAdSetId: selectedCampaign?.fbAdSetId,
+          campaignId: selectedCampaign?.id,
+          scaleType: option.type,
+          params: option.params,
+        }),
+      });
+      setScaleResult(res);
+      setStep('scale-done');
+    } catch (e: any) {
+      setError(e.message || 'Error ejecutando escalado');
+      setStep('scale-options');
+    }
   }
 
   // Strategy
@@ -359,33 +419,25 @@ export default function MetaAdsPage() {
                       {
                         icon: '📊',
                         label: 'Revisar métricas',
-                        desc: 'Ve el rendimiento de tus campañas activas — ROAS, CTR, CPC, gasto y conversiones.',
+                        desc: 'Selecciona una campaña. La IA analiza los datos y te dice exactamente qué mejorar.',
                         color: 'blue',
-                        action: () => { setStep('metrics'); loadMetrics(); },
-                        badge: null,
-                      },
-                      {
-                        icon: '📋',
-                        label: 'Mis campañas',
-                        desc: 'Lista de todas las campañas creadas desde MOMENTUM con su estado actual.',
-                        color: 'emerald',
-                        action: () => { setStep('campaigns'); loadCampaigns(); },
+                        action: () => { loadCampaigns(); setStep('metrics-select'); },
                         badge: null,
                       },
                       {
                         icon: '📈',
                         label: 'Escalar campaña',
-                        desc: 'Tienes algo que funciona. Configura el escalado correcto sin matar el ROAS.',
+                        desc: 'Selecciona una campaña ganadora. La IA te dice cómo escalar y lo ejecuta automáticamente.',
                         color: 'yellow',
-                        action: () => { setCampaignMode('escalar'); setStep('type'); },
-                        badge: '🔥 Pro',
+                        action: () => { loadCampaigns(); setStep('scale-select'); },
+                        badge: '🔥 IA',
                       },
                       {
-                        icon: '🧪',
-                        label: 'Nuevo testeo',
-                        desc: 'Prueba nuevos creativos, ángulos o audiencias con estructura ABO optimizada.',
-                        color: 'pink',
-                        action: () => { setCampaignMode('testeo'); setStep('type'); },
+                        icon: '📋',
+                        label: 'Mis campañas',
+                        desc: 'Lista de todas las campañas creadas desde MOMENTUM con su estado.',
+                        color: 'emerald',
+                        action: () => { setStep('campaigns'); loadCampaigns(); },
                         badge: null,
                       },
                       {
@@ -433,44 +485,186 @@ export default function MetaAdsPage() {
                 </div>
               )}
 
-              {/* STEP: METRICS */}
-              {step === 'metrics' && (
+              {/* STEP: METRICS SELECT */}
+              {step === 'metrics-select' && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <button onClick={() => setStep('home')} className="text-xs text-gray-500 hover:text-white">← Inicio</button>
-                    <h2 className="text-base font-semibold text-white">Métricas de campañas</h2>
+                    <h2 className="text-base font-semibold text-white">¿Qué campaña quieres revisar?</h2>
                   </div>
-                  {loadingMetrics ? (
+                  {loadingCampaigns ? (
                     <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>
-                  ) : metaMetrics.length === 0 ? (
+                  ) : campaigns.length === 0 ? (
                     <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                      <p className="text-gray-500 text-sm">Sin métricas disponibles.</p>
-                      <p className="text-gray-600 text-xs mt-1">Las métricas aparecen cuando tienes campañas activas con gasto.</p>
+                      <p className="text-gray-500 text-sm">Sin campañas creadas aún.</p>
+                      <button onClick={() => setStep('type')} className="mt-3 text-xs text-violet-400 hover:underline">Crear primera campaña →</button>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {metaMetrics.map((m: any, i: number) => (
-                        <div key={i} className="rounded-2xl p-4 space-y-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                          <p className="text-sm font-semibold text-white">{m.campaign_name}</p>
-                          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                            {[
-                              { label: 'Gasto', val: `$${parseFloat(m.spend || 0).toFixed(2)}` },
-                              { label: 'ROAS', val: m.purchase_roas?.[0]?.value ? `${parseFloat(m.purchase_roas[0].value).toFixed(2)}x` : '—' },
-                              { label: 'CTR', val: m.ctr ? `${parseFloat(m.ctr).toFixed(2)}%` : '—' },
-                              { label: 'CPC', val: m.cpc ? `$${parseFloat(m.cpc).toFixed(2)}` : '—' },
-                              { label: 'Alcance', val: m.reach ? parseInt(m.reach).toLocaleString() : '—' },
-                              { label: 'Conversiones', val: m.conversions?.[0]?.value || '—' },
-                            ].map(stat => (
-                              <div key={stat.label} className="text-center">
-                                <p className="text-xs text-gray-500">{stat.label}</p>
-                                <p className="text-sm font-bold text-white">{stat.val}</p>
-                              </div>
-                            ))}
+                    <div className="space-y-2">
+                      {campaigns.map((c: any) => (
+                        <button key={c.id} onClick={() => analyzeMetrics(c)}
+                          className="w-full text-left rounded-xl px-4 py-4 flex items-center justify-between transition-all hover:border-violet-500/40"
+                          style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div>
+                            <p className="text-sm font-medium text-white">{c.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{c.objective} · {c.country} · ${c.dailyBudget}/día</p>
+                            <p className="text-[10px] text-gray-700 mt-0.5">Creada: {new Date(c.createdAt).toLocaleDateString('es-DO', { day: '2-digit', month: 'short' })}</p>
                           </div>
+                          <ChevronRight size={16} className="text-gray-600" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP: METRICS ANALYSIS */}
+              {step === 'metrics-analysis' && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setStep('metrics-select')} className="text-xs text-gray-500 hover:text-white">← Campañas</button>
+                    <h2 className="text-base font-semibold text-white">{selectedCampaign?.name}</h2>
+                  </div>
+
+                  {campaignMetrics && (
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                      {[
+                        { label: 'Gasto', val: `$${parseFloat(campaignMetrics.spend || 0).toFixed(2)}`, color: '' },
+                        { label: 'ROAS', val: campaignMetrics.roas ? `${parseFloat(campaignMetrics.roas).toFixed(2)}x` : '—', color: parseFloat(campaignMetrics.roas) >= 2.5 ? '#34d399' : parseFloat(campaignMetrics.roas) >= 1.5 ? '#fbbf24' : '#f87171' },
+                        { label: 'CTR', val: campaignMetrics.ctr ? `${parseFloat(campaignMetrics.ctr).toFixed(2)}%` : '—', color: '' },
+                        { label: 'CPC', val: campaignMetrics.cpc ? `$${parseFloat(campaignMetrics.cpc).toFixed(2)}` : '—', color: '' },
+                        { label: 'Alcance', val: campaignMetrics.reach ? parseInt(campaignMetrics.reach).toLocaleString() : '—', color: '' },
+                        { label: 'Conversiones', val: campaignMetrics.conversions || '—', color: '' },
+                      ].map(stat => (
+                        <div key={stat.label} className="rounded-xl p-3 text-center" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <p className="text-[10px] text-gray-500">{stat.label}</p>
+                          <p className="text-sm font-bold mt-0.5" style={{ color: stat.color || 'white' }}>{stat.val}</p>
                         </div>
                       ))}
                     </div>
                   )}
+
+                  {loadingAnalysis ? (
+                    <div className="rounded-2xl p-8 flex flex-col items-center gap-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-xs text-gray-500">La IA está analizando tu campaña...</p>
+                    </div>
+                  ) : metricsAnalysis ? (
+                    <div className="rounded-2xl p-5 space-y-3" style={{ background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                      <p className="text-xs font-semibold text-violet-300">🤖 Análisis de la IA</p>
+                      <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{metricsAnalysis}</div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              {/* STEP: SCALE SELECT */}
+              {step === 'scale-select' && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setStep('home')} className="text-xs text-gray-500 hover:text-white">← Inicio</button>
+                    <h2 className="text-base font-semibold text-white">¿Qué campaña quieres escalar?</h2>
+                  </div>
+                  {loadingCampaigns ? (
+                    <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>
+                  ) : campaigns.length === 0 ? (
+                    <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <p className="text-gray-500 text-sm">Sin campañas creadas aún.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {campaigns.map((c: any) => (
+                        <button key={c.id} onClick={() => loadScaleOptions(c)}
+                          className="w-full text-left rounded-xl px-4 py-4 flex items-center justify-between transition-all hover:border-yellow-500/40"
+                          style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div>
+                            <p className="text-sm font-medium text-white">{c.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{c.objective} · {c.country} · ${c.dailyBudget}/día</p>
+                          </div>
+                          <ChevronRight size={16} className="text-gray-600" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP: SCALE OPTIONS */}
+              {step === 'scale-options' && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setStep('scale-select')} className="text-xs text-gray-500 hover:text-white">← Campañas</button>
+                    <h2 className="text-base font-semibold text-white">¿Cómo quieres escalar?</h2>
+                  </div>
+                  <p className="text-xs text-gray-500">{selectedCampaign?.name}</p>
+
+                  {loadingAnalysis ? (
+                    <div className="rounded-2xl p-8 flex flex-col items-center gap-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-xs text-gray-500">La IA está preparando las opciones...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {scaleOptions.map((opt: any, i: number) => (
+                        <div key={i} className="rounded-2xl p-5 space-y-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-semibold text-white">{opt.label}</p>
+                                {opt.recommended && <span className="text-[9px] px-1.5 py-0.5 rounded-md font-medium" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>⭐ Recomendado</span>}
+                              </div>
+                              <p className="text-xs text-gray-400">{opt.description}</p>
+                              <div className="flex gap-3 mt-2">
+                                <span className="text-[10px] text-emerald-400">✓ {opt.benefit}</span>
+                                {opt.risk && <span className="text-[10px] text-yellow-400">⚠ {opt.risk}</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <button onClick={() => executeScale(opt)}
+                            className="w-full py-2 rounded-xl text-xs font-semibold text-white transition-all"
+                            style={{ background: opt.recommended ? 'linear-gradient(135deg, #d97706, #b45309)' : 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            Aplicar este método →
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP: SCALE EXECUTING */}
+              {step === 'scale-executing' && (
+                <div className="flex flex-col items-center justify-center py-20 gap-5">
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)' }}>
+                    <div className="w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-white font-semibold">Ejecutando: {selectedScale?.label}</p>
+                    <p className="text-xs text-gray-500 mt-1">La IA está aplicando el cambio en tu cuenta de Meta...</p>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP: SCALE DONE */}
+              {step === 'scale-done' && scaleResult && (
+                <div className="rounded-2xl p-8 text-center space-y-4" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                  <CheckCircle size={44} className="text-emerald-400 mx-auto" />
+                  <div>
+                    <p className="text-lg font-semibold text-white">¡Escalado aplicado!</p>
+                    <p className="text-sm text-gray-400 mt-1">{selectedScale?.label}</p>
+                  </div>
+                  {scaleResult.details && (
+                    <div className="text-left rounded-xl p-4 text-xs text-gray-400 whitespace-pre-wrap" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                      {scaleResult.details}
+                    </div>
+                  )}
+                  <div className="rounded-xl p-3 text-xs text-gray-500" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                    <p className="text-yellow-400 font-medium">⏱ Próxima revisión recomendada: 72 horas</p>
+                    <p className="mt-1">Deja que Meta re-aprenda con el nuevo presupuesto/estructura antes de evaluar.</p>
+                  </div>
+                  <button onClick={() => setStep('home')} className="px-6 py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
+                    Volver al inicio
+                  </button>
                 </div>
               )}
 

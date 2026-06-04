@@ -66,9 +66,21 @@ export class MetaAdsController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('metrics')
-  getMetrics(@Req() req: any) {
-    return this.svc.getCampaignMetrics(req.user.id);
+  @Post('analyze-metrics')
+  analyzeMetrics(@Req() req: any, @Body() body: { fbCampaignId: string; campaignId: string }) {
+    return this.svc.analyzeMetrics(req.user.id, body.fbCampaignId, body.campaignId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('scale-options')
+  getScaleOptions(@Req() req: any, @Body() body: { fbCampaignId: string; fbAdSetId: string; campaignId: string }) {
+    return this.svc.getScaleOptions(req.user.id, body.fbCampaignId, body.fbAdSetId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('scale-execute')
+  executeScale(@Req() req: any, @Body() body: { fbCampaignId: string; fbAdSetId: string; scaleType: string; params: any }) {
+    return this.svc.executeScale(req.user.id, body.fbCampaignId, body.fbAdSetId, body.scaleType, body.params);
   }
 
   @UseGuards(JwtAuthGuard)

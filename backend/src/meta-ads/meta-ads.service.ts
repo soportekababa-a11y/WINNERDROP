@@ -456,6 +456,208 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
     });
   }
 
+  // ─── Metrics analysis ────────────────────────────────────────────────────
+
+  async analyzeMetrics(userId: string, fbCampaignId: string, campaignId: string): Promise<{ metrics: any; analysis: string }> {
+    const conn = await this.getConnection(userId);
+    const dbCampaign = await this.campaignRepo.findOne({ where: { id: campaignId, userId } });
+
+    // Check campaign age
+    const ageHours = dbCampaign ? (Date.now() - new Date(dbCampaign.createdAt).getTime()) / 3600000 : 999;
+    if (ageHours < 36) {
+      return {
+        metrics: null,
+        analysis: `⏳ Tu campaña tiene menos de 48 horas activa.\n\nNecesitas esperar al menos 1-2 días completos para tener datos significativos. Meta necesita tiempo para salir del learning phase y optimizar las entregas.\n\n**¿Qué puedes hacer ahora?**\n• No toques nada — cada cambio reinicia el aprendizaje\n• Revisa que el pixel esté disparando correctamente\n• Vuelve en ${Math.ceil(48 - ageHours)} horas para un análisis real`,
+      };
+    }
+
+    // Fetch metrics from Meta
+    if (!fbCampaignId) return { metrics: null, analysis: 'Esta campaña no tiene ID de Meta registrado.' };
+
+    const fields = 'spend,impressions,reach,clicks,ctr,cpc,purchase_roas,conversions,frequency,actions,cost_per_action_type';
+    const res = await fetch(
+      `${GRAPH}/${fbCampaignId}/insights?fields=${fields}&date_preset=last_7d&access_token=${conn.accessToken}`
+    ).then(r => r.json()) as any;
+
+    const m = res.data?.[0] ?? {};
+    const metrics = {
+      spend: m.spend ?? '0',
+      roas: m.purchase_roas?.[0]?.value ?? null,
+      ctr: m.ctr ?? null,
+      cpc: m.cpc ?? null,
+      reach: m.reach ?? null,
+      impressions: m.impressions ?? null,
+      frequency: m.frequency ?? null,
+      conversions: m.conversions?.[0]?.value ?? null,
+    };
+
+    // Claude analyzes
+    const analysisPrompt = `Eres un media buyer experto en Meta Ads. Analiza estas métricas de los últimos 7 días y da recomendaciones ESPECÍFICAS y ACCIONABLES.
+
+Campaña: ${dbCampaign?.name ?? fbCampaignId}
+Objetivo: ${dbCampaign?.objective ?? 'desconocido'}
+Presupuesto diario: $${dbCampaign?.dailyBudget ?? '?'}/día
+País: ${dbCampaign?.country ?? '?'}
+Días activa: ~${Math.floor(ageHours / 24)} días
+
+MÉTRICAS:
+- Gasto total: $${metrics.spend}
+- ROAS: ${metrics.roas ? `${parseFloat(metrics.roas).toFixed(2)}x` : 'Sin datos (sin pixel o sin ventas)'}
+- CTR: ${metrics.ctr ? `${parseFloat(metrics.ctr).toFixed(2)}%` : 'N/A'}
+- CPC: ${metrics.cpc ? `$${parseFloat(metrics.cpc).toFixed(2)}` : 'N/A'}
+- Alcance: ${metrics.reach ?? 'N/A'}
+- Frecuencia: ${metrics.frequency ?? 'N/A'}
+- Conversiones: ${metrics.conversions ?? '0'}
+
+Responde en español, directo, sin rodeos. Usa emojis para organizar.
+Formato:
+📊 DIAGNÓSTICO: (qué está pasando con esta campaña)
+✅ LO QUE FUNCIONA: (si hay algo positivo)
+⚠️ PROBLEMAS DETECTADOS: (qué está mal y por qué)
+🎯 ACCIONES INMEDIATAS: (máximo 3 acciones concretas ordenadas por impacto)
+⏭️ PRÓXIMO PASO: (qué hacer HOY)`;
+
+    const response = await this.anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 800,
+      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }] as any,
+      messages: [{ role: 'user', content: analysisPrompt }],
+    });
+
+    const analysis = response.content[0].type === 'text' ? response.content[0].text : 'Sin análisis disponible.';
+    return { metrics, analysis };
+  }
+
+  // ─── Scale options ────────────────────────────────────────────────────────
+
+  async getScaleOptions(userId: string, fbCampaignId: string, fbAdSetId: string): Promise<{ options: any[] }> {
+    const conn = await this.getConnection(userId);
+    const dbCampaign = await this.campaignRepo.findOne({ where: { fbCampaignId, userId } });
+
+    // Get current metrics to personalize recommendations
+    let currentBudget = dbCampaign?.dailyBudget ?? 10;
+    let roas = 0;
+    if (fbAdSetId) {
+      const adsetRes = await fetch(`${GRAPH}/${fbAdSetId}?fields=daily_budget&access_token=${conn.accessToken}`).then(r => r.json()) as any;
+      if (adsetRes.daily_budget) currentBudget = parseInt(adsetRes.daily_budget) / 100;
+    }
+    if (fbCampaignId) {
+      const metricsRes = await fetch(`${GRAPH}/${fbCampaignId}/insights?fields=purchase_roas,spend&date_preset=last_7d&access_token=${conn.accessToken}`).then(r => r.json()) as any;
+      roas = parseFloat(metricsRes.data?.[0]?.purchase_roas?.[0]?.value ?? 0);
+    }
+
+    const newBudget20 = Math.round(currentBudget * 1.2 * 100) / 100;
+    const newBudget30 = Math.round(currentBudget * 1.3 * 100) / 100;
+
+    const options = [
+      {
+        type: 'budget_20',
+        label: '📈 Escalar presupuesto +20%',
+        description: `Aumentar de $${currentBudget}/día a $${newBudget20}/día. La regla de oro: máximo 20-30% cada 3 días. Más que eso reinicia el learning phase.`,
+        benefit: 'Escala suave sin reiniciar aprendizaje',
+        risk: 'Esperar 72h antes del próximo aumento',
+        recommended: roas >= 2,
+        params: { newBudget: newBudget20 },
+      },
+      {
+        type: 'budget_30',
+        label: '🚀 Escalar presupuesto +30%',
+        description: `Aumentar de $${currentBudget}/día a $${newBudget30}/día. Más agresivo. Solo si el ROAS lleva 3+ días estable por encima de 2.5x.`,
+        benefit: 'Crecimiento más rápido si ROAS es sólido',
+        risk: 'Mayor riesgo de inestabilidad si ROAS no es estable',
+        recommended: roas >= 2.5,
+        params: { newBudget: newBudget30 },
+      },
+      {
+        type: 'duplicate_adset',
+        label: '🔄 Duplicar conjunto ganador',
+        description: 'Duplicar el conjunto actual con presupuesto fresco. Cada copia inicia un nuevo learning phase de forma independiente. Permite escalar horizontalmente sin tocar el original.',
+        benefit: 'No tocas el conjunto que ya funciona',
+        risk: 'Puede haber superposición de audiencias',
+        recommended: roas >= 1.5 && currentBudget >= 15,
+        params: {},
+      },
+      {
+        type: 'asc_plus',
+        label: '🤖 Migrar a ASC+ (Advantage+ Shopping)',
+        description: 'Crear nueva campaña ASC+ con el mismo presupuesto. La IA de Meta toma control total: audiencias, placements y creativos. Es la estructura que más convierte en ecommerce en 2024.',
+        benefit: 'El algoritmo de Meta optimiza todo automáticamente',
+        risk: 'Perdes control granular del targeting',
+        recommended: currentBudget >= 30,
+        params: {},
+      },
+      {
+        type: 'broad_targeting',
+        label: '🌐 Ampliar a audiencia broad',
+        description: 'Quitar restricciones de intereses y abrir a audiencia amplia. En 2024, el algoritmo de Meta supera a los intereses manuales en la mayoría de productos masivos.',
+        benefit: 'Mayor volumen, más datos para el algoritmo',
+        risk: 'Necesita ~$5 de gasto para calibrar',
+        recommended: false,
+        params: {},
+      },
+    ].sort((a, b) => (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0));
+
+    return { options };
+  }
+
+  // ─── Scale execute ────────────────────────────────────────────────────────
+
+  async executeScale(userId: string, fbCampaignId: string, fbAdSetId: string, scaleType: string, params: any): Promise<{ success: boolean; details: string }> {
+    const conn = await this.getConnection(userId);
+    const token = conn.accessToken;
+
+    switch (scaleType) {
+      case 'budget_20':
+      case 'budget_30': {
+        const newBudgetCents = Math.round(params.newBudget * 100);
+        const res = await fetch(`${GRAPH}/${fbAdSetId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ daily_budget: newBudgetCents, access_token: token }),
+        }).then(r => r.json()) as any;
+        if (res.error) throw new BadRequestException(res.error.message);
+        return { success: true, details: `Presupuesto actualizado a $${params.newBudget}/día.\n\nNo hagas otro cambio en las próximas 72 horas. Deja que Meta re-aprenda con el nuevo budget.` };
+      }
+
+      case 'duplicate_adset': {
+        const res = await fetch(`${GRAPH}/${fbAdSetId}/copies`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaign_id: fbCampaignId, access_token: token }),
+        }).then(r => r.json()) as any;
+        if (res.error) throw new BadRequestException(res.error.message);
+        return { success: true, details: `Conjunto duplicado correctamente (ID: ${res.ad_object_ids?.[0]?.copied_id ?? 'nuevo'}).\n\nEl original sigue activo. El duplicado empieza su propio learning phase.\n\nDeja ambos correr por 3-5 días antes de comparar resultados.` };
+      }
+
+      case 'asc_plus': {
+        const dbCampaign = await this.campaignRepo.findOne({ where: { fbCampaignId, userId } });
+        const budget = dbCampaign?.dailyBudget ?? 10;
+        const res = await this.metaPost(`/${conn.adAccountId}/campaigns`, {
+          name: `ASC+ ${dbCampaign?.name ?? 'Campaña'} - Escalado`,
+          objective: 'OUTCOME_SALES',
+          status: 'PAUSED',
+          special_ad_categories: [],
+          smart_promotion_type: 'GUIDED_CREATION',
+        }, token);
+        if (res.error) throw new BadRequestException(res.error.message);
+        return { success: true, details: `Campaña ASC+ creada (ID: ${res.id}) en estado PAUSADA.\n\nPróximos pasos:\n1. Ve a Meta Ads Manager\n2. Agrega tus creativos a la nueva campaña ASC+\n3. Actívala y monitorea vs. la campaña original\n4. En 7 días compara ROAS y decide cuál escalar.` };
+      }
+
+      case 'broad_targeting': {
+        const res = await fetch(`${GRAPH}/${fbAdSetId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targeting: { age_min: 18, age_max: 65, genders: [1, 2], geo_locations: { countries: ['DO'] } }, access_token: token }),
+        }).then(r => r.json()) as any;
+        if (res.error) throw new BadRequestException(res.error.message);
+        return { success: true, details: `Targeting ampliado a audiencia broad.\n\nEl conjunto ahora mostrará a todas las personas de 18-65 años. El algoritmo de Meta decidirá a quién mostrar basándose en el comportamiento del pixel.\n\nEspera 3-5 días para evaluar el impacto.` };
+      }
+
+      default:
+        throw new BadRequestException('Tipo de escalado no reconocido');
+    }
+  }
+
   async getCampaignMetrics(userId: string): Promise<any[]> {
     const conn = await this.connectionRepo.findOne({ where: { userId, isActive: true } });
     if (!conn?.adAccountId) return [];
