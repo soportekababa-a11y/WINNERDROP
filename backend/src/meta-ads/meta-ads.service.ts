@@ -343,7 +343,10 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       status: 'PAUSED',
       special_ad_categories: [],
     }, token);
-    if (campaignRes.error) throw new BadRequestException(`Meta: ${campaignRes.error.message}`);
+    if (campaignRes.error) {
+      this.logger.error(`[Meta] Campaign error: ${JSON.stringify(campaignRes.error)}`);
+      throw new BadRequestException(`Meta: ${campaignRes.error.message}`);
+    }
     const campaignId = campaignRes.id;
 
     // 2. Create ad set
@@ -400,7 +403,10 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       start_time: startTime,
       status: 'PAUSED',
     }, token);
-    if (adSetRes.error) throw new BadRequestException(`Meta ad set: ${adSetRes.error.message}`);
+    if (adSetRes.error) {
+      this.logger.error(`[Meta] AdSet error: ${JSON.stringify(adSetRes.error)}`);
+      throw new BadRequestException(`Meta ad set: ${adSetRes.error.message}`);
+    }
     const adSetId = adSetRes.id;
 
     // 3. Create ads (one per creative)
