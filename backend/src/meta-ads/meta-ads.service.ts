@@ -351,14 +351,35 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       ? Math.floor(Date.now() / 1000)
       : Math.floor(new Date(dto.startTime).getTime() / 1000);
 
+    const countryCodeMap: Record<string, string> = {
+      RD: 'DO', GT: 'GT', EC: 'EC', CR: 'CR', CO: 'CO',
+      MX: 'MX', US: 'US', ES: 'ES', PE: 'PE', CL: 'CL', AR: 'AR',
+    };
+    const isoCountry = countryCodeMap[dto.country] ?? dto.country;
+
+    // Use safe broad targeting — strip fake interest IDs from Claude
+    const safeTargeting: any = {
+      age_min: aiData.targeting?.age_min ?? 18,
+      age_max: aiData.targeting?.age_max ?? 55,
+      genders: aiData.targeting?.genders ?? [1, 2],
+      geo_locations: { countries: [isoCountry] },
+    };
+    if (dto.excludeCities?.length) {
+      safeTargeting.geo_locations.excluded_geo_locations = {
+        cities: dto.excludeCities.map((c: string) => ({ key: c })),
+      };
+    }
+
+    const optimizationGoal = objective === 'OUTCOME_LEADS' ? 'LEAD_GENERATION' : 'LINK_CLICKS';
+
     const adSetRes = await this.metaPost(`/${adAccountId}/adsets`, {
       name: aiData.adSetName ?? `Conjunto - ${dto.productName}`,
       campaign_id: campaignId,
       daily_budget: Math.round(dto.dailyBudget * 100),
       billing_event: 'IMPRESSIONS',
-      optimization_goal: objective === 'OUTCOME_SALES' ? 'OFFSITE_CONVERSIONS' : 'LINK_CLICKS',
+      optimization_goal: optimizationGoal,
       bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
-      targeting: aiData.targeting,
+      targeting: safeTargeting,
       start_time: startTime,
       status: 'PAUSED',
     }, token);
