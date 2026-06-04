@@ -11,11 +11,8 @@ const EFFI_LOGIN_URL = 'https://effi.com.co/ingreso';
 const EFFI_CATALOG_URL = 'https://effi.com.co/app/articulo_dropshipping';
 const PRODUCTS_PER_PAGE = 40;
 const SESSION_DIR = '/opt/winnerdrop/sessions';
-// Business day resets at 3:00 AM RD (UTC-4) = 7:00 AM UTC.
-// Scraper starts at 1:00 AM RD (5:00 AM UTC) — finishes scraping ~2:40 AM RD,
-// then waits until exactly 3:00 AM RD (7:00 AM UTC) before writing to DB.
-const DAILY_RUN_UTC_HOUR = 5;      // 1:00 AM RD — start scraping
-const DAILY_WRITE_UTC_HOUR = 7;    // 3:00 AM RD — write to DB
+// Continuous scraping — cycle runs back-to-back. Each full cycle takes ~2h naturally.
+// businessDay() controls the salesYesterday/salesToday boundary.
 
 function businessDay(): string {
   const now = new Date();
@@ -92,39 +89,13 @@ export class ScraperService implements OnModuleDestroy {
     // Login each country independently — failed countries are skipped, not fatal
     await this.loginAllCountries();
 
-    this.scheduleNextDailyRun();
+    this.runLoop();
   }
 
-  private scheduleNextDailyRun() {
-    const now = new Date();
-    const todayRun = new Date();
-    todayRun.setUTCHours(DAILY_RUN_UTC_HOUR, 0, 0, 0);
-    const todayWrite = new Date();
-    todayWrite.setUTCHours(DAILY_WRITE_UTC_HOUR, 0, 0, 0);
-
-    // If restart happens within the scraping window (1 AM - 3 AM RD), start immediately
-    const inWindow = now.getTime() >= todayRun.getTime() && now.getTime() < todayWrite.getTime();
-    if (inWindow) {
-      this.logger.log(`Reinicio dentro de ventana de scraping — arrancando ciclo inmediatamente`);
-      setImmediate(async () => {
-        await this.runCycle().catch(err => this.logger.error('Error en ciclo diario', err));
-        this.scheduleNextDailyRun();
-      });
-      return;
+  private async runLoop() {
+    while (this.isRunning) {
+      await this.runCycle().catch(err => this.logger.error('Error en ciclo', err));
     }
-
-    const next = new Date();
-    next.setUTCHours(DAILY_RUN_UTC_HOUR, 0, 0, 0);
-    if (next.getTime() <= now.getTime()) {
-      next.setUTCDate(next.getUTCDate() + 1);
-    }
-    const delayMs = next.getTime() - now.getTime();
-    const hours = Math.round(delayMs / 3600000 * 10) / 10;
-    this.logger.log(`Próximo ciclo diario: ${next.toISOString()} (en ${hours}h)`);
-    this.intervalHandle = setTimeout(async () => {
-      await this.runCycle().catch(err => this.logger.error('Error en ciclo diario', err));
-      this.scheduleNextDailyRun();
-    }, delayMs);
   }
 
   async stop() {
@@ -462,18 +433,7 @@ export class ScraperService implements OnModuleDestroy {
         }
       }
 
-      // Wait until 3:00 AM RD (7:00 AM UTC) before writing — ensures consistent day boundary
-      const now = new Date();
-      const writeAt = new Date();
-      writeAt.setUTCHours(DAILY_WRITE_UTC_HOUR, 0, 0, 0);
-      if (writeAt <= now) writeAt.setUTCDate(writeAt.getUTCDate() + 1);
-      const waitMs = writeAt.getTime() - now.getTime();
-      if (waitMs > 0) {
-        this.logger.log(`Scrape completo — esperando ${Math.round(waitMs / 60000)} min hasta ${writeAt.toISOString()} (3:00 AM RD) para escribir BD`);
-        await new Promise(r => setTimeout(r, waitMs));
-      }
-
-      // Phase 2: write ALL countries to DB at the same time (same businessDay() snapshot)
+      // Phase 2: write ALL countries to DB immediately after scraping
       this.logger.log(`Todos los países scrapeados — actualizando BD con businessDay=${businessDay()}`);
       for (const { raw, code } of allScraped) {
         try {
