@@ -396,20 +396,35 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       } else {
         const vidRes = await this.uploadVideo(adAccountId, file, dto.productName, token);
         if (vidRes.error) { this.logger.warn(`Video upload: ${vidRes.error.message}`); continue; }
+
+        // Wait for Meta to encode the video before creating creative
+        const videoId = vidRes.id;
+        this.logger.log(`Video uploaded: ${videoId} — waiting for processing...`);
+        for (let attempt = 0; attempt < 20; attempt++) {
+          await new Promise(r => setTimeout(r, 3000));
+          const statusRes = await fetch(
+            `${GRAPH}/${videoId}?fields=status&access_token=${token}`
+          ).then(r => r.json()) as any;
+          const progress = statusRes.status?.processing_progress;
+          const ready = statusRes.status?.video_status === 'ready' || progress === 100;
+          this.logger.log(`Video ${videoId} status: ${statusRes.status?.video_status ?? 'unknown'} (${progress ?? '?'}%)`);
+          if (ready) break;
+        }
+
         const creativeRes = await this.metaPost(`/${adAccountId}/adcreatives`, {
           name: `Creativo video ${i + 1}`,
           object_story_spec: {
             page_id: pageId,
             video_data: {
-              video_id: vidRes.id,
+              video_id: videoId,
               message: copy.primaryText,
-              title: copy.headline,
+              link_description: copy.description ?? copy.headline,
               call_to_action: { type: copy.callToAction ?? 'SHOP_NOW', value: { link: dto.landingPage } },
             },
           },
           ...(dto.instagramAccountId ? { instagram_actor_id: dto.instagramAccountId } : {}),
         }, token);
-        if (creativeRes.error) { this.logger.warn(`Creative video: ${creativeRes.error.message}`); continue; }
+        if (creativeRes.error) { this.logger.warn(`Creative video: ${JSON.stringify(creativeRes.error)}`); continue; }
         creativeId = creativeRes.id;
       }
       if (creativeId) creativeIds.push(creativeId);
