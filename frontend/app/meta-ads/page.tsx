@@ -288,8 +288,9 @@ export default function MetaAdsPage() {
 
       const res = await apiFetch('/meta-ads/campaigns', { method: 'POST', body: form });
       setResult(res);
+      // Update credits from response without calling loadStatus() — that would overwrite 'done' step
+      if (res?.credits !== undefined) setStatus((prev: any) => ({ ...prev, credits: res.credits }));
       setStep('done');
-      await loadStatus();
     } catch (e: any) {
       setError(e.message || 'Error creando campaña');
       setStep('ads');

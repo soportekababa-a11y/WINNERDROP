@@ -214,7 +214,7 @@ export class MetaAdsService {
     });
     await this.campaignRepo.save(campaign);
 
-    return { success: true, campaign: metaResult, aiData: aiResult };
+    return { success: true, campaign: metaResult, aiData: aiResult, credits: credits - 1 };
   }
 
   // ─── Claude ──────────────────────────────────────────────────────────────
@@ -484,11 +484,8 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
         if (creativeRes.error) { this.logger.warn(`Creative error: ${creativeRes.error.message}`); continue; }
         creativeId = creativeRes.id;
       } else {
-        // Video upload
-        const vidRes = await this.metaPost(`/${adAccountId}/advideos`, {
-          source: file.buffer.toString('base64'),
-          title: dto.productName,
-        }, token);
+        // Video upload — must use multipart/form-data, not base64 JSON
+        const vidRes = await this.uploadVideo(adAccountId, file, dto.productName, token);
         if (vidRes.error) { this.logger.warn(`Video upload error: ${vidRes.error.message}`); continue; }
 
         const creativeRes = await this.metaPost(`/${adAccountId}/adcreatives`, {
@@ -526,6 +523,16 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+    return res.json();
+  }
+
+  private async uploadVideo(adAccountId: string, file: Express.Multer.File, title: string, token: string): Promise<any> {
+    const form = new FormData();
+    form.append('access_token', token);
+    form.append('title', title);
+    const arrayBuf = file.buffer.buffer.slice(file.buffer.byteOffset, file.buffer.byteOffset + file.buffer.byteLength) as ArrayBuffer;
+    form.append('source', new Blob([arrayBuf], { type: file.mimetype }), file.originalname || 'video.mp4');
+    const res = await fetch(`${GRAPH}/${adAccountId}/advideos`, { method: 'POST', body: form as any });
     return res.json();
   }
 
