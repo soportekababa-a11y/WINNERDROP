@@ -11,7 +11,7 @@ import { ShoppingBag, TrendingUp, Loader2, ChevronDown, Sparkles, Search, X, Loc
 import { Sidebar } from "@/components/sidebar";
 
 const PAGE_SIZE = 40;
-type ProductoFilter = 'todos' | 'ayer' | 'winners';
+type ProductoFilter = 'todos' | 'hoy' | 'winners';
 type CountryFilter = '' | 'RD' | 'GT' | 'EC' | 'CR' | 'CO';
 const COUNTRIES: { value: CountryFilter; label: string }[] = [
   { value: '',   label: 'Elegir país' },
@@ -24,12 +24,12 @@ const COUNTRIES: { value: CountryFilter; label: string }[] = [
 
 const PRODUCTO_OPTIONS: { value: ProductoFilter; label: string }[] = [
   { value: 'todos',   label: 'Todos' },
-  { value: 'ayer',    label: 'Más vendidos ayer' },
+  { value: 'hoy',    label: 'Más vendidos hoy' },
   { value: 'winners', label: 'Winners' },
 ];
 
 function filterToParams(f: ProductoFilter): { hot: boolean; sort: 'today' | 'total' | 'growth' | 'winners' | 'yesterday'; limit: number } {
-  if (f === 'ayer')    return { hot: false, sort: 'yesterday', limit: PAGE_SIZE };
+  if (f === 'hoy')    return { hot: false, sort: 'today', limit: PAGE_SIZE };
   if (f === 'winners') return { hot: false, sort: 'winners',   limit: PAGE_SIZE };
   return                      { hot: false, sort: 'total',     limit: PAGE_SIZE };
 }
@@ -317,10 +317,10 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-28 space-y-3">
                   <p className="text-6xl mb-2 opacity-20">
-                    {productoFilter === 'ayer' ? '🔥' : productoFilter === 'winners' ? '🏆' : '📦'}
+                    {productoFilter === 'hoy' ? '🔥' : productoFilter === 'winners' ? '🏆' : '📦'}
                   </p>
                   <p className="text-gray-600 text-sm">
-                    {productoFilter === 'ayer' ? 'Sin ventas registradas ayer aún'
+                    {productoFilter === 'hoy' ? 'Sin ventas hoy aún'
                       : productoFilter === 'winners' ? 'Aún no hay winners — se necesitan 2+ días de datos'
                       : hasFilter ? 'Sin resultados para estos filtros'
                       : 'Cargando productos...'}
