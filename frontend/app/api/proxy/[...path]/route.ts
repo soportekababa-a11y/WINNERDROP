@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:3001';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
 async function handler(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
   const url = `${BACKEND}/${path.join('/')}${req.nextUrl.search}`;
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {};
   const auth = req.headers.get('Authorization');
   if (auth) headers['Authorization'] = auth;
   for (const h of ['x-admin-secret', 'x-shopify-hmac-sha256', 'x-shopify-shop-domain', 'x-shopify-topic', 'x-shopify-api-version']) {
@@ -14,9 +17,19 @@ async function handler(req: NextRequest, { params }: { params: Promise<{ path: s
     if (v) headers[h] = v;
   }
 
-  const body = req.method !== 'GET' && req.method !== 'HEAD'
-    ? await req.text()
-    : undefined;
+  const ct = req.headers.get('content-type') ?? '';
+  let body: BodyInit | undefined;
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    if (ct.includes('multipart/form-data')) {
+      // Forward multipart as-is with original content-type (includes boundary)
+      headers['content-type'] = ct;
+      body = await req.arrayBuffer() as any;
+    } else {
+      headers['content-type'] = ct || 'application/json';
+      body = await req.text();
+    }
+  }
 
   const res = await fetch(url, { method: req.method, headers, body });
   const data = await res.text();
