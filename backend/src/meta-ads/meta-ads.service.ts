@@ -41,7 +41,7 @@ export class MetaAdsService {
   getAuthUrl(userId: string): string {
     const appId = this.config.get('META_APP_ID');
     const redirectUri = this.config.get('META_REDIRECT_URI');
-    const scopes = 'ads_management,ads_read,business_management,pages_read_engagement,email';
+    const scopes = 'ads_management,ads_read,business_management,pages_read_engagement';
     const state = Buffer.from(userId).toString('base64');
     return `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=code&state=${state}`;
   }
