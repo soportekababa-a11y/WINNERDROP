@@ -405,10 +405,24 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
           const statusRes = await fetch(
             `${GRAPH}/${videoId}?fields=status&access_token=${token}`
           ).then(r => r.json()) as any;
-          const progress = statusRes.status?.processing_progress;
-          const ready = statusRes.status?.video_status === 'ready' || progress === 100;
-          this.logger.log(`Video ${videoId} status: ${statusRes.status?.video_status ?? 'unknown'} (${progress ?? '?'}%)`);
+          const ready = statusRes.status?.video_status === 'ready' || statusRes.status?.processing_progress === 100;
+          this.logger.log(`Video ${videoId} status: ${statusRes.status?.video_status ?? 'unknown'}`);
           if (ready) break;
+        }
+
+        // Fetch Meta-generated thumbnail (required for video creatives)
+        let thumbnailUrl: string | undefined;
+        try {
+          const thumbsRes = await fetch(
+            `${GRAPH}/${videoId}/thumbnails?access_token=${token}`
+          ).then(r => r.json()) as any;
+          thumbnailUrl = thumbsRes.data?.[0]?.uri;
+          this.logger.log(`Video thumbnail: ${thumbnailUrl ? 'found' : 'not found'}`);
+        } catch {}
+
+        if (!thumbnailUrl) {
+          this.logger.warn(`Video ${videoId}: no thumbnail available — skipping creative`);
+          continue;
         }
 
         const creativeRes = await this.metaPost(`/${adAccountId}/adcreatives`, {
@@ -417,6 +431,7 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
             page_id: pageId,
             video_data: {
               video_id: videoId,
+              image_url: thumbnailUrl,
               message: copy.primaryText,
               link_description: copy.description ?? copy.headline,
               call_to_action: { type: copy.callToAction ?? 'SHOP_NOW', value: { link: dto.landingPage } },
