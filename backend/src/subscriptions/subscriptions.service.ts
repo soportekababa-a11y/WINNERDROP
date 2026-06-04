@@ -78,6 +78,13 @@ export class SubscriptionsService {
     return { email: user.email, msgMonthlyLimit: limit };
   }
 
+  async setMetaCredits(email: string, credits: number) {
+    const user = await this.users.findByEmail(email);
+    if (!user) throw new NotFoundException(`Usuario no encontrado: ${email}`);
+    await this.users.setMetaCredits(user.id, credits);
+    return { email: user.email, metaCredits: credits };
+  }
+
   listUsers() {
     return this.users.findAll();
   }

@@ -62,6 +62,16 @@ export class SubscriptionsController {
     return this.subs.setMsgLimit(dto.email, dto.limit);
   }
 
+  @Post('admin/set-meta-credits')
+  @HttpCode(200)
+  adminSetMetaCredits(
+    @Headers('x-admin-secret') secret: string,
+    @Body() dto: { email: string; credits: number },
+  ) {
+    this.subs.verifyAdminSecret(secret);
+    return this.subs.setMetaCredits(dto.email, dto.credits);
+  }
+
   @Post('admin/renew')
   @HttpCode(200)
   adminRenew(

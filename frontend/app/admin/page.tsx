@@ -27,6 +27,7 @@ interface UserRow {
   planActivatedAt: string | null;
   planExpiresAt: string | null;
   msgMonthlyLimit: number;
+  metaCredits: number;
   isActive: boolean;
   createdAt: string;
 }
@@ -61,6 +62,8 @@ export default function AdminPage() {
   const [changingPlan, setChangingPlan] = useState<string | null>(null);
   const [renewingUser, setRenewingUser] = useState<string | null>(null);
   const [changingMsgLimit, setChangingMsgLimit] = useState<string | null>(null);
+  const [changingMetaCredits, setChangingMetaCredits] = useState<string | null>(null);
+  const [metaCreditsInput, setMetaCreditsInput] = useState<Record<string, string>>({});
 
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
@@ -118,6 +121,18 @@ export default function AdminPage() {
       loadUsers();
     } finally {
       setChangingMsgLimit(null);
+    }
+  }
+
+  async function handleMetaCredits(userId: string, email: string) {
+    const val = parseInt(metaCreditsInput[userId] ?? '0');
+    if (isNaN(val)) return;
+    setChangingMetaCredits(userId);
+    try {
+      await api(secret).post('/subscriptions/admin/set-meta-credits', { email, credits: val });
+      loadUsers();
+    } finally {
+      setChangingMetaCredits(null);
     }
   }
 
@@ -303,6 +318,27 @@ export default function AdminPage() {
                         {changingMsgLimit === u.id && <Loader2 size={10} className="animate-spin text-violet-400" />}
                       </div>
                     )}
+                    {/* Meta Credits */}
+                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      <span className="text-[10px] text-gray-600">Créditos Meta:</span>
+                      <span className="text-[10px] font-bold text-blue-400">{u.metaCredits ?? 0}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="cantidad"
+                        value={metaCreditsInput[u.id] ?? ''}
+                        onChange={e => setMetaCreditsInput(prev => ({ ...prev, [u.id]: e.target.value }))}
+                        className="w-16 text-[10px] px-2 py-0.5 rounded-lg outline-none"
+                        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#e2e8f0' }}
+                      />
+                      <button
+                        onClick={() => handleMetaCredits(u.id, u.email)}
+                        disabled={changingMetaCredits === u.id || !metaCreditsInput[u.id]}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-lg disabled:opacity-40 transition-all"
+                        style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa' }}>
+                        {changingMetaCredits === u.id ? <Loader2 size={9} className="animate-spin inline" /> : 'Asignar'}
+                      </button>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg"

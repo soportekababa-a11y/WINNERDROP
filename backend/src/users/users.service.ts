@@ -44,9 +44,13 @@ export class UsersService {
     await this.repo.update(userId, { msgMonthlyLimit: limit });
   }
 
+  async setMetaCredits(userId: string, credits: number) {
+    await this.repo.update(userId, { metaCredits: credits } as any);
+  }
+
   findAll() {
     return this.repo.find({
-      select: ['id', 'email', 'name', 'plan', 'selectedCountry', 'selectedPlatform', 'planActivatedAt', 'planExpiresAt', 'msgMonthlyLimit', 'isActive', 'createdAt'],
+      select: ['id', 'email', 'name', 'plan', 'selectedCountry', 'selectedPlatform', 'planActivatedAt', 'planExpiresAt', 'msgMonthlyLimit', 'metaCredits', 'isActive', 'createdAt'] as any,
       order: { createdAt: 'DESC' },
     });
   }
