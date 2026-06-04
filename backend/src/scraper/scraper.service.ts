@@ -11,34 +11,28 @@ const EFFI_LOGIN_URL = 'https://effi.com.co/ingreso';
 const EFFI_CATALOG_URL = 'https://effi.com.co/app/articulo_dropshipping';
 const PRODUCTS_PER_PAGE = 40;
 const SESSION_DIR = '/opt/winnerdrop/sessions';
-// Continuous scraping — cycle runs back-to-back. Each full cycle takes ~2h naturally.
-// businessDay() controls the salesYesterday/salesToday boundary.
 
+// Business day resets at 3:00 AM RD (UTC-4) = 7:00 AM UTC
 function businessDay(): string {
   const now = new Date();
-  // If before 7 AM UTC (= 3 AM RD), we are still in the previous business day
   const adjusted = new Date(now);
-  if (now.getUTCHours() < 7) {
-    adjusted.setUTCDate(adjusted.getUTCDate() - 1);
-  }
+  if (now.getUTCHours() < 7) adjusted.setUTCDate(adjusted.getUTCDate() - 1);
   return adjusted.toISOString().slice(0, 10);
 }
 
 const COUNTRIES: Array<{ code: string; storeName: string | null }> = [
-  { code: 'RD', storeName: null },           // default store after login
-  { code: 'GT', storeName: 'Guatemala 1' },  // must select this store
-  { code: 'EC', storeName: 'Ecuador' },      // matches ECUADOR 1 etc.
-  { code: 'CR', storeName: 'Costa Rica' },   // 54832 - COSTA RICA
-  { code: 'CO', storeName: 'Colombia' },     // 54865 - COLOMBIA
+  { code: 'RD', storeName: null },
+  { code: 'GT', storeName: 'Guatemala 1' },
+  { code: 'EC', storeName: 'Ecuador' },
+  { code: 'CR', storeName: 'Costa Rica' },
+  { code: 'CO', storeName: 'Colombia' },
 ];
 
 @Injectable()
 export class ScraperService implements OnModuleDestroy {
   private readonly logger = new Logger(ScraperService.name);
   private browser: Browser | null = null;
-  private contexts: Map<string, BrowserContext> = new Map();
   private isRunning = false;
-  private intervalHandle: NodeJS.Timeout | null = null;
   private lastScrapeStats = { total: 0, pages: 0, durationMs: 0, finishedAt: null as Date | null };
   private progress = { currentPage: 0, totalPages: 0, accumulated: 0, country: '' };
   private lastCleanupDate = '';
@@ -72,8 +66,6 @@ export class ScraperService implements OnModuleDestroy {
 
   private async startWithRetry() {
     const RETRY_DELAY_MS = 60 * 1000;
-
-    // Launch browser — retry until success
     while (true) {
       try {
         await this.launchBrowser();
@@ -82,13 +74,9 @@ export class ScraperService implements OnModuleDestroy {
         this.logger.error(`No se pudo lanzar el browser, reintentando en ${RETRY_DELAY_MS / 1000}s...`, err);
         await this.browser?.close().catch(() => {});
         this.browser = null;
-        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
       }
     }
-
-    // Login each country independently — failed countries are skipped, not fatal
-    await this.loginAllCountries();
-
     this.runLoop();
   }
 
@@ -99,12 +87,15 @@ export class ScraperService implements OnModuleDestroy {
   }
 
   async stop() {
-    if (this.intervalHandle) clearTimeout(this.intervalHandle);
     this.isRunning = false;
-    for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
-    this.contexts.clear();
     await this.browser?.close().catch(() => {});
+    this.browser = null;
     this.logger.log('Scraper detenido');
+  }
+
+  // kept for backward-compat (API endpoint calls this)
+  async login() {
+    this.logger.log('login() llamado — el próximo ciclo re-logueará todos los países');
   }
 
   private userAgent() {
@@ -128,6 +119,24 @@ export class ScraperService implements OnModuleDestroy {
 
     this.logger.log(`Chromium: ${executablePath ?? 'bundled'}`);
     this.browser = await chromium.launch({ headless: true, executablePath });
+  }
+
+  private isBrowserDead(): boolean {
+    return !this.browser || !this.browser.isConnected();
+  }
+
+  private async ensureBrowser(): Promise<boolean> {
+    if (!this.isBrowserDead()) return true;
+    this.logger.warn('Browser muerto — relanzando Chromium...');
+    await this.browser?.close().catch(() => {});
+    this.browser = null;
+    try {
+      await this.launchBrowser();
+      return true;
+    } catch (err) {
+      this.logger.error('No se pudo relanzar browser', err);
+      return false;
+    }
   }
 
   private sessionPath(code: string) {
@@ -160,47 +169,18 @@ export class ScraperService implements OnModuleDestroy {
     try {
       const { unlink } = await import('fs/promises');
       await unlink(this.sessionPath(code));
-      this.logger.log(`[${code}] Sesión guardada borrada (forzar re-login)`);
+      this.logger.log(`[${code}] Sesión guardada borrada`);
     } catch {}
   }
 
-  private async loginAllCountries() {
-    const email = this.config.get<string>('EFFI_EMAIL');
-    const password = this.config.get<string>('EFFI_PASSWORD');
-
-    for (const { code, storeName } of COUNTRIES) {
-      // Revive browser if it died during the previous country's login
-      if (this.isBrowserDead()) {
-        this.logger.warn(`[${code}] Browser muerto antes de login — relanzando...`);
-        await this.browser?.close().catch(() => {});
-        this.browser = null;
-        try {
-          await this.launchBrowser();
-        } catch (err) {
-          this.logger.error(`[${code}] No se pudo relanzar browser — omitiendo país`, err);
-          continue;
-        }
-      }
-
-      await this.loginCountry(code, storeName, email!, password!);
-
-      const isLast = code === COUNTRIES[COUNTRIES.length - 1].code;
-      if (!isLast && this.contexts.has(code)) {
-        // Only wait if the login succeeded — no point waiting after a failure
-        this.logger.log(`[${code}] Sesión lista — esperando 30s antes del siguiente país`);
-        await new Promise(r => setTimeout(r, 30000));
-      }
-    }
-
-    this.logger.log(`Login completo: ${this.contexts.size}/${COUNTRIES.length} países activos`);
-  }
-
-  private async loginCountry(code: string, storeName: string | null, email: string, password: string) {
-    const existing = this.contexts.get(code);
-    if (existing) await existing.close().catch(() => {});
-    this.contexts.delete(code);
-
-    // Try restoring from saved session first — avoids hitting Effi login rate-limits
+  // Login to one country and return its context. Caller must close() when done.
+  private async loginForCountry(
+    code: string,
+    storeName: string | null,
+    email: string,
+    password: string,
+  ): Promise<BrowserContext | null> {
+    // Try restoring saved session first
     const savedState = await this.loadSession(code);
     if (savedState) {
       try {
@@ -208,14 +188,18 @@ export class ScraperService implements OnModuleDestroy {
         const context = await this.browser!.newContext({ userAgent: this.userAgent(), storageState: savedState as any });
         const page = await context.newPage();
         try {
+          await page.route('**', (route) => {
+            const rt = route.request().resourceType();
+            if (['image', 'media', 'font', 'stylesheet'].includes(rt)) route.abort().catch(() => {});
+            else route.continue().catch(() => {});
+          });
           await page.goto(EFFI_CATALOG_URL, { waitUntil: 'domcontentloaded', timeout: 20000 });
-          await page.waitForTimeout(1500);
+          await page.waitForTimeout(1000);
           if (!page.url().includes('/ingreso')) {
             this.logger.log(`[${code}] Sesión restaurada OK`);
-            await page.goto('about:blank').catch(() => {}); // unload Effi JS before close
+            await page.goto('about:blank').catch(() => {});
             await page.close().catch(() => {});
-            this.contexts.set(code, context);
-            return;
+            return context;
           }
           this.logger.warn(`[${code}] Sesión guardada expiró — haciendo login completo`);
         } finally {
@@ -229,45 +213,32 @@ export class ScraperService implements OnModuleDestroy {
       await this.clearSession(code);
     }
 
-    // Full login
+    // Full login with retries
     const MAX_ATTEMPTS = 3;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      // Relaunch browser if it died during a previous attempt
       if (this.isBrowserDead()) {
         this.logger.warn(`[${code}] Browser muerto antes de intento ${attempt} — relanzando...`);
-        await this.browser?.close().catch(() => {});
-        this.browser = null;
-        try {
-          await this.launchBrowser();
-        } catch (err) {
-          this.logger.error(`[${code}] No se pudo relanzar browser — abortando login`, err);
-          return;
-        }
+        if (!await this.ensureBrowser()) return null;
       }
 
-      let context: import('playwright').BrowserContext | null = null;
+      let context: BrowserContext | null = null;
       try {
         this.logger.log(`[${code}] Login completo${attempt > 1 ? ` (intento ${attempt})` : ''}...`);
         context = await this.browser!.newContext({ userAgent: this.userAgent() });
         await this.loginContext(context, email, password, storeName);
         await this.saveSession(code, context);
-        this.contexts.set(code, context);
-        return;
+        return context;
       } catch (err) {
         await context?.close().catch(() => {});
         if (attempt < MAX_ATTEMPTS) {
-          this.logger.warn(`Login ${code} intento ${attempt} fallido, reintentando en 5s...`);
+          this.logger.warn(`[${code}] Login intento ${attempt} fallido, reintentando en 5s...`);
           await new Promise(r => setTimeout(r, 5000));
         } else {
-          this.logger.error(`Login fallido para ${code} tras ${MAX_ATTEMPTS} intentos — omitido`, err);
+          this.logger.error(`[${code}] Login fallido tras ${MAX_ATTEMPTS} intentos — omitido`, err);
         }
       }
     }
-  }
-
-  async login() {
-    // Keep for backward compat — re-login all
-    await this.loginAllCountries();
+    return null;
   }
 
   private async loginContext(context: BrowserContext, email: string, password: string, storeName: string | null) {
@@ -276,29 +247,24 @@ export class ScraperService implements OnModuleDestroy {
       await page.goto(EFFI_LOGIN_URL, { waitUntil: 'networkidle' });
       await page.locator('input[type="email"], input[placeholder*="Email"], input[placeholder*="email"]').fill(email);
       await page.locator('input[type="password"]').fill(password);
-      // Click submit — use .first() to avoid ambiguity if multiple "Ingresar" buttons exist
       await page.locator('button[type="submit"], button:has-text("Ingresar")').first().click();
 
-      // Wait for company selector page at /ingreso/validar_usuario
       await page.waitForURL('**/ingreso/validar_usuario', { timeout: 20000 });
 
-      // Effi uses jQuery Chosen — native <select> is hidden, must click Chosen widget
+      // Effi uses jQuery Chosen — native <select> is hidden
       const chosenContainer = page.locator('.chosen-container').first();
       await chosenContainer.waitFor({ state: 'visible', timeout: 10000 });
       await chosenContainer.click();
 
-      // Wait for Chosen dropdown results to appear
       const resultItems = page.locator('.chosen-results li.active-result');
       await resultItems.first().waitFor({ state: 'visible', timeout: 5000 });
 
       const optionTexts = await resultItems.allTextContents();
-      this.logger.log(`Empresas disponibles: ${JSON.stringify(optionTexts)}`);
+      this.logger.log(`[${storeName ?? 'RD'}] Empresas: ${JSON.stringify(optionTexts)}`);
 
       if (storeName) {
-        // Case-insensitive match (Effi stores names in UPPERCASE)
         const match = resultItems.filter({ hasText: new RegExp(storeName, 'i') });
-        const count = await match.count();
-        if (count > 0) {
+        if (await match.count() > 0) {
           const text = await match.first().textContent();
           await match.first().click();
           this.logger.log(`Empresa seleccionada: "${text?.trim()}"`);
@@ -307,39 +273,32 @@ export class ScraperService implements OnModuleDestroy {
           await resultItems.first().click();
         }
       } else {
-        // RD: first option that isn't the placeholder, Guatemala, or Costa Rica
+        // RD: exclude Guatemala, Costa Rica, Ecuador, Colombia, placeholder
         const rdItems = resultItems
           .filter({ hasNotText: /guatemala/i })
           .filter({ hasNotText: /costa rica/i })
+          .filter({ hasNotText: /ecuador/i })
+          .filter({ hasNotText: /colombia/i })
           .filter({ hasNotText: /seleccione/i });
-        const rdCount = await rdItems.count();
-        if (rdCount > 0) {
+        if (await rdItems.count() > 0) {
           const text = await rdItems.first().textContent();
           await rdItems.first().click();
           this.logger.log(`Empresa RD seleccionada: "${text?.trim()}"`);
         } else {
-          // Fallback: second item (skip placeholder)
           const text = await resultItems.nth(1).textContent().catch(() => '?');
           await resultItems.nth(1).click();
           this.logger.log(`Empresa RD seleccionada (fallback): "${text?.trim()}"`);
         }
       }
 
-      // Click Ingresar on the company selector form
       await page.locator('button:has-text("Ingresar")').click();
-
-      // Wait for navigation away from /ingreso paths
       await page.waitForURL(url => !url.href.includes('/ingreso'), { timeout: 20000 });
 
-      // Block heavy resources before loading catalog — same as scrapeAllPages.
-      // Without this, Chrome OOMs on Effi's catalog page and crashes the browser.
+      // Block heavy resources before verifying catalog — prevents Chrome OOM
       await page.route('**', (route) => {
         const rt = route.request().resourceType();
-        if (['image', 'media', 'font', 'stylesheet'].includes(rt)) {
-          route.abort().catch(() => {});
-        } else {
-          route.continue().catch(() => {});
-        }
+        if (['image', 'media', 'font', 'stylesheet'].includes(rt)) route.abort().catch(() => {});
+        else route.continue().catch(() => {});
       });
       await page.goto(EFFI_CATALOG_URL, { waitUntil: 'domcontentloaded', timeout: 20000 });
       await page.waitForTimeout(1000);
@@ -352,29 +311,6 @@ export class ScraperService implements OnModuleDestroy {
       await page.goto('about:blank').catch(() => {});
     } finally {
       await page.close();
-    }
-  }
-
-  private isBrowserDead(): boolean {
-    return !this.browser || !this.browser.isConnected();
-  }
-
-  private async ensureBrowserAlive(): Promise<boolean> {
-    if (!this.isBrowserDead()) return true;
-
-    this.logger.warn('Browser muerto — reiniciando Chromium y re-logineando...');
-    await this.browser?.close().catch(() => {});
-    this.browser = null;
-    for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
-    this.contexts.clear();
-
-    try {
-      await this.launchBrowser();
-      await this.loginAllCountries();
-      return this.contexts.size > 0;
-    } catch (err) {
-      this.logger.error('No se pudo reiniciar el browser', err);
-      return false;
     }
   }
 
@@ -392,90 +328,63 @@ export class ScraperService implements OnModuleDestroy {
     const password = this.config.get<string>('EFFI_PASSWORD')!;
 
     try {
-      if (!await this.ensureBrowserAlive()) {
-        this.logger.error('Browser no disponible — ciclo omitido');
-        return;
-      }
-
-      // Phase 1: scrape ALL countries into memory first
-      const allScraped: Array<{ raw: RawProduct; code: string }> = [];
-      const scrapedIdsByCountry = new Map<string, string[]>();
-
       for (const { code, storeName } of COUNTRIES) {
-        if (!this.contexts.has(code)) {
-          this.logger.warn(`[${code}] Sin sesión — intentando login...`);
-          await this.loginCountry(code, storeName, email, password);
-          if (!this.contexts.has(code)) {
-            this.logger.error(`[${code}] Login fallido — se omite, se reintenta en próximo ciclo`);
+        if (!await this.ensureBrowser()) {
+          this.logger.error(`Browser no disponible — omitiendo ${code}`);
+          continue;
+        }
+
+        let context: BrowserContext | null = null;
+        try {
+          context = await this.loginForCountry(code, storeName, email, password);
+          if (!context) {
+            this.logger.error(`[${code}] Login fallido — se reintenta en próximo ciclo`);
             continue;
           }
-        }
 
-        const context = this.contexts.get(code)!;
-        this.logger.log(`[${code}] Iniciando scrape`);
-        let page: import('playwright').Page | null = null;
+          this.logger.log(`[${code}] Iniciando scrape`);
+          const page = await context.newPage();
+          let products: RawProduct[] = [];
+          let pages = 0;
+          try {
+            const result = await this.scrapeAllPages(page, code);
+            products = result.products;
+            pages = result.pages;
+          } finally {
+            await page.close().catch(() => {});
+          }
 
-        try {
-          page = await context.newPage();
-          const { products, pages } = await this.scrapeAllPages(page, code);
-          this.logger.log(`[${code}] ${products.length} productos en ${pages} páginas`);
-          products.forEach(raw => allScraped.push({ raw, code }));
-          scrapedIdsByCountry.set(code, products.map(p => p.effiId));
+          this.logger.log(`[${code}] ${products.length} productos — escribiendo a BD`);
+          let saved = 0;
+          for (const raw of products) {
+            try {
+              await this.upsertProductAndSnapshot(raw, code);
+              saved++;
+            } catch (dbErr) {
+              this.logger.error(`[${code}] Error guardando ${raw.effiId}`, dbErr);
+            }
+          }
+
+          if (products.length > 100) {
+            const ids = products.map(p => p.effiId);
+            await this.productRepo
+              .createQueryBuilder()
+              .update()
+              .set({ isActive: false })
+              .where('"effiId" NOT IN (:...ids) AND "isActive" = true AND country = :country', { ids, country: code })
+              .execute()
+              .catch(err => this.logger.error(`[${code}] Error desactivando productos viejos`, err));
+          }
+
+          totalProducts += saved;
           totalPages += pages;
+          this.logger.log(`[${code}] ${saved}/${products.length} guardados en ${pages} páginas`);
 
         } catch (err) {
-          const errMsg = String(err);
-          const browserDied = this.isBrowserDead()
-            || errMsg.includes('has been closed')
-            || errMsg.includes('Target closed')
-            || errMsg.includes('browser has been closed');
-
-          if (browserDied) {
-            this.logger.error(`[${code}] Browser muerto durante ciclo — reiniciando en próximo ciclo`);
-            await this.browser?.close().catch(() => {});
-            this.browser = null;
-            for (const ctx of this.contexts.values()) await ctx.close().catch(() => {});
-            this.contexts.clear();
-            break;
-          }
-
-          const sessionExpired = errMsg.includes('/ingreso') || errMsg.includes('Login fallido');
-          if (sessionExpired) {
-            this.logger.warn(`[${code}] Sesión expiró durante scraping — borrando sesión guardada y re-logineando`);
-            await this.clearSession(code);
-          } else {
-            this.logger.error(`[${code}] Error — se omite y se reintenta próximo ciclo`, err);
-          }
-          const staleCtx = this.contexts.get(code);
-          if (staleCtx) { await staleCtx.close().catch(() => {}); this.contexts.delete(code); }
-          await this.loginCountry(code, storeName, email, password);
-
+          this.logger.error(`[${code}] Error en ciclo — omitiendo país`, err);
         } finally {
-          await page?.close().catch(() => {});
-        }
-      }
-
-      // Phase 2: write ALL countries to DB immediately after scraping
-      this.logger.log(`Todos los países scrapeados — actualizando BD con businessDay=${businessDay()}`);
-      for (const { raw, code } of allScraped) {
-        try {
-          await this.upsertProductAndSnapshot(raw, code);
-          totalProducts++;
-        } catch (dbErr) {
-          this.logger.error(`[${code}] Error guardando ${raw.effiId}`, dbErr);
-        }
-      }
-
-      // Deactivate removed products per country
-      for (const [code, ids] of scrapedIdsByCountry.entries()) {
-        if (ids.length > 100) {
-          await this.productRepo
-            .createQueryBuilder()
-            .update()
-            .set({ isActive: false })
-            .where('"effiId" NOT IN (:...ids) AND "isActive" = true AND country = :country', { ids, country: code })
-            .execute()
-            .catch(err => this.logger.error(`[${code}] Error desactivando productos viejos`, err));
+          // Always close context so next country starts clean with no session conflict
+          await context?.close().catch(() => {});
         }
       }
 
@@ -502,8 +411,6 @@ export class ScraperService implements OnModuleDestroy {
     const all: RawProduct[] = [];
     let pageNum = 1;
 
-    // Block images, fonts, media — product data is in HTML, not visual resources.
-    // This prevents Chrome's renderer from crashing under resource load pressure.
     await page.route('**', (route) => {
       const rt = route.request().resourceType();
       if (['image', 'media', 'font', 'stylesheet'].includes(rt)) {
@@ -516,9 +423,8 @@ export class ScraperService implements OnModuleDestroy {
     await page.goto(EFFI_CATALOG_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2000);
 
-    // Detect session expiry — Effi redirected us back to login
     if (page.url().includes('/ingreso')) {
-      throw new Error(`Login fallido — sesión expiró, redirigido a ${page.url()}`);
+      throw new Error(`Sesión expiró durante scraping — redirigido a ${page.url()}`);
     }
 
     const totalText = await page.locator('text=/\\d+ Artículos/').textContent().catch(() => '');
@@ -631,12 +537,7 @@ export class ScraperService implements OnModuleDestroy {
         const lastDate = new Date(product.salesBaselineDate + 'T12:00:00');
         const todayDate = new Date(today + 'T12:00:00');
         const dayGap = Math.round((todayDate.getTime() - lastDate.getTime()) / 86_400_000);
-        // Only trust salesYesterday when gap == 1 day; multi-day gaps give inflated values
-        if (dayGap === 1) {
-          product.salesYesterday = Math.max(0, raw.salesAccum - product.salesBaseline);
-        } else {
-          product.salesYesterday = 0;
-        }
+        product.salesYesterday = dayGap === 1 ? Math.max(0, raw.salesAccum - product.salesBaseline) : 0;
         product.salesBaseline = raw.salesAccum;
         product.salesBaselineDate = today;
       }
