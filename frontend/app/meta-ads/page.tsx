@@ -48,7 +48,7 @@ const COUNTRIES = [
 
 interface AdFile { file: File; preview: string; type: 'image' | 'video' }
 
-type Step = 'connect' | 'setup' | 'type' | 'form' | 'strategy' | 'ads' | 'creating' | 'done';
+type Step = 'connect' | 'setup' | 'home' | 'type' | 'form' | 'strategy' | 'ads' | 'creating' | 'done' | 'metrics' | 'campaigns';
 
 export default function MetaAdsPage() {
   const router = useRouter();
@@ -76,6 +76,24 @@ export default function MetaAdsPage() {
   const [customDate, setCustomDate] = useState('');
   const [excludeCities, setExcludeCities] = useState<string[]>([]);
   const [cityInput, setCityInput] = useState('');
+
+  // Metrics & campaigns list
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [metaMetrics, setMetaMetrics] = useState<any[]>([]);
+  const [loadingMetrics, setLoadingMetrics] = useState(false);
+
+  async function loadCampaigns() {
+    setLoadingCampaigns(true);
+    try { setCampaigns(await apiFetch('/meta-ads/campaigns')); } catch { /* ignore */ }
+    finally { setLoadingCampaigns(false); }
+  }
+
+  async function loadMetrics() {
+    setLoadingMetrics(true);
+    try { setMetaMetrics(await apiFetch('/meta-ads/metrics')); } catch { /* ignore */ }
+    finally { setLoadingMetrics(false); }
+  }
 
   // Strategy
   const [campaignMode, setCampaignMode] = useState(''); // testeo | escalar
@@ -115,7 +133,7 @@ export default function MetaAdsPage() {
       const s = await apiFetch('/meta-ads/status');
       setStatus(s);
       if (s.connected) {
-        setStep(s.adAccountId && s.pageId ? 'type' : 'setup');
+        setStep(s.adAccountId && s.pageId ? 'home' : 'setup');
         if (!s.adAccountId) loadAccounts();
       } else {
         setStep('connect');
@@ -145,7 +163,7 @@ export default function MetaAdsPage() {
     try {
       await apiFetch('/meta-ads/select-account', { method: 'POST', body: JSON.stringify({ adAccountId: selectedAccount, adAccountName: selectedAccountName }) });
       await apiFetch('/meta-ads/select-page', { method: 'POST', body: JSON.stringify({ pageId: selectedPage, pageName: selectedPageName }) });
-      setStep('type');
+      setStep('home');
     } catch (e: any) { setError(e.message); }
   }
 
@@ -321,11 +339,188 @@ export default function MetaAdsPage() {
                 </div>
               )}
 
+              {/* STEP: HOME */}
+              {step === 'home' && (
+                <div className="space-y-5">
+                  <div>
+                    <p className="text-xs text-gray-500">{status?.adAccountName}</p>
+                    <h2 className="text-lg font-semibold text-white mt-0.5">¿Qué quieres hacer?</h2>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {[
+                      {
+                        icon: '🚀',
+                        label: 'Crear campaña',
+                        desc: 'Nueva campaña con IA — copy, segmentación y estructura profesional generada automáticamente.',
+                        color: 'violet',
+                        action: () => setStep('type'),
+                        badge: null,
+                      },
+                      {
+                        icon: '📊',
+                        label: 'Revisar métricas',
+                        desc: 'Ve el rendimiento de tus campañas activas — ROAS, CTR, CPC, gasto y conversiones.',
+                        color: 'blue',
+                        action: () => { setStep('metrics'); loadMetrics(); },
+                        badge: null,
+                      },
+                      {
+                        icon: '📋',
+                        label: 'Mis campañas',
+                        desc: 'Lista de todas las campañas creadas desde MOMENTUM con su estado actual.',
+                        color: 'emerald',
+                        action: () => { setStep('campaigns'); loadCampaigns(); },
+                        badge: null,
+                      },
+                      {
+                        icon: '📈',
+                        label: 'Escalar campaña',
+                        desc: 'Tienes algo que funciona. Configura el escalado correcto sin matar el ROAS.',
+                        color: 'yellow',
+                        action: () => { setCampaignMode('escalar'); setStep('type'); },
+                        badge: '🔥 Pro',
+                      },
+                      {
+                        icon: '🧪',
+                        label: 'Nuevo testeo',
+                        desc: 'Prueba nuevos creativos, ángulos o audiencias con estructura ABO optimizada.',
+                        color: 'pink',
+                        action: () => { setCampaignMode('testeo'); setStep('type'); },
+                        badge: null,
+                      },
+                      {
+                        icon: '🔄',
+                        label: 'Cambiar cuenta',
+                        desc: 'Conectar otra cuenta publicitaria o página de Facebook.',
+                        color: 'gray',
+                        action: () => { loadAccounts(); setStep('setup'); },
+                        badge: null,
+                      },
+                    ].map((item) => {
+                      const bg: Record<string, string> = {
+                        violet: 'rgba(139,92,246,0.1)', blue: 'rgba(59,130,246,0.1)',
+                        emerald: 'rgba(16,185,129,0.1)', yellow: 'rgba(234,179,8,0.1)',
+                        pink: 'rgba(236,72,153,0.1)', gray: 'rgba(255,255,255,0.03)',
+                      };
+                      const border: Record<string, string> = {
+                        violet: 'rgba(139,92,246,0.25)', blue: 'rgba(59,130,246,0.25)',
+                        emerald: 'rgba(16,185,129,0.25)', yellow: 'rgba(234,179,8,0.25)',
+                        pink: 'rgba(236,72,153,0.25)', gray: 'rgba(255,255,255,0.06)',
+                      };
+                      return (
+                        <button key={item.label} onClick={item.action}
+                          className="text-left p-5 rounded-2xl space-y-2 transition-all hover:scale-[1.02] active:scale-[0.99]"
+                          style={{ background: bg[item.color], border: `1px solid ${border[item.color]}` }}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-2xl">{item.icon}</span>
+                            {item.badge && <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>{item.badge}</span>}
+                          </div>
+                          <p className="text-sm font-semibold text-white">{item.label}</p>
+                          <p className="text-xs text-gray-500">{item.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-600 pt-1">
+                    <span>Créditos disponibles: <span className="text-violet-400 font-semibold">{status?.credits ?? 0}</span></span>
+                    {(status?.credits ?? 0) === 0 && (
+                      <a href="https://wa.me/18299607483?text=Quiero recargar créditos Meta Ads"
+                        target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">
+                        + Recargar créditos
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* STEP: METRICS */}
+              {step === 'metrics' && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setStep('home')} className="text-xs text-gray-500 hover:text-white">← Inicio</button>
+                    <h2 className="text-base font-semibold text-white">Métricas de campañas</h2>
+                  </div>
+                  {loadingMetrics ? (
+                    <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>
+                  ) : metaMetrics.length === 0 ? (
+                    <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <p className="text-gray-500 text-sm">Sin métricas disponibles.</p>
+                      <p className="text-gray-600 text-xs mt-1">Las métricas aparecen cuando tienes campañas activas con gasto.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {metaMetrics.map((m: any, i: number) => (
+                        <div key={i} className="rounded-2xl p-4 space-y-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <p className="text-sm font-semibold text-white">{m.campaign_name}</p>
+                          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                            {[
+                              { label: 'Gasto', val: `$${parseFloat(m.spend || 0).toFixed(2)}` },
+                              { label: 'ROAS', val: m.purchase_roas?.[0]?.value ? `${parseFloat(m.purchase_roas[0].value).toFixed(2)}x` : '—' },
+                              { label: 'CTR', val: m.ctr ? `${parseFloat(m.ctr).toFixed(2)}%` : '—' },
+                              { label: 'CPC', val: m.cpc ? `$${parseFloat(m.cpc).toFixed(2)}` : '—' },
+                              { label: 'Alcance', val: m.reach ? parseInt(m.reach).toLocaleString() : '—' },
+                              { label: 'Conversiones', val: m.conversions?.[0]?.value || '—' },
+                            ].map(stat => (
+                              <div key={stat.label} className="text-center">
+                                <p className="text-xs text-gray-500">{stat.label}</p>
+                                <p className="text-sm font-bold text-white">{stat.val}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP: CAMPAIGNS LIST */}
+              {step === 'campaigns' && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setStep('home')} className="text-xs text-gray-500 hover:text-white">← Inicio</button>
+                    <h2 className="text-base font-semibold text-white">Mis campañas</h2>
+                  </div>
+                  {loadingCampaigns ? (
+                    <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>
+                  ) : campaigns.length === 0 ? (
+                    <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <p className="text-gray-500 text-sm">Sin campañas creadas aún.</p>
+                      <button onClick={() => setStep('type')} className="mt-3 text-xs text-violet-400 hover:underline">Crear primera campaña →</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {campaigns.map((c: any) => (
+                        <div key={c.id} className="rounded-xl px-4 py-3 flex items-center gap-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">{c.name}</p>
+                            <p className="text-xs text-gray-500">{c.objective} · {c.country} · ${c.dailyBudget}/día</p>
+                            <p className="text-[10px] text-gray-700 mt-0.5">{new Date(c.createdAt).toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: '2-digit' })}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {c.fbCampaignId && (
+                              <span className="text-[10px] font-mono text-gray-600">ID: {c.fbCampaignId.slice(0, 8)}...</span>
+                            )}
+                            <span className="text-[10px] px-2 py-0.5 rounded-lg font-medium"
+                              style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.2)' }}>
+                              {c.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* STEP: TYPE */}
               {step === 'type' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-base font-semibold text-white">¿Qué quieres lograr?</h2>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setStep('home')} className="text-xs text-gray-500 hover:text-white">← Inicio</button>
+                      <h2 className="text-base font-semibold text-white">¿Qué quieres lograr?</h2>
+                    </div>
                     <span className="text-xs text-gray-600">{status?.adAccountName}</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

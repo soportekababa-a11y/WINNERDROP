@@ -456,6 +456,17 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
     });
   }
 
+  async getCampaignMetrics(userId: string): Promise<any[]> {
+    const conn = await this.connectionRepo.findOne({ where: { userId, isActive: true } });
+    if (!conn?.adAccountId) return [];
+    const fields = 'campaign_name,spend,impressions,reach,clicks,ctr,cpc,purchase_roas,conversions';
+    const res = await fetch(
+      `${GRAPH}/${conn.adAccountId}/insights?fields=${fields}&date_preset=last_7d&level=campaign&access_token=${conn.accessToken}`
+    ).then(r => r.json()) as any;
+    if (res.error) return [];
+    return res.data ?? [];
+  }
+
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
   private async getConnection(userId: string): Promise<MetaConnection> {

@@ -66,6 +66,12 @@ export class MetaAdsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('metrics')
+  getMetrics(@Req() req: any) {
+    return this.svc.getCampaignMetrics(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('campaigns')
   @UseInterceptors(FilesInterceptor('files', 10, { storage: memoryStorage() }))
   createCampaign(
