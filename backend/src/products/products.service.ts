@@ -188,7 +188,7 @@ export class ProductsService {
            HAVING SUM(CASE WHEN daily.day_sales > 0 THEN 1 ELSE 0 END) >= 3
          ) w ON w.pid = p.id
          WHERE ${conds.join(' AND ')}
-         ORDER BY w.days_active DESC, w.total_week DESC
+         ORDER BY w.total_week DESC, w.days_active DESC
          LIMIT $${lp - 1} OFFSET $${lp}`,
         params,
       );
