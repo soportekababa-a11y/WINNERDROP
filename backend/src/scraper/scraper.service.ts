@@ -329,16 +329,23 @@ export class ScraperService implements OnModuleDestroy {
 
     try {
       for (const { code, storeName } of COUNTRIES) {
-        if (!await this.ensureBrowser()) {
-          this.logger.error(`Browser no disponible — omitiendo ${code}`);
-          continue;
-        }
+        let countryDone = false;
+        for (let attempt = 1; attempt <= 3 && !countryDone; attempt++) {
+          if (attempt > 1) {
+            this.logger.warn(`[${code}] Reintentando (intento ${attempt}/3)...`);
+            await new Promise(r => setTimeout(r, 5000));
+          }
+
+          if (!await this.ensureBrowser()) {
+            this.logger.error(`Browser no disponible — omitiendo ${code}`);
+            break;
+          }
 
         let context: BrowserContext | null = null;
         try {
           context = await this.loginForCountry(code, storeName, email, password);
           if (!context) {
-            this.logger.error(`[${code}] Login fallido — se reintenta en próximo ciclo`);
+            this.logger.error(`[${code}] Login fallido intento ${attempt}`);
             continue;
           }
 
@@ -393,13 +400,14 @@ export class ScraperService implements OnModuleDestroy {
           totalProducts += saved;
           totalPages += pages;
           this.logger.log(`[${code}] ${saved}/${products.length} guardados en ${pages} páginas`);
+          countryDone = true;
 
         } catch (err) {
-          this.logger.error(`[${code}] Error en ciclo — omitiendo país`, err);
+          this.logger.error(`[${code}] Error intento ${attempt} — ${err}`, err);
         } finally {
-          // Always close context so next country starts clean with no session conflict
           await context?.close().catch(() => {});
         }
+        } // end retry loop
       }
 
       await this.cleanupOldSnapshots();
