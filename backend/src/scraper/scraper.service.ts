@@ -6,6 +6,7 @@ import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import { Product } from '../products/product.entity';
 import { Snapshot } from '../snapshots/snapshot.entity';
 import { ProductsService } from '../products/products.service';
+import { DropisService, DROPI_COUNTRIES } from './dropi.service';
 
 const EFFI_LOGIN_URL = 'https://effi.com.co/ingreso';
 const EFFI_CATALOG_URL = 'https://effi.com.co/app/articulo_dropshipping';
@@ -41,6 +42,7 @@ export class ScraperService implements OnModuleDestroy {
   constructor(
     private config: ConfigService,
     private productsService: ProductsService,
+    private dropisService: DropisService,
     @InjectRepository(Product) private productRepo: Repository<Product>,
     @InjectRepository(Snapshot) private snapshotRepo: Repository<Snapshot>,
   ) {}
@@ -408,6 +410,15 @@ export class ScraperService implements OnModuleDestroy {
           await context?.close().catch(() => {});
         }
         } // end retry loop
+      }
+
+      // Dropi countries — sequential, one at a time
+      for (const dropiDef of DROPI_COUNTRIES) {
+        try {
+          await this.dropisService.scrapeCountry(dropiDef);
+        } catch (err) {
+          this.logger.error(`[Dropi:${dropiDef.code}] Error en ciclo`, err);
+        }
       }
 
       await this.cleanupOldSnapshots();

@@ -55,6 +55,9 @@ export class Product {
   @Column({ default: 'RD' })
   country: string;
 
+  @Column({ default: 'effi' })
+  platform: string;
+
   @OneToMany(() => Snapshot, (s) => s.product)
   snapshots: Snapshot[];
 
