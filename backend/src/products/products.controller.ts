@@ -17,13 +17,13 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get('categories')
-  getCategories(@Request() req: any, @Query('country') country?: string) {
-    return this.productsService.getCategories(effectiveCountry(req.user, country));
+  getCategories(@Request() req: any, @Query('country') country?: string, @Query('platform') platform?: string) {
+    return this.productsService.getCategories(effectiveCountry(req.user, country), platform);
   }
 
   @Get('providers')
-  getProviders(@Request() req: any, @Query('country') country?: string) {
-    return this.productsService.getProviders(effectiveCountry(req.user, country));
+  getProviders(@Request() req: any, @Query('country') country?: string, @Query('platform') platform?: string) {
+    return this.productsService.getProviders(effectiveCountry(req.user, country), platform);
   }
 
   @Get()
@@ -52,6 +52,7 @@ export class ProductsController {
     @Query('hot') hot?: string,
     @Query('provider') provider?: string,
     @Query('country') country?: string,
+    @Query('platform') platform?: string,
   ) {
     const c = effectiveCountry(req.user, country);
     return this.productsService.getProductsWithDailyGrid(
@@ -64,12 +65,13 @@ export class ProductsController {
       hot === 'true',
       provider,
       c,
+      platform,
     );
   }
 
   @Get('dashboard')
-  getDashboardStats(@Request() req: any, @Query('country') country?: string) {
-    return this.productsService.getDashboardStats(effectiveCountry(req.user, country));
+  getDashboardStats(@Request() req: any, @Query('country') country?: string, @Query('platform') platform?: string) {
+    return this.productsService.getDashboardStats(effectiveCountry(req.user, country), platform);
   }
 
   @Get(':id/daily')

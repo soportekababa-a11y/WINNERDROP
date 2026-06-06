@@ -89,17 +89,17 @@ export interface ProductWithGrid extends Product {
   dailyGrid: { date: string; sales: number }[];
 }
 
-export const fetchProductsGrid = (params?: { limit?: number; sort?: 'today' | 'total' | 'growth' | 'winners' | 'yesterday'; days?: number; search?: string; category?: string; provider?: string; offset?: number; hot?: boolean; country?: string }) =>
+export const fetchProductsGrid = (params?: { limit?: number; sort?: 'today' | 'total' | 'growth' | 'winners' | 'yesterday'; days?: number; search?: string; category?: string; provider?: string; offset?: number; hot?: boolean; country?: string; platform?: string }) =>
   api.get<ProductWithGrid[]>('/products/grid', { params }).then(r => r.data);
 
-export const fetchDashboard = (country?: string) => api.get<DashboardStats>('/products/dashboard', { params: country ? { country } : undefined }).then(r => r.data);
+export const fetchDashboard = (country?: string, platform?: string) => api.get<DashboardStats>('/products/dashboard', { params: { ...(country ? { country } : {}), ...(platform ? { platform } : {}) } }).then(r => r.data);
 
 export const fetchProducts = (params?: { limit?: number; sort?: string; search?: string; category?: string; country?: string }) =>
   api.get<Product[]>('/products', { params }).then(r => r.data);
 
-export const fetchCategories = (country?: string) => api.get<string[]>('/products/categories', { params: country ? { country } : undefined }).then(r => r.data);
+export const fetchCategories = (country?: string, platform?: string) => api.get<string[]>('/products/categories', { params: { ...(country ? { country } : {}), ...(platform ? { platform } : {}) } }).then(r => r.data);
 
-export const fetchProviders = (country?: string) => api.get<string[]>('/products/providers', { params: country ? { country } : undefined }).then(r => r.data);
+export const fetchProviders = (country?: string, platform?: string) => api.get<string[]>('/products/providers', { params: { ...(country ? { country } : {}), ...(platform ? { platform } : {}) } }).then(r => r.data);
 
 export const fetchProduct = (id: string) => api.get<Product>(`/products/${id}`).then(r => r.data);
 

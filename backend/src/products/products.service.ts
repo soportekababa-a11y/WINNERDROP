@@ -29,13 +29,14 @@ export class ProductsService {
     @InjectRepository(Snapshot) private snapshotRepo: Repository<Snapshot>,
   ) {}
 
-  async getTopProducts(limit = 50, sortBy: 'today' | 'total' | 'growth' = 'today', category?: string, country?: string) {
+  async getTopProducts(limit = 50, sortBy: 'today' | 'total' | 'growth' = 'today', category?: string, country?: string, platform?: string) {
     const qb = this.productRepo
       .createQueryBuilder('p')
       .where('p.isActive = true');
 
     if (category) qb.andWhere('p.category = :category', { category });
     if (country) qb.andWhere('p.country = :country', { country });
+    if (platform) qb.andWhere('p.platform = :platform', { platform });
 
     if (sortBy === 'growth') {
       qb.orderBy('CASE WHEN p.salesYesterday > 0 THEN (p.salesToday - p.salesYesterday)::float / p.salesYesterday ELSE p.salesToday END', 'DESC');
@@ -48,7 +49,7 @@ export class ProductsService {
     return qb.take(limit).getMany();
   }
 
-  async getDashboardStats(country?: string) {
+  async getDashboardStats(country?: string, platform?: string) {
     const qb = this.productRepo
       .createQueryBuilder('p')
       .select('SUM(p.salesToday)', 'totalToday')
@@ -57,6 +58,7 @@ export class ProductsService {
       .where('p.isActive = true');
 
     if (country) qb.andWhere('p.country = :country', { country });
+    if (platform) qb.andWhere('p.platform = :platform', { platform });
 
     const result = await qb.getRawOne();
 
@@ -64,7 +66,7 @@ export class ProductsService {
     const yesterday = parseInt(result.totalYesterday) || 0;
     const growth = yesterday > 0 ? Math.round(((today - yesterday) / yesterday) * 100 * 10) / 10 : 0;
 
-    const topProducts = await this.getTopProducts(10, 'today', undefined, country);
+    const topProducts = await this.getTopProducts(10, 'today', undefined, country, platform);
 
     return { totalSalesToday: today, totalSalesYesterday: yesterday, growthPercent: growth, activeProducts: parseInt(result.activeProducts), topProducts };
   }
@@ -147,6 +149,7 @@ export class ProductsService {
     hot = false,
     provider?: string,
     country?: string,
+    platform?: string,
   ) {
     const { tz, utcOffset } = getTzCfg(country);
     const intervalExpr = `'${utcOffset} hours'`;
@@ -155,6 +158,7 @@ export class ProductsService {
     if (category) qb.andWhere('p.category = :category', { category });
     if (provider) qb.andWhere('p.provider = :provider', { provider });
     if (country) qb.andWhere('p.country = :country', { country });
+    if (platform) qb.andWhere('p.platform = :platform', { platform });
     if (search) qb.andWhere('LOWER(p.name) LIKE LOWER(:q) OR LOWER(p.category) LIKE LOWER(:q) OR LOWER(p.provider) LIKE LOWER(:q)', { q: `%${search}%` });
 
     if (sortBy === 'winners') {
@@ -163,6 +167,7 @@ export class ProductsService {
       if (category) { params.push(category); conds.push(`p.category = $${params.length}`); }
       if (provider) { params.push(provider); conds.push(`p.provider = $${params.length}`); }
       if (country)  { params.push(country);  conds.push(`p.country = $${params.length}`); }
+      if (platform) { params.push(platform); conds.push(`p.platform = $${params.length}`); }
       if (search) {
         params.push(`%${search}%`);
         const n = params.length;
@@ -294,22 +299,24 @@ export class ProductsService {
     });
   }
 
-  async getCategories(country?: string): Promise<string[]> {
+  async getCategories(country?: string, platform?: string): Promise<string[]> {
     const qb = this.productRepo
       .createQueryBuilder('p')
       .select('DISTINCT p.category', 'category')
       .where('p.isActive = true AND p.category IS NOT NULL AND p.category != :empty', { empty: '' });
     if (country) qb.andWhere('p.country = :country', { country });
+    if (platform) qb.andWhere('p.platform = :platform', { platform });
     const rows = await qb.orderBy('p.category', 'ASC').getRawMany();
     return rows.map(r => r.category).filter(Boolean);
   }
 
-  async getProviders(country?: string): Promise<string[]> {
+  async getProviders(country?: string, platform?: string): Promise<string[]> {
     const qb = this.productRepo
       .createQueryBuilder('p')
       .select('DISTINCT p.provider', 'provider')
       .where('p.isActive = true AND p.provider IS NOT NULL AND p.provider != :empty', { empty: '' });
     if (country) qb.andWhere('p.country = :country', { country });
+    if (platform) qb.andWhere('p.platform = :platform', { platform });
     const rows = await qb.orderBy('p.provider', 'ASC').getRawMany();
     return rows.map(r => r.provider).filter(Boolean);
   }

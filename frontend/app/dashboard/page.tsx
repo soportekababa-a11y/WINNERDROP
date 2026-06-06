@@ -13,7 +13,9 @@ import { Sidebar } from "@/components/sidebar";
 const PAGE_SIZE = 40;
 type ProductoFilter = 'todos' | 'hoy' | 'winners';
 type CountryFilter = '' | 'RD' | 'GT' | 'EC' | 'CR' | 'CO';
-const COUNTRIES: { value: CountryFilter; label: string }[] = [
+type PlatformFilter = 'effi' | 'dropi';
+
+const EFFI_COUNTRIES: { value: CountryFilter; label: string }[] = [
   { value: '',   label: 'Elegir país' },
   { value: 'RD', label: '🇩🇴 Rep. Dominicana' },
   { value: 'GT', label: '🇬🇹 Guatemala' },
@@ -21,6 +23,15 @@ const COUNTRIES: { value: CountryFilter; label: string }[] = [
   { value: 'CR', label: '🇨🇷 Costa Rica' },
   { value: 'CO', label: '🇨🇴 Colombia' },
 ];
+
+const DROPI_COUNTRIES: { value: CountryFilter; label: string }[] = [
+  { value: 'CR', label: '🇨🇷 Costa Rica' },
+];
+
+const COUNTRIES_BY_PLATFORM: Record<PlatformFilter, { value: CountryFilter; label: string }[]> = {
+  effi: EFFI_COUNTRIES,
+  dropi: DROPI_COUNTRIES,
+};
 
 const PRODUCTO_OPTIONS: { value: ProductoFilter; label: string }[] = [
   { value: 'todos',   label: 'Todos' },
@@ -59,12 +70,31 @@ export default function Dashboard() {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [platform, setPlatform] = useState<PlatformFilter>(() => {
+    if (typeof window === 'undefined') return 'effi';
+    const u = getUser();
+    if (u?.plan === 'basic' && u.selectedPlatform) return (u.selectedPlatform as PlatformFilter) || 'effi';
+    return (sessionStorage.getItem('ms_platform') as PlatformFilter) || 'effi';
+  });
+
   const [country, setCountry] = useState<CountryFilter>(() => {
     if (typeof window === 'undefined') return '';
     const u = getUser();
     if (u?.plan === 'basic' && u.selectedCountry) return u.selectedCountry as CountryFilter;
     return (sessionStorage.getItem('ms_country') as CountryFilter) || '';
   });
+
+  const updatePlatform = (v: PlatformFilter) => {
+    setPlatform(v);
+    setCategory('');
+    setProvider('');
+    if (typeof window !== 'undefined') sessionStorage.setItem('ms_platform', v);
+    // Dropi only has CR — auto-select it
+    if (v === 'dropi') {
+      setCountry('CR');
+      if (typeof window !== 'undefined') sessionStorage.setItem('ms_country', 'CR');
+    }
+  };
 
   const updateCountry = (v: CountryFilter) => {
     setCountry(v);
@@ -89,29 +119,29 @@ export default function Dashboard() {
   }, [router]);
 
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['dashboard', country],
-    queryFn: () => fetchDashboard(country || undefined),
+    queryKey: ['dashboard', country, platform],
+    queryFn: () => fetchDashboard(country || undefined, platform),
     refetchInterval: 60_000,
   });
 
   const { data: categories } = useQuery({
-    queryKey: ['categories', country],
-    queryFn: () => fetchCategories(country || undefined),
+    queryKey: ['categories', country, platform],
+    queryFn: () => fetchCategories(country || undefined, platform),
     staleTime: 5 * 60_000,
   });
 
   const { data: providers } = useQuery({
-    queryKey: ['providers', country],
-    queryFn: () => fetchProviders(country || undefined),
+    queryKey: ['providers', country, platform],
+    queryFn: () => fetchProviders(country || undefined, platform),
     staleTime: 5 * 60_000,
   });
 
   const { hot, sort, limit } = filterToParams(productoFilter);
 
   const { data, isLoading: productsLoading, isFetchingNextPage, fetchNextPage, hasNextPage } = useInfiniteQuery({
-    queryKey: ['products-grid', productoFilter, sort, category, provider, search, country],
+    queryKey: ['products-grid', productoFilter, sort, category, provider, search, country, platform],
     queryFn: ({ pageParam = 0 }) =>
-      fetchProductsGrid({ limit, sort, days: 14, category: category || undefined, provider: provider || undefined, search: search || undefined, country: country || undefined, offset: pageParam as number, hot }),
+      fetchProductsGrid({ limit, sort, days: 14, category: category || undefined, provider: provider || undefined, search: search || undefined, country: country || undefined, platform, offset: pageParam as number, hot }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => lastPage.length < PAGE_SIZE ? undefined : allPages.flat().length,
     refetchInterval: 120_000,
@@ -177,7 +207,7 @@ export default function Dashboard() {
                 <Sparkles size={20} className="text-violet-400" />
                 Productos Ganadores
               </h1>
-              <p className="text-sm text-gray-600 mt-0.5">{country ? (COUNTRIES.find(c => c.value === country)?.label ?? country) : 'Selecciona un país'} · actualización en tiempo real</p>
+              <p className="text-sm text-gray-600 mt-0.5">{country ? (COUNTRIES_BY_PLATFORM[platform].find(c => c.value === country)?.label ?? country) : 'Selecciona un país'} · {platform === 'dropi' ? 'Dropi' : 'Effi'} · actualización en tiempo real</p>
             </div>
           </div>
 
@@ -185,21 +215,30 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Plataforma</label>
-                <div className="relative">
-                  <select value="effi" disabled
-                    className="w-full appearance-none rounded-xl px-3 py-2.5 pr-8 text-sm font-medium focus:outline-none disabled:opacity-40 disabled:cursor-default"
-                    style={selectStyle}>
-                    <option value="effi">Effi</option>
-                  </select>
-                  <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">País</label>
                 {isBasic ? (
                   <div className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium"
                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#e2e8f0' }}>
-                    <span>{COUNTRIES.find(c => c.value === country)?.label ?? country}</span>
+                    <span>{platform === 'dropi' ? 'Dropi' : 'Effi'}</span>
+                    <Lock size={11} className="text-gray-600" />
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <select value={platform} onChange={e => updatePlatform(e.target.value as PlatformFilter)}
+                      className="w-full appearance-none rounded-xl px-3 py-2.5 pr-8 text-sm font-medium focus:outline-none cursor-pointer transition-all duration-200"
+                      style={selectStyle}>
+                      <option value="effi">Effi</option>
+                      <option value="dropi">Dropi</option>
+                    </select>
+                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">País</label>
+                {isBasic || platform === 'dropi' ? (
+                  <div className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#e2e8f0' }}>
+                    <span>{COUNTRIES_BY_PLATFORM[platform].find(c => c.value === country)?.label ?? country}</span>
                     <Lock size={11} className="text-gray-600" />
                   </div>
                 ) : (
@@ -207,7 +246,7 @@ export default function Dashboard() {
                     <select value={country} onChange={e => updateCountry(e.target.value as CountryFilter)}
                       className="w-full appearance-none rounded-xl px-3 py-2.5 pr-8 text-sm font-medium focus:outline-none cursor-pointer transition-all duration-200"
                       style={selectStyle}>
-                      {COUNTRIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                      {COUNTRIES_BY_PLATFORM[platform].map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                     </select>
                     <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
                   </div>
