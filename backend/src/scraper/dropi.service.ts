@@ -136,6 +136,11 @@ export class DropisService {
       const items: any[] = resp.objects ?? [];
       if (!items.length) break;
 
+      if (start === 0 && items.length > 0) {
+        this.logger.log(`[Dropi:${code}] SAMPLE_ITEM_KEYS: ${Object.keys(items[0]).join(', ')}`);
+        this.logger.log(`[Dropi:${code}] SAMPLE_ITEM: ${JSON.stringify(items[0])}`);
+      }
+
       for (const item of items) {
         const imageUrl = item.gallery?.[0]?.urlS3 ? `${CDN}${item.gallery[0].urlS3}` : '';
         const stock    = item.warehouse_product?.[0]?.stock ?? 0;
