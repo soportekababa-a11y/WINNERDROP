@@ -257,16 +257,15 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 {statsLoading ? (
-                  Array.from({ length: 3 }).map((_, i) => (
+                  Array.from({ length: 2 }).map((_, i) => (
                     <div key={i} className="rounded-2xl p-5 h-32 animate-shimmer" style={{ border: '1px solid rgba(255,255,255,0.05)' }} />
                   ))
                 ) : stats ? (
                   <>
                     <StatCard label="Ventas hoy" value={stats.totalSalesToday.toLocaleString()} trend={stats.growthPercent} icon={<ShoppingBag size={16} />} highlight color="fuchsia" />
                     <StatCard label="Ventas ayer" value={stats.totalSalesYesterday.toLocaleString()} icon={<TrendingUp size={16} />} color="violet" />
-                    <StatCard label="Crecimiento" value={`${stats.growthPercent > 0 ? '+' : ''}${stats.growthPercent}%`} sub="vs ayer" highlight={stats.growthPercent > 0} color="emerald" />
                   </>
                 ) : null}
               </div>

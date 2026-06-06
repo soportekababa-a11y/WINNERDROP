@@ -125,10 +125,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-3">
               {[
                 { icon: <BarChart2 size={16} />, label: "Ventas hoy", value: product.salesToday > 0 ? product.salesToday.toLocaleString() : '—', sub: product.salesYesterday > 0 ? `${product.salesYesterday} ayer` : undefined, hi: product.salesToday > 0 },
-                { icon: <TrendingUp size={16} />, label: "Total acumulado", value: product.totalSalesAccum.toLocaleString(), sub: peakDay ? `Pico: ${peakDay.sales} el ${peakDay.date}` : undefined },
                 { icon: <Package size={16} />, label: "Stock", value: product.stock.toLocaleString(), sub: product.stock < 10 && product.stock > 0 ? '⚠ Stock bajo' : undefined, warn: product.stock < 10 && product.stock > 0 },
               ].map(s => (
                 <div key={s.label} className="rounded-2xl p-4 space-y-2 transition-all duration-300"
