@@ -330,6 +330,15 @@ export class ScraperService implements OnModuleDestroy {
     const password = this.config.get<string>('EFFI_PASSWORD')!;
 
     try {
+      // Start Dropi in parallel with Effi — independent browser, independent DB rows
+      const dropiPromise = Promise.all(
+        DROPI_COUNTRIES.map(def =>
+          this.dropisService.scrapeCountry(def).catch(err =>
+            this.logger.error(`[Dropi:${def.code}] Error en ciclo`, err),
+          ),
+        ),
+      );
+
       for (const { code, storeName } of COUNTRIES) {
         let countryDone = false;
         for (let attempt = 1; attempt <= 3 && !countryDone; attempt++) {
@@ -412,14 +421,8 @@ export class ScraperService implements OnModuleDestroy {
         } // end retry loop
       }
 
-      // Dropi countries — sequential, one at a time
-      for (const dropiDef of DROPI_COUNTRIES) {
-        try {
-          await this.dropisService.scrapeCountry(dropiDef);
-        } catch (err) {
-          this.logger.error(`[Dropi:${dropiDef.code}] Error en ciclo`, err);
-        }
-      }
+      // Wait for Dropi to finish (was running in parallel with Effi)
+      await dropiPromise;
 
       await this.cleanupOldSnapshots();
       await this.productsService.refreshDailyCache().catch(err =>
