@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { chromium, Browser } from 'playwright';
 import { Product } from '../products/product.entity';
 import { Snapshot } from '../snapshots/snapshot.entity';
 
@@ -17,7 +16,7 @@ function businessDay(): string {
 }
 
 export const DROPI_COUNTRIES = [
-  { code: 'CR', loginUrl: 'https://app.dropi.cr/auth/login', apiBase: 'https://api.dropi.cr', countryKey: 'COSTARICA' },
+  { code: 'CR', apiBase: 'https://api.dropi.cr', countryKey: 'COSTARICA' },
 ];
 
 interface DropiRaw {
@@ -45,9 +44,9 @@ export class DropisService {
   async scrapeCountry(def: typeof DROPI_COUNTRIES[0]): Promise<{ saved: number }> {
     const email    = this.config.get<string>('DROPI_EMAIL')!;
     const password = this.config.get<string>('DROPI_PASSWORD')!;
-    const { code, loginUrl, apiBase, countryKey } = def;
+    const { code, apiBase, countryKey } = def;
 
-    const token = await this.login(loginUrl, email, password, code);
+    const token = await this.login(apiBase, email, password, code);
     if (!token) { this.logger.error(`[Dropi:${code}] Login fallido`); return { saved: 0 }; }
     this.logger.log(`[Dropi:${code}] Token OK — fetching products...`);
 
@@ -81,39 +80,22 @@ export class DropisService {
     return { saved };
   }
 
-  private async login(loginUrl: string, email: string, password: string, code: string): Promise<string | null> {
-    let browser: Browser | null = null;
+  private async login(apiBase: string, email: string, password: string, code: string): Promise<string | null> {
     try {
-      const executablePath = this.chromiumPath();
-      browser = await chromium.launch({ headless: true, executablePath });
-      const page = await browser.newPage();
-      let token: string | null = null;
-
-      page.on('response', async resp => {
-        if (resp.url().includes('/api/login')) {
-          try { const d = await resp.json(); if (d.token) token = d.token; } catch {}
-        }
+      const res = await fetch(`${apiBase}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
-
-      await page.route('**', route => {
-        const rt = route.request().resourceType();
-        if (['image','media','font','stylesheet'].includes(rt)) route.abort().catch(() => {});
-        else route.continue().catch(() => {});
-      });
-
-      await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await page.waitForTimeout(3000);
-      await page.fill('#email', email);
-      await page.fill('#password', password);
-      await page.click('button.primary');
-      await page.waitForTimeout(6000);
-
-      return token;
+      if (!res.ok) {
+        this.logger.error(`[Dropi:${code}] Login HTTP ${res.status}`);
+        return null;
+      }
+      const data = await res.json() as any;
+      return data.token ?? null;
     } catch (err) {
       this.logger.error(`[Dropi:${code}] Login error`, err);
       return null;
-    } finally {
-      await browser?.close().catch(() => {});
     }
   }
 
@@ -217,10 +199,4 @@ export class DropisService {
     return pendingYesterday;
   }
 
-  private chromiumPath(): string | undefined {
-    const { existsSync } = require('fs');
-    for (const p of [process.env.CHROMIUM_PATH, '/usr/bin/google-chrome-stable', '/usr/bin/chromium-browser', '/usr/bin/chromium', '/snap/bin/chromium'].filter(Boolean) as string[]) {
-      if (existsSync(p)) return p;
-    }
-  }
 }
