@@ -143,7 +143,8 @@ export class DropisService {
 
       for (const item of items) {
         const imageUrl = item.gallery?.[0]?.urlS3 ? `${CDN}${item.gallery[0].urlS3}` : '';
-        const stock    = item.warehouse_product?.[0]?.stock ?? 0;
+        const rawStock = item.warehouse_product?.[0]?.stock ?? 0;
+        const stock    = rawStock > 100_000_000 ? 0 : rawStock; // skip "unlimited" virtual stock
         all.push({
           dropiId: `dropi_${item.id}`,
           name: item.name ?? '',
