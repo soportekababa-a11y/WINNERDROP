@@ -81,17 +81,26 @@ export class DropisService {
   }
 
   private async login(apiBase: string, email: string, password: string, code: string): Promise<string | null> {
+    const appDomain = apiBase.replace('api.', 'app.');
     try {
       const res = await fetch(`${apiBase}/api/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/plain, */*',
+          'Origin': appDomain,
+          'Referer': `${appDomain}/auth/login`,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        },
         body: JSON.stringify({ email, password }),
       });
       if (!res.ok) {
-        this.logger.error(`[Dropi:${code}] Login HTTP ${res.status}`);
+        const body = await res.text().catch(() => '');
+        this.logger.error(`[Dropi:${code}] Login HTTP ${res.status} — ${body.slice(0, 200)}`);
         return null;
       }
       const data = await res.json() as any;
+      if (!data.token) this.logger.warn(`[Dropi:${code}] Login OK pero sin token — keys: ${Object.keys(data).join(', ')}`);
       return data.token ?? null;
     } catch (err) {
       this.logger.error(`[Dropi:${code}] Login error`, err);
