@@ -140,12 +140,16 @@ export class DropisService {
         }),
       }).then(r => r.json()) as any;
 
+      if (start === 0) {
+        this.logger.log(`[Dropi:${code}] RESP_KEYS: ${Object.keys(resp).join(', ')} | objects: ${resp.objects?.length ?? 'undefined'} | status: ${resp.status}`);
+      }
+
       const items: any[] = resp.objects ?? [];
       if (!items.length) break;
 
       if (start === 0 && items.length > 0) {
         this.logger.log(`[Dropi:${code}] SAMPLE_ITEM_KEYS: ${Object.keys(items[0]).join(', ')}`);
-        this.logger.log(`[Dropi:${code}] SAMPLE_ITEM: ${JSON.stringify(items[0])}`);
+        this.logger.log(`[Dropi:${code}] SAMPLE_ITEM: ${JSON.stringify(items[0]).slice(0, 500)}`);
       }
 
       for (const item of items) {
