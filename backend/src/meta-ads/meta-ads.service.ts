@@ -383,10 +383,20 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
     // 2. Upload all creatives once (reuse across ad sets)
     const creativeIds: string[] = [];
     const copys: any[] = dto.copys ?? [];
+    const trunc = (s: string | undefined, max: number) => {
+      if (!s) return '';
+      return s.length <= max ? s : s.slice(0, max - 1) + '…';
+    };
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const copy = copys[i] ?? copys[0] ?? { primaryText: '', headline: dto.productName, description: '', callToAction: 'SHOP_NOW' };
+      const rawCopy = copys[i] ?? copys[0] ?? { primaryText: '', headline: dto.productName, description: '', callToAction: 'SHOP_NOW' };
+      const copy = {
+        primaryText: trunc(rawCopy.primaryText, 125),
+        headline:    trunc(rawCopy.headline,    40),
+        description: trunc(rawCopy.description, 30),
+        callToAction: rawCopy.callToAction ?? 'SHOP_NOW',
+      };
       let creativeId: string | undefined;
 
       if (file.mimetype.startsWith('image/')) {
@@ -402,8 +412,8 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
               link: dto.landingPage,
               message: copy.primaryText,
               name: copy.headline,
-              description: copy.description ?? '',
-              call_to_action: { type: copy.callToAction ?? 'SHOP_NOW', value: { link: dto.landingPage } },
+              description: copy.description,
+              call_to_action: { type: copy.callToAction, value: { link: dto.landingPage } },
             },
           },
           ...(dto.instagramAccountId ? { instagram_actor_id: dto.instagramAccountId } : {}),
@@ -450,8 +460,8 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
               video_id: videoId,
               image_url: thumbnailUrl,
               message: copy.primaryText,
-              link_description: copy.description ?? copy.headline,
-              call_to_action: { type: copy.callToAction ?? 'SHOP_NOW', value: { link: dto.landingPage } },
+              link_description: copy.description || trunc(copy.headline, 30),
+              call_to_action: { type: copy.callToAction, value: { link: dto.landingPage } },
             },
           },
           ...(dto.instagramAccountId ? { instagram_actor_id: dto.instagramAccountId } : {}),
