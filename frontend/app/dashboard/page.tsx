@@ -11,7 +11,7 @@ import { ShoppingBag, TrendingUp, Loader2, ChevronDown, Sparkles, Search, X, Loc
 import { Sidebar } from "@/components/sidebar";
 
 const PAGE_SIZE = 40;
-type ProductoFilter = 'todos' | 'hoy' | 'winners';
+type ProductoFilter = 'todos' | 'hoy' | 'ayer' | 'winners';
 type CountryFilter = '' | 'RD' | 'GT' | 'EC' | 'CR' | 'CO';
 type PlatformFilter = 'effi' | 'dropi';
 
@@ -36,13 +36,15 @@ const COUNTRIES_BY_PLATFORM: Record<PlatformFilter, { value: CountryFilter; labe
 const PRODUCTO_OPTIONS: { value: ProductoFilter; label: string }[] = [
   { value: 'todos',   label: 'Todos' },
   { value: 'hoy',    label: 'Más vendidos hoy' },
+  { value: 'ayer',   label: 'Más vendidos ayer' },
   { value: 'winners', label: 'Winners' },
 ];
 
 function filterToParams(f: ProductoFilter): { hot: boolean; sort: 'today' | 'total' | 'growth' | 'winners' | 'yesterday'; limit: number } {
-  if (f === 'hoy')     return { hot: false, sort: 'today',   limit: 10 };
-  if (f === 'winners') return { hot: false, sort: 'winners', limit: 5 };
-  return                      { hot: false, sort: 'today',   limit: PAGE_SIZE };
+  if (f === 'hoy')     return { hot: false, sort: 'today',     limit: 10 };
+  if (f === 'ayer')    return { hot: false, sort: 'yesterday', limit: 10 };
+  if (f === 'winners') return { hot: false, sort: 'winners',   limit: 5 };
+  return                      { hot: false, sort: 'today',     limit: PAGE_SIZE };
 }
 
 function SkeletonCard() {
@@ -355,10 +357,11 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-28 space-y-3">
                   <p className="text-6xl mb-2 opacity-20">
-                    {productoFilter === 'hoy' ? '🔥' : productoFilter === 'winners' ? '🏆' : '📦'}
+                    {productoFilter === 'hoy' ? '🔥' : productoFilter === 'ayer' ? '📅' : productoFilter === 'winners' ? '🏆' : '📦'}
                   </p>
                   <p className="text-gray-600 text-sm">
                     {productoFilter === 'hoy' ? 'Sin ventas hoy aún'
+                      : productoFilter === 'ayer' ? 'Sin ventas registradas ayer'
                       : productoFilter === 'winners' ? 'Aún no hay winners — se necesitan 2+ días de datos'
                       : hasFilter ? 'Sin resultados para estos filtros'
                       : 'Cargando productos...'}
