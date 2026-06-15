@@ -870,7 +870,7 @@ export default function MetaAdsPage() {
                   <button onClick={createCampaign} disabled={creating || status?.credits === 0}
                     className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
                     style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
-                    {creating ? <><Loader2 size={16} className="animate-spin" /> Creando...</> : <><Zap size={16} /> Crear campaña ({status?.credits ?? 0} crédito{status?.credits !== 1 ? 's' : ''})</>}
+                    {creating ? <><Loader2 size={16} className="animate-spin" /> Creando...</> : <><Zap size={16} /> Crear campaña — 1 crédito</>}
                   </button>
                 </div>
               )}
