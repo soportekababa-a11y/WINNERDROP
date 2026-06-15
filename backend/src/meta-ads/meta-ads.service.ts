@@ -318,6 +318,7 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
     const token = conn.accessToken;
     const adAccountId = conn.adAccountId;
     const pageId = conn.pageId;
+    const isCBO = dto.budgetType === 'CBO';
 
     const objectiveMap: Record<string, string> = {
       VENTAS: 'OUTCOME_SALES', TRAFICO: 'OUTCOME_TRAFFIC',
@@ -325,15 +326,14 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
     };
     const objective = objectiveMap[dto.campaignType] ?? 'OUTCOME_SALES';
 
-    // Determine optimization goal + promoted object
+    // LEADS uses OFFSITE_CONVERSIONS (pixel-based), not LEAD_GENERATION (requires native lead form)
     const goalMap: Record<string, string> = {
       OUTCOME_SALES: 'OFFSITE_CONVERSIONS', OUTCOME_TRAFFIC: 'LANDING_PAGE_VIEWS',
-      OUTCOME_LEADS: 'LEAD_GENERATION', OUTCOME_ENGAGEMENT: 'LINK_CLICKS', OUTCOME_AWARENESS: 'REACH',
+      OUTCOME_LEADS: 'OFFSITE_CONVERSIONS', OUTCOME_ENGAGEMENT: 'LINK_CLICKS', OUTCOME_AWARENESS: 'REACH',
     };
     let optimizationGoal = goalMap[objective] ?? 'LINK_CLICKS';
     let promotedObject: any = undefined;
 
-    // Convert pixel event name to Meta API custom_event_type format
     const eventNameToApiType: Record<string, string> = {
       Purchase: 'PURCHASE', AddToCart: 'ADD_TO_CART', ViewContent: 'CONTENT_VIEW',
       Lead: 'LEAD', CompleteRegistration: 'COMPLETE_REGISTRATION',
@@ -345,28 +345,34 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
     const toEventType = (e: string) => eventNameToApiType[e] ?? e.replace(/([A-Z])/g, '_$1').toUpperCase().replace(/^_/, '');
 
     if (dto.pixelId) {
-      const fallback = optimizationGoal === 'LEAD_GENERATION' ? 'LEAD' : 'PURCHASE';
+      const fallback = dto.campaignType === 'LEADS' ? 'LEAD' : 'PURCHASE';
       promotedObject = { pixel_id: dto.pixelId, custom_event_type: toEventType(dto.conversionEvent ?? fallback) };
-    } else if (optimizationGoal === 'OFFSITE_CONVERSIONS' || optimizationGoal === 'LEAD_GENERATION') {
+    } else if (optimizationGoal === 'OFFSITE_CONVERSIONS') {
       try {
         const pixRes = await fetch(`${GRAPH}/${adAccountId}/adspixels?fields=id&limit=1&access_token=${token}`).then(r => r.json()) as any;
         const pixel = pixRes.data?.[0];
         if (pixel?.id) {
-          promotedObject = { pixel_id: pixel.id, custom_event_type: optimizationGoal === 'LEAD_GENERATION' ? 'LEAD' : 'PURCHASE' };
+          promotedObject = { pixel_id: pixel.id, custom_event_type: dto.campaignType === 'LEADS' ? 'LEAD' : 'PURCHASE' };
         } else {
           optimizationGoal = 'LANDING_PAGE_VIEWS';
+          promotedObject = undefined;
         }
-      } catch { optimizationGoal = 'LANDING_PAGE_VIEWS'; }
+      } catch { optimizationGoal = 'LANDING_PAGE_VIEWS'; promotedObject = undefined; }
     }
 
-    // 1. Create campaign
-    const campaignRes = await this.metaPost(`/${adAccountId}/campaigns`, {
+    // 1. Create campaign — CBO: budget lives here, not on ad sets
+    const campaignBody: any = {
       name: `${dto.productName} - ${dto.country}`,
       objective,
       status: 'PAUSED',
       special_ad_categories: [],
-      is_adset_budget_sharing_enabled: false,
-    }, token);
+    };
+    if (isCBO) {
+      campaignBody.campaign_budget_optimization = true;
+      campaignBody.daily_budget = Math.round(dto.dailyBudget * 100);
+    }
+
+    const campaignRes = await this.metaPost(`/${adAccountId}/campaigns`, campaignBody, token);
     if (campaignRes.error) throw new BadRequestException(`Meta: ${campaignRes.error.message}`);
     const campaignId = campaignRes.id;
 
@@ -463,25 +469,41 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
     const allAdIds: string[] = [];
     const audienceAdSets: any[] = dto.audienceAdSets?.length ? dto.audienceAdSets : [{ name: 'Audiencia Principal', isBroad: true, interests: [] }];
 
+    // Resolve city names → Meta geo keys (numeric IDs)
+    const resolvedCityKeys: { key: string }[] = [];
+    if (dto.excludeCities?.length) {
+      for (const cityName of dto.excludeCities as string[]) {
+        try {
+          const r = await fetch(
+            `${GRAPH}/search?type=adgeolocation&q=${encodeURIComponent(cityName)}&location_types=%5B%22city%22%5D&limit=1&access_token=${token}`
+          ).then(x => x.json()) as any;
+          if (r.data?.[0]?.key) resolvedCityKeys.push({ key: String(r.data[0].key) });
+        } catch {}
+      }
+    }
+
     for (const adSetDef of audienceAdSets) {
       const targeting: any = {
         geo_locations: { countries: [isoCountry] },
-        targeting_automation: { advantage_audience: adSetDef.isBroad ? 1 : 0 },
       };
+
       if (!adSetDef.isBroad) {
         targeting.age_min = 18;
         targeting.age_max = 55;
         targeting.genders = [1, 2];
-        if (adSetDef.interests?.length) targeting.interests = adSetDef.interests;
+        // Meta requires flexible_spec for interest targeting, not targeting.interests
+        if (adSetDef.interests?.length) {
+          targeting.flexible_spec = [{ interests: adSetDef.interests }];
+        }
       }
-      if (dto.excludeCities?.length) {
-        targeting.geo_locations.excluded_geo_locations = { cities: dto.excludeCities.map((c: string) => ({ key: c })) };
+
+      if (resolvedCityKeys.length) {
+        targeting.geo_locations.excluded_geo_locations = { cities: resolvedCityKeys };
       }
 
       const adSetBody: any = {
         name: adSetDef.name,
         campaign_id: campaignId,
-        daily_budget: Math.round(dto.dailyBudget * 100),
         billing_event: 'IMPRESSIONS',
         optimization_goal: optimizationGoal,
         bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
@@ -489,6 +511,8 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
         start_time: startTime,
         status: 'PAUSED',
       };
+      // CBO: budget is on the campaign, not the ad set
+      if (!isCBO) adSetBody.daily_budget = Math.round(dto.dailyBudget * 100);
       if (promotedObject) adSetBody.promoted_object = promotedObject;
 
       const adSetRes = await this.metaPost(`/${adAccountId}/adsets`, adSetBody, token);
