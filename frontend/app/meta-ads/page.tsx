@@ -1,443 +1,679 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Globe, Plus, X, Play, Trash2, ArrowLeft, Sparkles, Loader2, CheckCircle, AlertCircle, Send, Zap, Lock, ChevronDown } from 'lucide-react';
-import { getToken, isAuthenticated } from '@/lib/auth';
+import { getToken } from '@/lib/auth';
 import { Sidebar } from '@/components/sidebar';
 
-async function apiFetch(path: string, options?: RequestInit) {
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+
+function apiFetch(path: string, options?: RequestInit) {
   const token = getToken();
-  const res = await fetch(`/api/proxy${path}`, {
+  return fetch(`${API}${path}`, {
     ...options,
-    headers: {
-      ...(!(options?.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options?.headers,
-    },
+    headers: { Authorization: `Bearer ${token}`, ...(options?.headers ?? {}) },
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText }));
-    throw err;
-  }
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
 }
 
-interface AdFile { file: File; preview: string; type: 'image' | 'video' }
-interface Message { role: 'user' | 'assistant'; content: string }
+// ─── Strategies ───────────────────────────────────────────────────────────────
 
-const glass = { background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' };
-const inputClass = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50';
-const selectStyle = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#e2e8f0' };
+const STRATEGIES = [
+  {
+    id: 'creative_test',
+    icon: '🧪',
+    name: 'Test de Creativos',
+    badge: '🔥 Más popular',
+    tagline: 'Descubre qué imagen o video convierte más',
+    description: '1 conjunto broad + múltiples anuncios. Meta decide a quién mostrar cada creativo automáticamente.',
+    when: 'Primera campaña o cuando tienes varios creativos',
+    campaignType: 'VENTAS',
+    budgetType: 'ABO',
+    fixedAdSets: 1,
+    minCreatives: 3,
+    audienceType: 'broad',
+  },
+  {
+    id: 'audience_test',
+    icon: '🎯',
+    name: 'Test de Audiencias',
+    badge: null,
+    tagline: 'Compara qué audiencia compra más',
+    description: '2-4 conjuntos con intereses diferentes, mismo creativo. La IA genera audiencias validadas contra Meta API.',
+    when: 'Ya tienes un creativo ganador',
+    campaignType: 'VENTAS',
+    budgetType: 'ABO',
+    fixedAdSets: null,
+    minCreatives: 1,
+    audienceType: 'interests',
+  },
+  {
+    id: 'scale_cbo',
+    icon: '🚀',
+    name: 'Escalar con CBO',
+    badge: '⭐ Para escalar',
+    tagline: 'Meta distribuye el budget donde más convierte',
+    description: 'CBO con 2-4 conjuntos mixtos. Meta decide automáticamente cuánto gastar en cada audiencia.',
+    when: 'Ya tienes datos y quieres crecer el gasto',
+    campaignType: 'VENTAS',
+    budgetType: 'CBO',
+    fixedAdSets: null,
+    minCreatives: 2,
+    audienceType: 'mixed',
+  },
+  {
+    id: 'asc_plus',
+    icon: '🤖',
+    name: 'Advantage+ Shopping',
+    badge: '🧠 Full IA',
+    tagline: 'Meta controla audiencias, placements y creativos',
+    description: 'Campaña ASC+ — la IA de Meta optimiza todo automáticamente. Máximo ROAS con pixel activo.',
+    when: 'Pixel con 50+ compras/semana, $30+/día',
+    campaignType: 'VENTAS',
+    budgetType: 'CBO',
+    fixedAdSets: 1,
+    minCreatives: 3,
+    audienceType: 'broad',
+  },
+  {
+    id: 'traffic',
+    icon: '🌐',
+    name: 'Tráfico al Sitio',
+    badge: null,
+    tagline: 'Lleva visitas baratas a tu landing page',
+    description: 'Optimizado para landing page views. Ideal para construir audiencias de pixel o productos nuevos.',
+    when: 'Nuevo producto, construir audiencia de pixel',
+    campaignType: 'TRAFICO',
+    budgetType: 'ABO',
+    fixedAdSets: 1,
+    minCreatives: 1,
+    audienceType: 'interests',
+  },
+  {
+    id: 'leads',
+    icon: '📋',
+    name: 'Captación de Leads',
+    badge: null,
+    tagline: 'Capta nombre, email y teléfono',
+    description: 'Lead generation con pixel. Capta datos de contacto de personas interesadas en tu producto.',
+    when: 'Servicios, cursos, productos de alta consideración',
+    campaignType: 'LEADS',
+    budgetType: 'ABO',
+    fixedAdSets: 1,
+    minCreatives: 1,
+    audienceType: 'interests',
+  },
+  {
+    id: 'messages',
+    icon: '💬',
+    name: 'Mensajes WhatsApp',
+    badge: '💬 Popular LATAM',
+    tagline: 'Clientes te escriben directo por WhatsApp',
+    description: 'Anuncios con botón que abre WhatsApp. Resultados excelentes en LATAM para ventas personalizadas.',
+    when: 'Ventas personalizadas, negocios locales, servicios',
+    campaignType: 'MENSAJES',
+    budgetType: 'ABO',
+    fixedAdSets: 1,
+    minCreatives: 1,
+    audienceType: 'interests',
+  },
+  {
+    id: 'awareness',
+    icon: '👁️',
+    name: 'Reconocimiento de Marca',
+    badge: null,
+    tagline: 'Llega al máximo de personas en tu mercado',
+    description: 'Objetivo REACH — maximiza impresiones únicas y construye top of mind antes de vender.',
+    when: 'Lanzamiento de marca, antes de campañas de venta',
+    campaignType: 'RECONOCIMIENTO',
+    budgetType: 'ABO',
+    fixedAdSets: 1,
+    minCreatives: 2,
+    audienceType: 'broad',
+  },
+] as const;
 
-const INITIAL_MESSAGE: Message = {
-  role: 'assistant',
-  content: '¡Hola! 👋 Soy tu asistente de Meta Ads. Cuéntame sobre el producto que quieres anunciar — puedes darme todo de una vez:\n\n• Nombre y descripción del producto\n• Precio (antes y después si hay descuento)\n• URL de tu landing page\n• País donde publicar\n• Presupuesto diario en USD\n• Objetivo (ventas, tráfico, leads, mensajes)\n• ABO o CBO, cuántos conjuntos\n\n¡O simplemente descríbemelo y yo pregunto lo que falta! 🚀',
-};
+type StrategyId = typeof STRATEGIES[number]['id'];
+
+const COUNTRIES = [
+  { code: 'RD', name: '🇩🇴 Rep. Dominicana' },
+  { code: 'MX', name: '🇲🇽 México' },
+  { code: 'CO', name: '🇨🇴 Colombia' },
+  { code: 'GT', name: '🇬🇹 Guatemala' },
+  { code: 'EC', name: '🇪🇨 Ecuador' },
+  { code: 'CR', name: '🇨🇷 Costa Rica' },
+  { code: 'PE', name: '🇵🇪 Perú' },
+  { code: 'CL', name: '🇨🇱 Chile' },
+  { code: 'AR', name: '🇦🇷 Argentina' },
+  { code: 'US', name: '🇺🇸 Estados Unidos' },
+  { code: 'ES', name: '🇪🇸 España' },
+];
+
+type Step = 'connect' | 'setup' | 'strategy' | 'form' | 'creating' | 'done';
+
+interface ConnStatus {
+  connected: boolean;
+  adAccountId?: string;
+  adAccountName?: string;
+  pageId?: string;
+  pageName?: string;
+  credits: number;
+}
+
+interface FormState {
+  productName: string;
+  landingPage: string;
+  country: string;
+  dailyBudget: string;
+  priceBefore: string;
+  priceAfter: string;
+  excludeCities: string;
+  adSetsCount: string;
+  audienceHint: string;
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MetaAdsPage() {
   const router = useRouter();
-  const [authed, setAuthed] = useState(false);
-  const [status, setStatus] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<'connect' | 'setup' | 'chat' | 'creating' | 'done'>('connect');
-  const [error, setError] = useState('');
-
-  // Setup
-  const [adAccounts, setAdAccounts] = useState<any[]>([]);
+  const [step, setStep] = useState<Step>('connect');
+  const [connStatus, setConnStatus] = useState<ConnStatus | null>(null);
+  const [selectedStrategy, setSelectedStrategy] = useState<StrategyId | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<any>(null);
+  const [creatingMsg, setCreatingMsg] = useState('');
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [pages, setPages] = useState<any[]>([]);
-  const [selectedAccount, setSelectedAccount] = useState('');
-  const [selectedAccountName, setSelectedAccountName] = useState('');
-  const [selectedPage, setSelectedPage] = useState('');
-  const [selectedPageName, setSelectedPageName] = useState('');
-
-  // Chat
-  const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
-  const [input, setInput] = useState('');
-  const [thinking, setThinking] = useState(false);
-  const [campaignData, setCampaignData] = useState<any>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Files
-  const [adFiles, setAdFiles] = useState<AdFile[]>([]);
-  const [playingVideo, setPlayingVideo] = useState<number | null>(null);
-  const videoRefs = useRef<Record<number, HTMLVideoElement | null>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Result
-  const [result, setResult] = useState<any>(null);
+  const [form, setForm] = useState<FormState>({
+    productName: '',
+    landingPage: 'https://',
+    country: 'RD',
+    dailyBudget: '',
+    priceBefore: '',
+    priceAfter: '',
+    excludeCities: '',
+    adSetsCount: '2',
+    audienceHint: '',
+  });
+
+  const strategy = STRATEGIES.find(s => s.id === selectedStrategy);
+
+  // ─── Init ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!isAuthenticated()) { router.replace('/login'); return; }
-    setAuthed(true);
-    loadStatus();
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('connected') === '1') window.history.replaceState({}, '', '/meta-ads');
-    if (params.get('error')) { setError('Error conectando Facebook. Intenta de nuevo.'); window.history.replaceState({}, '', '/meta-ads'); }
+    checkStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, thinking]);
-
-  async function loadStatus() {
-    setLoading(true);
+  const checkStatus = async () => {
     try {
-      const s = await apiFetch('/meta-ads/status');
-      setStatus(s);
-      if (s.connected) setStep(s.adAccountId && s.pageId ? 'chat' : 'setup');
-      if (s.connected && !s.adAccountId) loadAccounts();
-    } catch { setStep('connect'); }
-    finally { setLoading(false); }
-  }
-
-  async function loadAccounts() {
-    try {
-      setAdAccounts(await apiFetch('/meta-ads/accounts'));
-      setPages(await apiFetch('/meta-ads/pages'));
-    } catch (e: any) { setError(e.message); }
-  }
-
-  async function sendMessage() {
-    const text = input.trim();
-    if (!text || thinking) return;
-    const userMsg: Message = { role: 'user', content: text };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
-    setInput('');
-    setThinking(true);
-    setError('');
-
-    try {
-      const res = await apiFetch('/meta-ads/chat', {
-        method: 'POST',
-        body: JSON.stringify({ messages: newMessages }),
-      });
-      const aiMsg: Message = { role: 'assistant', content: res.message };
-      setMessages(prev => [...prev, aiMsg]);
-      if (res.ready && res.data) {
-        setCampaignData(res.data);
+      const res = await apiFetch('/meta-ads/status');
+      const data: ConnStatus = await res.json();
+      setConnStatus(data);
+      if (data.connected && data.adAccountId && data.pageId) setStep('strategy');
+      else if (data.connected) {
+        setStep('setup');
+        loadSetup();
+      } else {
+        setStep('connect');
       }
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Error procesando tu mensaje. Intenta de nuevo.' }]);
-    } finally {
-      setThinking(false);
+      setStep('connect');
     }
-  }
+  };
 
-  async function createCampaign() {
-    if (!campaignData || adFiles.length === 0) return;
+  const loadSetup = async () => {
+    const [accRes, pgRes] = await Promise.all([
+      apiFetch('/meta-ads/accounts').then(r => r.json()),
+      apiFetch('/meta-ads/pages').then(r => r.json()),
+    ]);
+    setAccounts(accRes.accounts ?? []);
+    setPages(pgRes.pages ?? []);
+  };
+
+  // ─── Handlers ────────────────────────────────────────────────────────────────
+
+  const connectMeta = async () => {
+    const res = await apiFetch('/meta-ads/auth-url');
+    const { url } = await res.json();
+    const popup = window.open(url, 'meta-oauth', 'width=600,height=700');
+    const iv = setInterval(async () => {
+      if (popup?.closed) { clearInterval(iv); await checkStatus(); }
+    }, 1000);
+  };
+
+  const selectAccount = async (id: string, name: string) => {
+    await apiFetch('/meta-ads/select-account', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adAccountId: id, adAccountName: name }),
+    });
+    setConnStatus(s => s ? { ...s, adAccountId: id, adAccountName: name } : s);
+  };
+
+  const selectPage = async (id: string, name: string) => {
+    await apiFetch('/meta-ads/select-page', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageId: id, pageName: name }),
+    });
+    setConnStatus(s => s ? { ...s, pageId: id, pageName: name } : s);
+    setStep('strategy');
+  };
+
+  const addFiles = (incoming: FileList | File[]) => {
+    const arr = Array.from(incoming).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+    setFiles(prev => {
+      const seen = new Set(prev.map(f => f.name + f.size));
+      return [...prev, ...arr.filter(f => !seen.has(f.name + f.size))].slice(0, 10);
+    });
+  };
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); setDragging(false);
+    addFiles(e.dataTransfer.files);
+  }, []);
+
+  const upd = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setForm(f => ({ ...f, [field]: e.target.value }));
+
+  const createCampaign = async () => {
+    if (!strategy) return;
+    setError(null);
+    if (!form.productName.trim()) return setError('Nombre del producto requerido');
+    if (!form.landingPage.startsWith('http')) return setError('URL inválida — debe empezar con https://');
+    if (!form.dailyBudget || parseFloat(form.dailyBudget) < 1) return setError('Presupuesto diario requerido');
+    if (files.length === 0) return setError('Sube al menos un creativo (imagen o video)');
+
     setStep('creating');
-    setError('');
-    try {
-      const form = new FormData();
-      Object.entries(campaignData).forEach(([k, v]) => {
-        if (Array.isArray(v)) form.append(k, JSON.stringify(v));
-        else if (v !== undefined && v !== null && v !== '') form.append(k, String(v));
-      });
-      form.append('audienceAdSets', JSON.stringify([]));
-      form.append('copys', JSON.stringify([]));
-      adFiles.forEach(a => form.append('files', a.file));
+    const msgs = [
+      'Buscando intereses en Meta API…',
+      'Validando audiencias…',
+      'Generando copies con IA…',
+      'Creando campaña en Meta…',
+      'Subiendo creativos…',
+      'Configurando conjuntos de anuncios…',
+    ];
+    let mi = 0;
+    setCreatingMsg(msgs[0]);
+    const iv = setInterval(() => { mi = (mi + 1) % msgs.length; setCreatingMsg(msgs[mi]); }, 4000);
 
-      const res = await apiFetch('/meta-ads/campaigns', { method: 'POST', body: form });
-      setResult(res);
-      if (res?.credits !== undefined) setStatus((prev: any) => ({ ...prev, credits: res.credits }));
+    const fd = new FormData();
+    fd.append('campaignType', strategy.campaignType);
+    fd.append('productName', form.productName.trim());
+    fd.append('landingPage', form.landingPage.trim());
+    fd.append('country', form.country);
+    fd.append('dailyBudget', form.dailyBudget);
+    fd.append('budgetType', strategy.budgetType);
+    fd.append('adSetsCount', strategy.fixedAdSets ? String(strategy.fixedAdSets) : form.adSetsCount);
+    fd.append('strategy', strategy.id);
+    fd.append('startTime', 'now');
+    if (form.priceBefore) fd.append('priceBefore', form.priceBefore);
+    if (form.priceAfter) fd.append('priceAfter', form.priceAfter);
+    const cities = form.excludeCities.split(',').map(c => c.trim()).filter(Boolean);
+    if (cities.length) fd.append('excludeCities', JSON.stringify(cities));
+    if (form.audienceHint.trim()) fd.append('audienceHint', form.audienceHint.trim());
+    fd.append('audienceAdSets', JSON.stringify([]));
+    fd.append('copys', JSON.stringify([]));
+    files.forEach(f => fd.append('files', f));
+
+    try {
+      const res = await apiFetch('/meta-ads/campaigns', { method: 'POST', body: fd });
+      clearInterval(iv);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? 'Error creando campaña');
+      setResult(data);
       setStep('done');
     } catch (e: any) {
-      setError(e.message || 'Error creando campaña');
-      setStep('chat');
+      clearInterval(iv);
+      setError(e.message ?? 'Error desconocido');
+      setStep('form');
     }
-  }
+  };
 
-  function handleFileAdd(files: FileList | null) {
-    if (!files) return;
-    Array.from(files).slice(0, 10 - adFiles.length).forEach(file => {
-      setAdFiles(prev => [...prev, { file, preview: URL.createObjectURL(file), type: file.type.startsWith('video/') ? 'video' : 'image' }]);
-    });
-  }
-
-  function removeAd(idx: number) {
-    setAdFiles(prev => { URL.revokeObjectURL(prev[idx].preview); return prev.filter((_, i) => i !== idx); });
-  }
-
-  function resetChat() {
-    setMessages([INITIAL_MESSAGE]);
-    setCampaignData(null);
-    setAdFiles([]);
+  const resetForm = () => {
+    setStep('strategy');
+    setFiles([]);
     setResult(null);
-    setError('');
-    setStep('chat');
-  }
+    setSelectedStrategy(null);
+    setForm(f => ({ ...f, productName: '', landingPage: 'https://', priceBefore: '', priceAfter: '', audienceHint: '', excludeCities: '' }));
+  };
 
-  if (!authed) return null;
+  // ─── Styles ───────────────────────────────────────────────────────────────────
 
-  return (
-    <div className="min-h-screen bg-[#020209] flex">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <div className="max-w-3xl w-full mx-auto px-6 py-8 space-y-6">
+  const fieldCls = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-violet-500 transition-colors placeholder:text-zinc-600';
+  const labelCls = 'block text-xs font-medium text-zinc-400 mb-1.5';
 
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl" style={{ background: 'rgba(24,119,242,0.15)', border: '1px solid rgba(24,119,242,0.3)' }}>
-                <Globe size={22} className="text-blue-400" />
-              </div>
-              <div>
-                <h1 className="text-xl font-semibold text-white">Meta Ads IA</h1>
-                <p className="text-xs text-gray-500">Campañas profesionales con IA conversacional</p>
-              </div>
+  // ─── Renders ─────────────────────────────────────────────────────────────────
+
+  const renderContent = () => {
+
+    // CONNECT
+    if (step === 'connect') return (
+      <div className="flex items-center justify-center min-h-[80vh]">
+        <div className="max-w-sm w-full text-center">
+          <div className="text-5xl mb-5">📣</div>
+          <h1 className="text-2xl font-bold text-white mb-3">Meta Ads con IA</h1>
+          <p className="text-zinc-400 text-sm mb-7 leading-relaxed">
+            Crea campañas profesionales en minutos. La IA genera audiencias y copies — tú solo subes los creativos.
+          </p>
+          <button onClick={connectMeta} className="w-full bg-violet-600 hover:bg-violet-500 text-white font-semibold py-3 rounded-xl transition-colors mb-3">
+            Conectar cuenta de Meta
+          </button>
+          <button onClick={() => router.push('/dashboard')} className="text-zinc-500 hover:text-zinc-300 text-sm transition-colors">
+            Volver al dashboard
+          </button>
+        </div>
+      </div>
+    );
+
+    // SETUP
+    if (step === 'setup') return (
+      <div className="max-w-xl">
+        <h1 className="text-xl font-bold text-white mb-6">Configura tu cuenta</h1>
+        {!connStatus?.adAccountId ? (
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-300 mb-3">Cuenta publicitaria</h2>
+            <div className="space-y-2">
+              {accounts.length === 0 && <p className="text-zinc-500 text-sm">Cargando cuentas…</p>}
+              {accounts.map((acc: any) => (
+                <button key={acc.id} onClick={() => selectAccount(acc.id, acc.name)}
+                  className="w-full text-left bg-zinc-900 border border-zinc-800 rounded-xl p-4 hover:border-violet-600 transition-colors">
+                  <div className="font-medium text-white text-sm">{acc.name}</div>
+                  <div className="text-xs text-zinc-500 mt-0.5">{acc.id}</div>
+                </button>
+              ))}
             </div>
-            {status && (
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-500">Créditos: <span className="text-violet-400 font-semibold">{status.credits}</span></span>
-                {status.connected && (
-                  <button onClick={() => apiFetch('/meta-ads/disconnect', { method: 'DELETE' }).then(loadStatus)} className="text-xs text-gray-600 hover:text-red-400 transition-colors">Desconectar</button>
+          </div>
+        ) : (
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-300 mb-3">Página de Facebook</h2>
+            <div className="space-y-2">
+              {pages.length === 0 && <p className="text-zinc-500 text-sm">Cargando páginas…</p>}
+              {pages.map((pg: any) => (
+                <button key={pg.id} onClick={() => selectPage(pg.id, pg.name)}
+                  className="w-full text-left bg-zinc-900 border border-zinc-800 rounded-xl p-4 hover:border-violet-600 transition-colors">
+                  <div className="font-medium text-white text-sm">{pg.name}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+
+    // STRATEGY SELECTION
+    if (step === 'strategy') return (
+      <div>
+        <div className="flex items-center justify-between mb-7">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Nueva Campaña</h1>
+            <p className="text-zinc-400 text-sm mt-1">Elige la estrategia según tu objetivo</p>
+          </div>
+          <div className="text-right hidden sm:block">
+            <div className="text-xs text-zinc-500">{connStatus?.adAccountName}</div>
+            <div className="flex items-center gap-1 mt-1 justify-end">
+              <span className="text-yellow-400">⚡</span>
+              <span className="text-sm font-medium text-white">{connStatus?.credits ?? 0} créditos</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {STRATEGIES.map(s => (
+            <button key={s.id} onClick={() => { setSelectedStrategy(s.id); setStep('form'); }}
+              className="text-left bg-zinc-900 border border-zinc-800 rounded-2xl p-5 hover:border-violet-500 hover:bg-zinc-800/80 transition-all group">
+              <div className="flex items-start justify-between mb-3">
+                <span className="text-3xl">{s.icon}</span>
+                {s.badge && (
+                  <span className="text-xs bg-violet-600/20 text-violet-300 px-2 py-0.5 rounded-full border border-violet-600/30 leading-5">
+                    {s.badge}
+                  </span>
                 )}
               </div>
+              <h3 className="font-bold text-white text-sm mb-1 group-hover:text-violet-300 transition-colors">{s.name}</h3>
+              <p className="text-violet-400 text-xs mb-2 font-medium">{s.tagline}</p>
+              <p className="text-zinc-500 text-xs leading-relaxed mb-3">{s.description}</p>
+              <div className="border-t border-zinc-800 pt-3 mb-3">
+                <p className="text-xs text-zinc-600"><span className="text-zinc-500">Cuándo: </span>{s.when}</p>
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">{s.budgetType}</span>
+                <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">{s.campaignType}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <p className="text-center text-zinc-600 text-xs mt-6">
+          <button onClick={() => router.push('/dashboard')} className="hover:text-zinc-400 transition-colors">← Volver al dashboard</button>
+        </p>
+      </div>
+    );
+
+    // FORM
+    if (step === 'form' && strategy) {
+      const showAdSets = !strategy.fixedAdSets;
+      const perSet = showAdSets && form.dailyBudget && strategy.budgetType === 'ABO'
+        ? (parseFloat(form.dailyBudget) / parseInt(form.adSetsCount)).toFixed(2)
+        : null;
+
+      return (
+        <div className="max-w-2xl">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 mb-6 text-sm">
+            <button onClick={() => setStep('strategy')} className="text-zinc-500 hover:text-zinc-300 transition-colors">← Estrategias</button>
+            <span className="text-zinc-700">/</span>
+            <span className="text-xl">{strategy.icon}</span>
+            <span className="text-white font-medium">{strategy.name}</span>
+            <div className="ml-auto flex gap-2">
+              <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">{strategy.budgetType}</span>
+              <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">{strategy.campaignType}</span>
+            </div>
+          </div>
+
+          {/* Strategy hint */}
+          <div className="bg-violet-600/10 border border-violet-600/20 rounded-xl p-4 mb-5 text-sm text-violet-300">
+            {strategy.description}
+            {strategy.minCreatives > 1 && (
+              <span className="block text-violet-400/60 text-xs mt-1">Sube {strategy.minCreatives}+ creativos distintos para mejores resultados.</span>
             )}
           </div>
 
-          {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 p-3 rounded-xl text-sm text-red-400" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
-              <AlertCircle size={14} /> {error}
-              <button onClick={() => setError('')} className="ml-auto"><X size={14} /></button>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-5 text-red-400 text-sm">
+              {error}
             </div>
           )}
 
-          {loading ? (
-            <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>
-          ) : (
-            <>
-              {/* ── CONNECT ── */}
-              {step === 'connect' && (
-                <div className="rounded-2xl p-8 text-center space-y-5" style={glass}>
-                  <Globe size={48} className="text-blue-400 mx-auto" />
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">Conecta tu cuenta de Facebook</h2>
-                    <p className="text-sm text-gray-500 mt-1">Necesario para crear campañas en tu cuenta publicitaria</p>
-                  </div>
-                  <button onClick={() => apiFetch('/meta-ads/auth-url').then(r => { window.location.href = r.url; })}
-                    className="mx-auto flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium text-white"
-                    style={{ background: 'linear-gradient(135deg, #1877f2, #0c5fc7)' }}>
-                    <Globe size={16} /> Conectar con Facebook
-                  </button>
+          <div className="space-y-5">
+            {/* Product */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+              <h2 className="text-white font-semibold text-sm mb-4">Producto</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Nombre del producto *</label>
+                  <input className={fieldCls} value={form.productName} onChange={upd('productName')} placeholder="ej. Faja Reductora Premium" />
                 </div>
-              )}
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>URL de la landing page *</label>
+                  <input className={fieldCls} value={form.landingPage} onChange={upd('landingPage')} type="url" placeholder="https://tutienda.com/producto" />
+                </div>
+                <div>
+                  <label className={labelCls}>Precio antes (opcional)</label>
+                  <input className={fieldCls} value={form.priceBefore} onChange={upd('priceBefore')} type="number" placeholder="ej. 59.99" />
+                </div>
+                <div>
+                  <label className={labelCls}>Precio actual (opcional)</label>
+                  <input className={fieldCls} value={form.priceAfter} onChange={upd('priceAfter')} type="number" placeholder="ej. 39.99" />
+                </div>
+              </div>
+            </div>
 
-              {/* ── SETUP ── */}
-              {step === 'setup' && (
-                <div className="rounded-2xl p-6 space-y-5" style={glass}>
-                  <div className="flex items-center gap-2"><CheckCircle size={16} className="text-emerald-400" /><p className="text-sm text-emerald-400 font-medium">Facebook conectado</p></div>
-                  <h2 className="text-base font-semibold text-white">Configura tu cuenta</h2>
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-gray-500">Cuenta publicitaria</label>
-                    <select className={inputClass} value={selectedAccount} onChange={e => { const a = adAccounts.find(x => x.id === e.target.value); setSelectedAccount(e.target.value); setSelectedAccountName(a?.name ?? ''); }}>
-                      <option value="">Seleccionar cuenta...</option>
-                      {adAccounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.id})</option>)}
+            {/* Campaign config */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+              <h2 className="text-white font-semibold text-sm mb-4">Configuración</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>País *</label>
+                  <select className={fieldCls} value={form.country} onChange={upd('country')}>
+                    {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Presupuesto diario (USD) *</label>
+                  <input className={fieldCls} value={form.dailyBudget} onChange={upd('dailyBudget')} type="number" min="1" step="0.01" placeholder="ej. 20" />
+                </div>
+                {showAdSets && (
+                  <div>
+                    <label className={labelCls}>Conjuntos de anuncios</label>
+                    <select className={fieldCls} value={form.adSetsCount} onChange={upd('adSetsCount')}>
+                      <option value="2">2 conjuntos</option>
+                      <option value="3">3 conjuntos</option>
+                      <option value="4">4 conjuntos</option>
                     </select>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-gray-500">Página de Facebook</label>
-                    <select className={inputClass} value={selectedPage} onChange={e => { const p = pages.find(x => x.id === e.target.value); setSelectedPage(e.target.value); setSelectedPageName(p?.name ?? ''); }}>
-                      <option value="">Seleccionar página...</option>
-                      {pages.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                  </div>
-                  <button onClick={async () => {
-                    await apiFetch('/meta-ads/select-account', { method: 'POST', body: JSON.stringify({ adAccountId: selectedAccount, adAccountName: selectedAccountName }) });
-                    await apiFetch('/meta-ads/select-page', { method: 'POST', body: JSON.stringify({ pageId: selectedPage, pageName: selectedPageName }) });
-                    setStep('chat');
-                  }} disabled={!selectedAccount || !selectedPage}
-                    className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50"
-                    style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
-                    Continuar →
-                  </button>
+                )}
+                <div>
+                  <label className={labelCls}>Excluir ciudades (separadas por coma)</label>
+                  <input className={fieldCls} value={form.excludeCities} onChange={upd('excludeCities')} placeholder="ej. Santiago, Valparaíso" />
+                </div>
+              </div>
+
+              {strategy.audienceType !== 'broad' && (
+                <div className="mt-4">
+                  <label className={labelCls}>Describe tu audiencia ideal (opcional)</label>
+                  <textarea className={`${fieldCls} resize-none`} rows={2} value={form.audienceHint} onChange={upd('audienceHint')}
+                    placeholder="ej. mujeres 25-45 interesadas en fajas, fitness y moda" />
+                  <p className="text-zinc-600 text-xs mt-1">La IA usa esto para generar intereses más precisos en Meta</p>
                 </div>
               )}
 
-              {/* ── CHAT ── */}
-              {step === 'chat' && (
-                <div className="space-y-4">
-                  {/* Account info bar */}
-                  <div className="flex items-center justify-between text-xs text-gray-600 px-1">
-                    <span>{status?.adAccountName ?? 'Cuenta conectada'}</span>
-                    <button onClick={() => { loadAccounts(); setStep('setup'); }} className="hover:text-gray-400 transition-colors">Cambiar cuenta</button>
-                  </div>
+              <div className="mt-4 bg-zinc-800/60 rounded-xl p-3 text-xs text-zinc-400">
+                {strategy.budgetType === 'CBO'
+                  ? '💡 CBO — El presupuesto va en la campaña. Meta decide cuánto gastar en cada conjunto según lo que convierte.'
+                  : `💡 ABO — El presupuesto va en cada conjunto.${perSet ? ` ≈ $${perSet}/día por conjunto.` : ''}`}
+              </div>
+            </div>
 
-                  {/* Chat window */}
-                  <div className="rounded-2xl overflow-hidden flex flex-col" style={{ ...glass, minHeight: 400, maxHeight: 520 }}>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                      {messages.map((msg, i) => (
-                        <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                          {msg.role === 'assistant' && (
-                            <div className="w-6 h-6 rounded-full flex items-center justify-center mr-2 mt-0.5 shrink-0"
-                              style={{ background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.4)' }}>
-                              <Sparkles size={11} className="text-violet-400" />
-                            </div>
-                          )}
-                          <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
-                            msg.role === 'user'
-                              ? 'text-white rounded-tr-sm'
-                              : 'text-gray-200 rounded-tl-sm'
-                          }`} style={msg.role === 'user'
-                            ? { background: 'rgba(139,92,246,0.3)', border: '1px solid rgba(139,92,246,0.4)' }
-                            : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            {msg.content}
-                          </div>
-                        </div>
-                      ))}
-                      {thinking && (
-                        <div className="flex justify-start">
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center mr-2 shrink-0"
-                            style={{ background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.4)' }}>
-                            <Sparkles size={11} className="text-violet-400" />
-                          </div>
-                          <div className="px-4 py-2.5 rounded-2xl rounded-tl-sm text-sm text-gray-500"
-                            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            <span className="animate-pulse">Analizando...</span>
-                          </div>
-                        </div>
-                      )}
-                      <div ref={chatEndRef} />
+            {/* Creatives */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+              <h2 className="text-white font-semibold text-sm mb-1">Creativos *</h2>
+              <p className="text-zinc-500 text-xs mb-4">
+                Se crearán {files.length || 0} anuncio{files.length !== 1 ? 's' : ''} en {strategy.fixedAdSets ?? form.adSetsCount} conjunto{(strategy.fixedAdSets ?? parseInt(form.adSetsCount)) !== 1 ? 's' : ''} — total {files.length * (strategy.fixedAdSets ?? parseInt(form.adSetsCount))} anuncios en Meta
+              </p>
+
+              <div
+                onDragOver={e => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={onDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${dragging ? 'border-violet-500 bg-violet-500/5' : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/30'}`}
+              >
+                <div className="text-3xl mb-2">📁</div>
+                <p className="text-zinc-400 text-sm mb-1">Arrastra aquí o haz clic para subir</p>
+                <p className="text-zinc-600 text-xs">JPG, PNG, MP4, MOV — máx. 10 archivos</p>
+                <input ref={fileInputRef} type="file" multiple accept="image/*,video/*" className="hidden"
+                  onChange={e => e.target.files && addFiles(e.target.files)} />
+              </div>
+
+              {files.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {files.map((f, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-zinc-800 rounded-lg px-3 py-2">
+                      <span>{f.type.startsWith('video/') ? '🎬' : '🖼️'}</span>
+                      <span className="text-zinc-300 text-sm flex-1 truncate">{f.name}</span>
+                      <span className="text-zinc-600 text-xs">{(f.size / 1024 / 1024).toFixed(1)} MB</span>
+                      <button onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))} className="text-zinc-600 hover:text-red-400 transition-colors text-lg leading-none">×</button>
                     </div>
-
-                    {/* Input */}
-                    <div className="border-t border-white/05 p-3 flex gap-2 items-end">
-                      <textarea
-                        ref={textareaRef}
-                        value={input}
-                        onChange={e => setInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                        placeholder="Describe tu producto, presupuesto, país... (Enter para enviar)"
-                        rows={2}
-                        className="flex-1 bg-transparent text-sm text-white placeholder-gray-600 resize-none focus:outline-none leading-relaxed"
-                        style={{ minHeight: 44 }}
-                      />
-                      <button onClick={sendMessage} disabled={!input.trim() || thinking}
-                        className="p-2.5 rounded-xl flex items-center justify-center transition-all disabled:opacity-40"
-                        style={{ background: 'rgba(139,92,246,0.3)', border: '1px solid rgba(139,92,246,0.5)' }}>
-                        <Send size={15} className="text-violet-300" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Ready: show file upload */}
-                  {campaignData && (
-                    <div className="space-y-4">
-                      {/* Campaign summary */}
-                      <div className="rounded-xl p-4 text-xs space-y-1.5" style={{ background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.2)' }}>
-                        <p className="text-violet-300 font-semibold mb-2">✅ Campaña lista para crear</p>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-400">
-                          <span>Producto: <span className="text-white">{campaignData.productName}</span></span>
-                          <span>País: <span className="text-white">{campaignData.country}</span></span>
-                          <span>Presupuesto: <span className="text-white">${campaignData.dailyBudget}/día</span></span>
-                          <span>Objetivo: <span className="text-white">{campaignData.campaignType}</span></span>
-                          <span>Estructura: <span className="text-white">{campaignData.budgetType} · {campaignData.adSetsCount} conjunto(s)</span></span>
-                          {campaignData.priceAfter && <span>Precio: <span className="text-white">{campaignData.priceBefore && <span className="line-through text-gray-600 mr-1">{campaignData.priceBefore}</span>}{campaignData.priceAfter}</span></span>}
-                        </div>
-                        <button onClick={() => setCampaignData(null)} className="text-gray-600 hover:text-gray-400 text-[10px] mt-1">✏️ Cambiar datos</button>
-                      </div>
-
-                      {/* File upload */}
-                      <div className="space-y-3">
-                        <p className="text-sm font-semibold text-white">Sube tus creativos</p>
-                        <div className="rounded-xl p-3 text-xs" style={{ background: 'rgba(234,179,8,0.06)', border: '1px solid rgba(234,179,8,0.15)' }}>
-                          <p className="text-yellow-300 font-medium">📐 Formatos recomendados</p>
-                          <p className="text-gray-400 mt-0.5">Imagen: 1080×1080 o 1080×1920 · Video: MP4 1080p, 9:16 para Reels</p>
-                        </div>
-
-                        <div className="flex flex-wrap gap-3">
-                          {adFiles.map((ad, idx) => (
-                            <div key={idx} className="relative flex flex-col items-center">
-                              <div className="relative rounded-[1.5rem] overflow-hidden" style={{ width: 100, height: 170, background: '#0a0a14', border: '2px solid rgba(255,255,255,0.12)' }}>
-                                <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-8 h-2 rounded-full z-10" style={{ background: '#020209' }} />
-                                <div className="w-full h-full flex items-center justify-center overflow-hidden">
-                                  {ad.type === 'image' ? (
-                                    <img src={ad.preview} alt="" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="relative w-full h-full cursor-pointer" onClick={() => { const el = videoRefs.current[idx]; if (!el) return; el.paused ? (el.play(), setPlayingVideo(idx)) : (el.pause(), setPlayingVideo(null)); }}>
-                                      <video src={ad.preview} className="w-full h-full object-cover" loop playsInline muted ref={el => { videoRefs.current[idx] = el; }} />
-                                      {playingVideo !== idx && <div className="absolute inset-0 flex items-center justify-center"><div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}><Play size={10} className="text-white ml-0.5" /></div></div>}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <button onClick={() => removeAd(idx)} className="mt-1 p-1 text-gray-600 hover:text-red-400 transition-all"><Trash2 size={10} /></button>
-                            </div>
-                          ))}
-                          {adFiles.length < 10 && (
-                            <div onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center cursor-pointer">
-                              <div className="flex items-center justify-center rounded-[1.5rem] transition-all hover:border-violet-500/40"
-                                style={{ width: 100, height: 170, background: 'rgba(255,255,255,0.02)', border: '2px dashed rgba(255,255,255,0.1)' }}>
-                                <div className="flex flex-col items-center gap-1 text-gray-600"><Plus size={16} /><span className="text-[10px]">Agregar</span></div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <input ref={fileInputRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={e => handleFileAdd(e.target.files)} />
-                      </div>
-
-                      {/* Create button */}
-                      {(status?.credits ?? 0) === 0 ? (
-                        <div className="rounded-xl p-4" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                          <p className="text-sm text-red-400">Sin créditos — <a href="https://wa.me/18299607483" target="_blank" rel="noopener noreferrer" className="underline">recarga aquí</a></p>
-                        </div>
-                      ) : (
-                        <button onClick={createCampaign} disabled={adFiles.length === 0}
-                          className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40 flex items-center justify-center gap-2"
-                          style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
-                          <Zap size={16} /> Crear campaña — 1 crédito
-                          {adFiles.length === 0 && <span className="text-xs text-violet-300 ml-1">(sube al menos 1 creativo)</span>}
-                        </button>
-                      )}
-                    </div>
-                  )}
+                  ))}
                 </div>
               )}
+            </div>
 
-              {/* ── CREATING ── */}
-              {step === 'creating' && (
-                <div className="flex flex-col items-center py-24 gap-5">
-                  <div className="w-16 h-16 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-                  <div className="text-center space-y-2">
-                    <p className="text-white font-semibold">Creando tu campaña en Meta...</p>
-                    <p className="text-xs text-gray-500">La IA genera audiencias · copy · creativos → Meta Ads</p>
-                  </div>
-                </div>
-              )}
+            <button onClick={createCampaign}
+              className="w-full bg-violet-600 hover:bg-violet-500 text-white font-bold py-4 rounded-xl transition-colors text-base">
+              Crear Campaña — {strategy.name}
+            </button>
+            <p className="text-center text-xs text-zinc-600">
+              Usa 1 crédito · {connStatus?.credits ?? 0} disponibles · La campaña se crea en modo PAUSA
+            </p>
+          </div>
+        </div>
+      );
+    }
 
-              {/* ── DONE ── */}
-              {step === 'done' && result && (
-                <div className="rounded-2xl p-8 text-center space-y-5" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                  <CheckCircle size={48} className="text-emerald-400 mx-auto" />
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">¡Campaña creada!</h2>
-                    <p className="text-sm text-gray-400 mt-1">Tu campaña está en Meta en estado <span className="text-yellow-400">PAUSADA</span>. Actívala cuando estés listo.</p>
-                  </div>
-                  <div className="text-left rounded-xl p-4 space-y-2 text-xs" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                    <p className="text-gray-400">Campaign ID: <span className="text-white font-mono">{result.campaign?.campaignId}</span></p>
-                    <p className="text-gray-400">Conjuntos: <span className="text-emerald-400">{result.campaign?.adSetIds?.length ?? 0}</span></p>
-                    <p className="text-gray-400">Anuncios: <span className="text-emerald-400">{result.campaign?.adIds?.length ?? 0}</span></p>
-                  </div>
-                  <div className="rounded-xl p-3 text-xs text-gray-500" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                    <p className="text-yellow-400 font-medium">⏱ Espera 72h antes de evaluar</p>
-                    <p className="mt-1">Meta necesita tiempo para salir del learning phase. No hagas cambios en ese periodo.</p>
-                  </div>
-                  <button onClick={resetChat}
-                    className="px-6 py-2.5 rounded-xl text-sm font-medium text-white"
-                    style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
-                    Crear otra campaña
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+    // CREATING
+    if (step === 'creating') return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="max-w-sm w-full text-center">
+          <div className="relative inline-flex items-center justify-center mb-7">
+            <div className="w-20 h-20 rounded-full border-4 border-violet-600/30 border-t-violet-500 animate-spin" />
+            <span className="absolute text-3xl">{strategy?.icon}</span>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">{strategy?.name}</h2>
+          <p className="text-zinc-400 text-sm mb-5">{creatingMsg}</p>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-left text-xs text-zinc-500 space-y-1.5">
+            <div className="flex items-center gap-2"><span className="text-green-500">✓</span> {form.productName}</div>
+            <div className="flex items-center gap-2"><span className="text-green-500">✓</span> {COUNTRIES.find(c => c.code === form.country)?.name} · ${form.dailyBudget}/día</div>
+            <div className="flex items-center gap-2"><span className="text-green-500">✓</span> {files.length} creativo{files.length !== 1 ? 's' : ''} · {strategy?.budgetType}</div>
+          </div>
+          <p className="text-zinc-600 text-xs mt-4">Videos pueden tardar 1-2 min para procesar</p>
         </div>
       </div>
+    );
+
+    // DONE
+    if (step === 'done') return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="max-w-sm w-full text-center">
+          <div className="text-6xl mb-5">🎉</div>
+          <h2 className="text-2xl font-bold text-white mb-2">¡Campaña creada!</h2>
+          <p className="text-zinc-400 text-sm mb-6">
+            Está en modo <span className="text-yellow-400 font-semibold">PAUSA</span>. Revísala en Meta Ads Manager y actívala cuando estés listo.
+          </p>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 text-left mb-6 text-sm">
+            <div className="font-semibold text-white mb-3">Resumen</div>
+            <div className="space-y-2">
+              {[
+                ['Estrategia', `${strategy?.icon} ${strategy?.name}`],
+                ['Producto', form.productName],
+                ['Presupuesto', `$${form.dailyBudget}/día · ${strategy?.budgetType}`],
+                ['Creativos', `${files.length} anuncio${files.length !== 1 ? 's' : ''}`],
+                result?.campaign?.adSetIds ? ['Conjuntos', result.campaign.adSetIds.length] : null,
+                ['Créditos restantes', `${result?.credits ?? 0} ⚡`],
+              ].filter(Boolean).map(([k, v]: any) => (
+                <div key={k} className="flex justify-between">
+                  <span className="text-zinc-500">{k}</span>
+                  <span className="text-white">{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-3">
+            <button onClick={resetForm} className="w-full bg-violet-600 hover:bg-violet-500 text-white font-semibold py-3 rounded-xl transition-colors">
+              Crear otra campaña
+            </button>
+            <button onClick={() => router.push('/dashboard')} className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-3 rounded-xl transition-colors">
+              Ver mis campañas
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+
+    return null;
+  };
+
+  // ─── Layout ───────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="flex min-h-screen bg-zinc-950">
+      <Sidebar />
+      <main className="flex-1 p-6 overflow-auto">
+        {renderContent()}
+      </main>
     </div>
   );
 }

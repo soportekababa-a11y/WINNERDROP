@@ -107,6 +107,8 @@ export class MetaAdsController {
       startTime: body.startTime ?? 'now',
       excludeCities: body.excludeCities ? JSON.parse(body.excludeCities) : [],
       instagramAccountId: body.instagramAccountId || undefined,
+      strategy: body.strategy || undefined,
+      audienceHint: body.audienceHint || undefined,
       audienceAdSets: body.audienceAdSets ? JSON.parse(body.audienceAdSets) : [],
       copys: body.copys ? JSON.parse(body.copys) : [],
     }, files);

@@ -177,6 +177,8 @@ export class MetaAdsService {
       startTime: string;
       excludeCities?: string[];
       instagramAccountId?: string;
+      strategy?: string;
+      audienceHint?: string;
       audienceAdSets?: Array<{ name: string; isBroad: boolean; interests: Array<{ id: string; name: string }> }>;
       copys?: Array<{ primaryText: string; headline: string; description: string; callToAction: string }>;
     },
@@ -191,7 +193,7 @@ export class MetaAdsService {
     if (!conn.pageId) throw new BadRequestException('Selecciona una página de Facebook primero');
     if (!files || files.length === 0) throw new BadRequestException('Sube al menos un anuncio');
 
-    // Auto-generate audiences when not provided (chat flow)
+    // Auto-generate audiences
     if (!dto.audienceAdSets?.length) {
       const suggested = await this.suggestAudience(userId, {
         productName: dto.productName,
@@ -199,6 +201,8 @@ export class MetaAdsService {
         budgetType: dto.budgetType,
         adSetsCount: dto.adSetsCount ?? 1,
         campaignType: dto.campaignType,
+        strategy: dto.strategy,
+        audienceHint: dto.audienceHint,
       });
       dto.audienceAdSets = suggested.adSets;
     }
@@ -892,21 +896,61 @@ Responde SOLO JSON:
     } catch { return { research: dto.productName, angle: 'transformación' }; }
   }
 
-  async suggestAudience(userId: string, dto: { productName: string; country: string; budgetType: string; adSetsCount: number; productResearch?: string; campaignType: string }): Promise<{ adSets: any[] }> {
+  private async findBestInterest(name: string, token: string): Promise<{ id: string; name: string } | null> {
+    const words = name.trim().split(/\s+/);
+    const variants = [
+      name,
+      words.slice(0, 2).join(' '),
+      words[0],
+    ].filter((v, i, a) => v.length >= 3 && a.indexOf(v) === i);
+
+    for (const variant of variants) {
+      try {
+        const r = await fetch(
+          `${GRAPH}/search?type=adinterest&q=${encodeURIComponent(variant)}&limit=3&access_token=${token}`
+        ).then(x => x.json()) as any;
+        if (r.data?.length) {
+          // Pick first result — Meta sorts by relevance
+          return { id: String(r.data[0].id), name: r.data[0].name };
+        }
+      } catch {}
+    }
+    return null;
+  }
+
+  async suggestAudience(userId: string, dto: { productName: string; country: string; budgetType: string; adSetsCount: number; productResearch?: string; campaignType: string; audienceHint?: string; strategy?: string }): Promise<{ adSets: any[] }> {
     const conn = await this.getConnection(userId);
     const token = conn.accessToken;
-    const countryNames: Record<string, string> = { RD: 'República Dominicana', GT: 'Guatemala', EC: 'Ecuador', CR: 'Costa Rica', CO: 'Colombia', MX: 'México' };
+    const countryNames: Record<string, string> = { RD: 'República Dominicana', GT: 'Guatemala', EC: 'Ecuador', CR: 'Costa Rica', CO: 'Colombia', MX: 'México', US: 'Estados Unidos', ES: 'España', PE: 'Perú', CL: 'Chile', AR: 'Argentina' };
     const country = countryNames[dto.country] ?? dto.country;
+
+    const isBroadStrategy = dto.strategy === 'creative_test' || dto.strategy === 'asc_plus' || dto.strategy === 'awareness';
+
+    if (isBroadStrategy) {
+      return { adSets: [{ name: 'Audiencia Amplia', isBroad: true, interests: [], rationale: 'Broad targeting — Meta AI optimiza automáticamente' }] };
+    }
+
     try {
       const resp = await this.anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 800,
-        messages: [{ role: 'user', content: `Media buyer experto. Crea ${dto.adSetsCount} conjunto(s) de audiencia para Meta Ads.
-Producto: ${dto.productName}
-${dto.productResearch ? `Info: ${dto.productResearch}` : ''}
-País: ${country}  Estructura: ${dto.budgetType}  Conjuntos: ${dto.adSetsCount}
-Para cada conjunto: broad sin intereses O 3-5 intereses específicos muy relevantes, sin repetir entre conjuntos.
-Responde SOLO JSON: {"adSets":[{"name":"nombre","isBroad":true/false,"interestNames":["interés1"],"rationale":"razón"}]}` }],
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: `Expert Meta Ads media buyer. Create ${dto.adSetsCount} ad set audience(s) for this product.
+Product: ${dto.productName}
+Country: ${country}
+Structure: ${dto.budgetType}
+Ad sets needed: ${dto.adSetsCount}
+${dto.productResearch ? `Product info: ${dto.productResearch}` : ''}
+${dto.audienceHint ? `Client audience notes: ${dto.audienceHint}` : ''}
+
+CRITICAL RULES for interests:
+- Interest names MUST be in English (Meta's database is in English)
+- Use COMMON, BROAD category names that definitely exist in Facebook's interest database
+- Good examples: "Online shopping", "Fashion", "Health", "Fitness", "Beauty", "Women's clothing", "E-commerce", "Shopping", "Skin care", "Weight loss"
+- BAD examples: brand names, regional slang, very specific niche terms
+- Each ad set: either broad (isBroad:true, no interests) OR 4-6 common English interests
+- No repeat interests between ad sets
+
+Reply ONLY as JSON: {"adSets":[{"name":"set name","isBroad":false,"interestNames":["Online shopping","Fashion","Beauty"],"rationale":"why"}]}` }],
       });
       const text = resp.content[0].type === 'text' ? resp.content[0].text : '{}';
       const aiData = JSON.parse(text.replace(/```json?\n?/g, '').replace(/```\n?/g, '').trim());
@@ -914,14 +958,14 @@ Responde SOLO JSON: {"adSets":[{"name":"nombre","isBroad":true/false,"interestNa
       for (const adSet of (aiData.adSets ?? [])) {
         const interests: { id: string; name: string }[] = [];
         if (!adSet.isBroad && adSet.interestNames?.length) {
-          for (const name of (adSet.interestNames as string[]).slice(0, 5)) {
-            try {
-              const r = await fetch(`${GRAPH}/search?type=adinterest&q=${encodeURIComponent(name)}&limit=1&access_token=${token}`).then(x => x.json()) as any;
-              if (r.data?.[0]?.id) interests.push({ id: r.data[0].id, name: r.data[0].name });
-            } catch {}
+          for (const name of (adSet.interestNames as string[]).slice(0, 6)) {
+            const found = await this.findBestInterest(name, token);
+            if (found) interests.push(found);
           }
         }
-        resolved.push({ name: adSet.name, isBroad: adSet.isBroad ?? interests.length === 0, interests, rationale: adSet.rationale ?? '' });
+        // If interest-based but nothing resolved, fall back to broad
+        const effectivelyBroad = adSet.isBroad || interests.length === 0;
+        resolved.push({ name: adSet.name, isBroad: effectivelyBroad, interests, rationale: adSet.rationale ?? '' });
       }
       return { adSets: resolved.length ? resolved : [{ name: 'Audiencia Amplia', isBroad: true, interests: [], rationale: 'Broad targeting recomendado' }] };
     } catch { return { adSets: [{ name: 'Audiencia Amplia', isBroad: true, interests: [], rationale: 'Broad targeting recomendado' }] }; }
