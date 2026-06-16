@@ -174,7 +174,7 @@ export class DropisService implements OnModuleDestroy {
 
       // Wait for SPA to navigate away from login page (dashboard/home)
       try {
-        await page.waitForURL(url => !url.includes('/auth') && !url.includes('/login'), { timeout: 15000 });
+        await page.waitForURL((url: URL) => !url.toString().includes('/auth') && !url.toString().includes('/login'), { timeout: 15000 });
         this.logger.log(`[Dropi:${code}] Post-login URL: ${page.url()}`);
       } catch {
         // If waitForURL times out, wait a bit and check if we have token
