@@ -208,68 +208,110 @@ export class DropisService implements OnModuleDestroy {
   }
 
   private async fetchAllViaBrowser(page: any, apiBase: string, token: string, countryKey: string, code: string): Promise<DropiRaw[]> {
-    const all: DropiRaw[] = [];
-    let start = 0;
+    const collected: any[] = [];
+    const seenIds = new Set<number>();
+    let lastCount = 0;
+    let staleTicks = 0;
 
-    while (true) {
-      // Make request from browser context — session cookies are included automatically
-      const result = await page.evaluate(async ({ apiBase, token, countryKey, start, pageSize }: any) => {
-        try {
-          const r = await fetch(`${apiBase}/api/products/v4/index`, {
-            method: 'POST',
-            headers: {
-              'x-authorization': `Bearer ${token}`,
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              pageSize, startData: start,
-              privated_product: false, userVerified: false, favorite: false,
-              with_collection: true, get_stock: true, no_count: true,
-              search_type: 'simple', country: countryKey,
-            }),
-          });
-          const d = await r.json();
-          return { status: r.status, data: d };
-        } catch (e: any) {
-          return { status: 0, error: e?.message };
+    // Intercept all products API responses from the network
+    page.on('response', async (resp: any) => {
+      try {
+        if (!resp.url().includes('/api/products')) return;
+        const ct = resp.headers()['content-type'] ?? '';
+        if (!ct.includes('json')) return;
+        const d = await resp.json().catch(() => null);
+        if (!d?.objects?.length) return;
+        for (const item of d.objects) {
+          if (!seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            collected.push(item);
+          }
         }
-      }, { apiBase, token, countryKey, start, pageSize: PAGE_SIZE });
+        this.logger.log(`[Dropi:${code}] Interceptado: ${collected.length} únicos (resp: ${d.objects.length})`);
+      } catch {}
+    });
 
-      if (start === 0) {
-        this.logger.log(`[Dropi:${code}] HTTP ${result.status} | objects: ${result.data?.objects?.length ?? 'undefined'} | msg: ${result.data?.message ?? result.error ?? ''}`);
+    // Navigate to catalog — trigger initial load
+    const catalogUrl = apiBase.replace('api.', 'app.') + '/dashboard/products';
+    this.logger.log(`[Dropi:${code}] Navegando catálogo: ${catalogUrl}`);
+    try {
+      await page.goto(catalogUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } catch {
+      // Some pages don't fire domcontentloaded cleanly — continue anyway
+    }
+    await page.waitForTimeout(4000);
+
+    // Auto-scroll to trigger infinite scroll / "load more" pagination
+    for (let i = 0; i < 60; i++) {
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.waitForTimeout(1500);
+
+      // Click any "load more" / "mostrar más" button if present
+      try {
+        const btn = page.locator('button:has-text("mostrar"), button:has-text("Mostrar"), button:has-text("Ver más"), button:has-text("Load more"), button:has-text("Cargar")');
+        if (await btn.count() > 0) await btn.first().click({ timeout: 2000 }).catch(() => {});
+      } catch {}
+
+      // Stop if no new products in last 3 ticks (~4.5s)
+      if (collected.length === lastCount) {
+        staleTicks++;
+        if (staleTicks >= 3) break;
+      } else {
+        staleTicks = 0;
+        lastCount = collected.length;
       }
-
-      if (result.status !== 200 || !result.data?.objects) break;
-      const items: any[] = result.data.objects;
-      if (!items.length) break;
-
-      if (start === 0 && items.length > 0) {
-        this.logger.log(`[Dropi:${code}] SAMPLE: ${JSON.stringify(items[0]).slice(0, 300)}`);
-      }
-
-      for (const item of items) {
-        const imageUrl = item.gallery?.[0]?.urlS3 ? `${CDN}${item.gallery[0].urlS3}` : '';
-        const rawStock = item.warehouse_product?.[0]?.stock ?? 0;
-        const stock    = rawStock > 100_000_000 ? 0 : rawStock;
-        all.push({
-          dropiId: `dropi_${item.id}`,
-          name: item.name ?? '',
-          imageUrl,
-          provider: item.user?.name ?? '',
-          category: item.categories?.[0]?.name ?? '',
-          subcategory: item.categories?.[1]?.name ?? '',
-          price: item.suggested_price ?? 0,
-          cost: item.sale_price ?? 0,
-          stock,
-        });
-      }
-
-      this.logger.log(`[Dropi:${code}] Acumulado: ${all.length} (start=${start})`);
-      if (items.length < PAGE_SIZE) break;
-      start += PAGE_SIZE;
     }
 
+    this.logger.log(`[Dropi:${code}] Scroll completo — ${collected.length} productos únicos`);
+
+    // Fallback: if catalog nav failed (0 items), use direct API via browser fetch
+    if (collected.length === 0) {
+      this.logger.warn(`[Dropi:${code}] Sin productos por scroll — fallback a API paginada`);
+      let start = 0;
+      while (true) {
+        const result = await page.evaluate(async ({ apiBase, token, countryKey, start, pageSize }: any) => {
+          try {
+            const r = await fetch(`${apiBase}/api/products/v4/index`, {
+              method: 'POST',
+              headers: { 'x-authorization': `Bearer ${token}`, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pageSize, startData: start, get_stock: true, with_collection: true, country: countryKey }),
+            });
+            const d = await r.json();
+            return { status: r.status, data: d };
+          } catch (e: any) { return { status: 0, error: e?.message }; }
+        }, { apiBase, token, countryKey, start, pageSize: PAGE_SIZE });
+
+        this.logger.log(`[Dropi:${code}] API fallback start=${start} → HTTP ${result.status} | items: ${result.data?.objects?.length ?? 0}`);
+        if (result.status !== 200 || !result.data?.objects?.length) break;
+        for (const item of result.data.objects) {
+          if (!seenIds.has(item.id)) { seenIds.add(item.id); collected.push(item); }
+        }
+        if (result.data.objects.length < PAGE_SIZE) break;
+        start += PAGE_SIZE;
+      }
+    }
+
+    // Parse collected raw items
+    const all: DropiRaw[] = [];
+    for (const item of collected) {
+      const imageUrl = item.gallery?.[0]?.urlS3 ? `${CDN}${item.gallery[0].urlS3}` : '';
+      const rawStock = item.warehouse_product?.[0]?.stock ?? 0;
+      all.push({
+        dropiId: `dropi_${item.id}`,
+        name: item.name ?? '',
+        imageUrl,
+        provider: item.user?.name ?? '',
+        category: item.categories?.[0]?.name ?? '',
+        subcategory: item.categories?.[1]?.name ?? '',
+        price: item.suggested_price ?? 0,
+        cost: item.sale_price ?? 0,
+        stock: rawStock > 100_000_000 ? 0 : rawStock,
+      });
+    }
+
+    if (all.length > 0) {
+      this.logger.log(`[Dropi:${code}] SAMPLE: ${JSON.stringify(collected[0]).slice(0, 300)}`);
+    }
     return all;
   }
 
