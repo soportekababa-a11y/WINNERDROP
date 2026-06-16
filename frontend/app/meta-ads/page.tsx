@@ -237,9 +237,17 @@ export default function MetaAdsPage() {
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
   const connectMeta = async () => {
-    const res = await apiFetch('/meta-ads/auth-url');
-    const { url } = await res.json();
-    const popup = window.open(url, 'meta-oauth', 'width=600,height=700');
+    // Open popup synchronously (before any await) to avoid browser popup blocker
+    const popup = window.open('about:blank', 'meta-oauth', 'width=600,height=700');
+    try {
+      const res = await apiFetch('/meta-ads/auth-url');
+      const { url } = await res.json();
+      if (popup) popup.location.href = url;
+    } catch {
+      popup?.close();
+      setError('Error obteniendo URL de Meta. Intenta de nuevo.');
+      return;
+    }
     const iv = setInterval(async () => {
       if (popup?.closed) { clearInterval(iv); await checkStatus(); }
     }, 1000);
