@@ -73,10 +73,13 @@ export class MetaAdsService {
     const appSecret = this.config.get('META_APP_SECRET');
     const redirectUri = this.config.get('META_REDIRECT_URI');
 
+    this.logger.log(`[OAuth] userId=${userId} appId=${appId} redirectUri=${redirectUri}`);
+
     const tokenRes = await fetch(
       `${GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`
     ).then(r => r.json()) as any;
 
+    this.logger.log(`[OAuth] tokenRes=${JSON.stringify(tokenRes)}`);
     if (tokenRes.error) throw new BadRequestException(tokenRes.error.message);
 
     const llRes = await fetch(
