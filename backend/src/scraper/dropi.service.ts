@@ -8,7 +8,6 @@ import { Snapshot } from '../snapshots/snapshot.entity';
 
 const CDN = 'https://d3sk39qh2f4j46.cloudfront.net/';
 const PAGE_SIZE = 100;
-const CYCLE_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 function businessDay(): string {
   const now = new Date();
@@ -50,36 +49,25 @@ export class DropisService implements OnModuleDestroy {
 
   getStats() { return { running: this.running, ...this.lastStats }; }
 
-  start() {
-    if (this.running) return;
-    this.running = true;
-    this.logger.log('Dropi loop iniciado');
-    this.loop();
-  }
-
-  private async loop() {
-    while (this.running) {
-      const t = Date.now();
-      let total = 0;
-      const email = this.config.get<string>('DROPI_EMAIL')!;
-      const password = this.config.get<string>('DROPI_PASSWORD')!;
-      if (!email || !password) {
-        this.logger.error('DROPI_EMAIL / DROPI_PASSWORD no configurados — omitiendo ciclo');
-        await new Promise(r => setTimeout(r, CYCLE_INTERVAL_MS));
-        continue;
-      }
-      for (const def of DROPI_COUNTRIES) {
-        try {
-          const { saved } = await this.scrapeCountry(def, email, password);
-          total += saved;
-        } catch (err) {
-          this.logger.error(`[Dropi:${def.code}] Error en ciclo`, err);
-        }
-      }
-      this.lastStats = { total, durationMs: Date.now() - t, finishedAt: new Date() };
-      this.logger.log(`Dropi ciclo completo — ${total} productos en ${Math.round((Date.now() - t) / 1000)}s. Próximo en 2h.`);
-      await new Promise(r => setTimeout(r, CYCLE_INTERVAL_MS));
+  async runAll(): Promise<void> {
+    const email    = this.config.get<string>('DROPI_EMAIL')!;
+    const password = this.config.get<string>('DROPI_PASSWORD')!;
+    if (!email || !password) {
+      this.logger.error('DROPI_EMAIL / DROPI_PASSWORD no configurados — omitiendo Dropi');
+      return;
     }
+    const t = Date.now();
+    let total = 0;
+    for (const def of DROPI_COUNTRIES) {
+      try {
+        const { saved } = await this.scrapeCountry(def, email, password);
+        total += saved;
+      } catch (err) {
+        this.logger.error(`[Dropi:${def.code}] Error en ciclo`, err);
+      }
+    }
+    this.lastStats = { total, durationMs: Date.now() - t, finishedAt: new Date() };
+    this.logger.log(`Dropi ciclo completo — ${total} productos en ${Math.round((Date.now() - t) / 1000)}s`);
   }
 
   async scrapeCountry(def: typeof DROPI_COUNTRIES[0], emailOverride?: string, passwordOverride?: string): Promise<{ saved: number }> {
@@ -248,6 +236,9 @@ export class DropisService implements OnModuleDestroy {
 
       const items: any[] = result.data?.objects ?? [];
       this.logger.log(`[Dropi:${code}] start=${start} → HTTP ${result.status} | items: ${items.length} | total acumulado: ${all.length}`);
+      if (start === 0 && items.length > 0) {
+        this.logger.log(`[Dropi:${code}] RAW_USER_FIELDS: ${JSON.stringify(items[0].user)}`);
+      }
 
       if (result.status !== 200) break;
 
@@ -287,6 +278,13 @@ export class DropisService implements OnModuleDestroy {
       this.logger.log(`[Dropi:${code}] SAMPLE: ${JSON.stringify({ id: all[0].dropiId, name: all[0].name, stock: all[0].stock })}`);
     }
     return all;
+  }
+
+  async scrapeOnce(): Promise<{ saved: number }> {
+    const email    = this.config.get<string>('DROPI_EMAIL')!;
+    const password = this.config.get<string>('DROPI_PASSWORD')!;
+    const def = DROPI_COUNTRIES[0];
+    return this.scrapeCountry(def, email, password);
   }
 
   private chromiumPath(): string | undefined {

@@ -1,11 +1,15 @@
 import { Controller, Post, Get, UseGuards } from '@nestjs/common';
 import { ScraperService } from './scraper.service';
+import { DropisService } from './dropi.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('scraper')
 @UseGuards(JwtAuthGuard)
 export class ScraperController {
-  constructor(private readonly scraperService: ScraperService) {}
+  constructor(
+    private readonly scraperService: ScraperService,
+    private readonly dropisService: DropisService,
+  ) {}
 
   @Post('start')
   start() {
@@ -28,5 +32,16 @@ export class ScraperController {
   @Get('stats')
   stats() {
     return this.scraperService.getStats();
+  }
+
+  @Post('dropi/run')
+  async dropiRun() {
+    const result = await this.dropisService.scrapeOnce();
+    return { message: 'Dropi completado', ...result };
+  }
+
+  @Get('dropi/stats')
+  dropiStats() {
+    return this.dropisService.getStats();
   }
 }
