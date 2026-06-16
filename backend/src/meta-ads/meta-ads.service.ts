@@ -554,7 +554,8 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       }
 
       if (resolvedCityKeys.length) {
-        targeting.geo_locations.excluded_geo_locations = { cities: resolvedCityKeys };
+        // excluded_geo_locations must be at targeting level, NOT inside geo_locations
+        targeting.excluded_geo_locations = { cities: resolvedCityKeys };
       }
 
       const adSetBody: any = {
