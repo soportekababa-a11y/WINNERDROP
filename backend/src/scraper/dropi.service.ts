@@ -128,10 +128,18 @@ export class DropisService implements OnModuleDestroy {
       const page = await browser.newPage();
       let token: string | null = null;
 
+      // Capture token from any auth-related response
       page.on('response', async resp => {
-        if (resp.url().includes('/api/login')) {
-          try { const d = await resp.json(); if (d.token) token = d.token; } catch {}
-        }
+        if (token) return;
+        const url = resp.url();
+        if (!url.includes('login') && !url.includes('auth') && !url.includes('token')) return;
+        try {
+          const ct = resp.headers()['content-type'] ?? '';
+          if (!ct.includes('json')) return;
+          const d = await resp.json();
+          const t = d.token ?? d.access_token ?? d.accessToken ?? d.jwt ?? d.data?.token ?? d.data?.access_token;
+          if (t) { token = t; this.logger.log(`[Dropi:${code}] Token capturado desde ${url}`); }
+        } catch {}
       });
 
       await page.route('**', route => {
@@ -141,11 +149,41 @@ export class DropisService implements OnModuleDestroy {
       });
 
       await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await page.waitForTimeout(3000);
-      await page.fill('#email', email);
-      await page.fill('#password', password);
-      await page.click('button.primary');
+      await page.waitForTimeout(2000);
+
+      // Try multiple selector patterns for different Dropi versions
+      const emailSel = ['#email', 'input[type="email"]', 'input[name="email"]', 'input[placeholder*="email" i]'];
+      const passSel  = ['#password', 'input[type="password"]', 'input[name="password"]'];
+      const btnSel   = ['button.primary', 'button[type="submit"]', 'button:has-text("Iniciar")', 'button:has-text("Ingresar")', 'button:has-text("Login")'];
+
+      let filled = false;
+      for (const sel of emailSel) {
+        try { await page.fill(sel, email, { timeout: 3000 }); filled = true; break; } catch {}
+      }
+      if (!filled) { this.logger.error(`[Dropi:${code}] No se encontró campo email`); return null; }
+      for (const sel of passSel) {
+        try { await page.fill(sel, password, { timeout: 3000 }); break; } catch {}
+      }
+      for (const sel of btnSel) {
+        try { await page.click(sel, { timeout: 3000 }); break; } catch {}
+      }
       await page.waitForTimeout(6000);
+
+      // Fallback: read token from localStorage
+      if (!token) {
+        try {
+          const ls = await page.evaluate(() => {
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i) ?? '';
+              const val = localStorage.getItem(key) ?? '';
+              if (key.toLowerCase().includes('token') || key.toLowerCase().includes('auth')) return val;
+              try { const j = JSON.parse(val); if (j?.token) return j.token; if (j?.access_token) return j.access_token; } catch {}
+            }
+            return null;
+          });
+          if (ls) { token = ls; this.logger.log(`[Dropi:${code}] Token desde localStorage`); }
+        } catch {}
+      }
 
       if (!token) this.logger.warn(`[Dropi:${code}] Login completado pero sin token — verifica credenciales`);
       return token;
@@ -159,7 +197,14 @@ export class DropisService implements OnModuleDestroy {
 
   private chromiumPath(): string | undefined {
     const { existsSync } = require('fs');
-    for (const p of [process.env.CHROMIUM_PATH, '/usr/bin/google-chrome-stable', '/usr/bin/chromium-browser', '/usr/bin/chromium', '/snap/bin/chromium'].filter(Boolean) as string[]) {
+    for (const p of [
+      process.env.CHROMIUM_PATH,
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/snap/bin/chromium',
+    ].filter(Boolean) as string[]) {
       if (existsSync(p)) return p;
     }
   }
