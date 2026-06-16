@@ -123,10 +123,10 @@ export class DropisService implements OnModuleDestroy {
 
   private async login(loginUrl: string, email: string, password: string, code: string): Promise<string | null> {
     let browser: Browser | null = null;
+    let token: string | null = null;
     try {
       browser = await chromium.launch({ headless: true, executablePath: this.chromiumPath() });
       const page = await browser.newPage();
-      let token: string | null = null;
 
       // Capture token from any auth-related response
       page.on('response', async resp => {
