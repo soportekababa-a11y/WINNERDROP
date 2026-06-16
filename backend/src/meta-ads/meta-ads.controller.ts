@@ -83,6 +83,11 @@ export class MetaAdsController {
     return this.svc.executeScale(req.user.id, body.fbCampaignId, body.fbAdSetId, body.scaleType, body.params);
   }
 
+  @UseGuards(JwtAuthGuard) @Post('chat')
+  chat(@Req() req: any, @Body() body: { messages: { role: string; content: string }[] }) {
+    return this.svc.chatSession(req.user.id, body.messages);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('campaigns')
   @UseInterceptors(FilesInterceptor('files', 10, { storage: memoryStorage() }))
@@ -94,6 +99,9 @@ export class MetaAdsController {
       country: body.country,
       dailyBudget: parseFloat(body.dailyBudget),
       budgetType: body.budgetType ?? 'ABO',
+      adSetsCount: body.adSetsCount ? parseInt(body.adSetsCount) : 1,
+      priceBefore: body.priceBefore || undefined,
+      priceAfter: body.priceAfter || undefined,
       pixelId: body.pixelId || undefined,
       conversionEvent: body.conversionEvent || undefined,
       startTime: body.startTime ?? 'now',

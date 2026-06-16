@@ -169,13 +169,16 @@ export class MetaAdsService {
       country: string;
       dailyBudget: number;
       budgetType: string;
+      adSetsCount?: number;
+      priceBefore?: string;
+      priceAfter?: string;
       pixelId?: string;
       conversionEvent?: string;
       startTime: string;
       excludeCities?: string[];
       instagramAccountId?: string;
-      audienceAdSets: Array<{ name: string; isBroad: boolean; interests: Array<{ id: string; name: string }> }>;
-      copys: Array<{ primaryText: string; headline: string; description: string; callToAction: string }>;
+      audienceAdSets?: Array<{ name: string; isBroad: boolean; interests: Array<{ id: string; name: string }> }>;
+      copys?: Array<{ primaryText: string; headline: string; description: string; callToAction: string }>;
     },
     files: Express.Multer.File[],
   ): Promise<any> {
@@ -187,6 +190,37 @@ export class MetaAdsService {
     if (!conn.adAccountId) throw new BadRequestException('Selecciona una cuenta publicitaria primero');
     if (!conn.pageId) throw new BadRequestException('Selecciona una página de Facebook primero');
     if (!files || files.length === 0) throw new BadRequestException('Sube al menos un anuncio');
+
+    // Auto-generate audiences when not provided (chat flow)
+    if (!dto.audienceAdSets?.length) {
+      const suggested = await this.suggestAudience(userId, {
+        productName: dto.productName,
+        country: dto.country,
+        budgetType: dto.budgetType,
+        adSetsCount: dto.adSetsCount ?? 1,
+        campaignType: dto.campaignType,
+      });
+      dto.audienceAdSets = suggested.adSets;
+    }
+
+    // Auto-generate copy when not provided (chat flow)
+    if (!dto.copys?.length) {
+      const generated = await this.generateCopy(userId, {
+        productName: dto.productName,
+        country: dto.country,
+        landingPage: dto.landingPage,
+        priceBefore: dto.priceBefore,
+        priceAfter: dto.priceAfter,
+        campaignType: dto.campaignType,
+        adCount: files.length,
+      });
+      dto.copys = generated.ads.map((ad: any) => ad.option1 ?? {
+        primaryText: dto.productName,
+        headline: dto.productName,
+        description: '',
+        callToAction: 'SHOP_NOW',
+      });
+    }
 
     const metaResult = await this.createOnMeta(conn, dto, files);
 
@@ -921,6 +955,63 @@ Exactamente ${dto.adCount} elemento(s) en el array ads.` }],
       const fallback = { primaryText: `¡${dto.productName} disponible!`, headline: dto.productName, description: 'Ver más', callToAction: cta };
       return { ads: Array.from({ length: dto.adCount }, () => ({ option1: fallback, option2: { ...fallback, primaryText: `Consigue ${dto.productName} hoy` } })) };
     }
+  }
+
+  // ─── Chat session ─────────────────────────────────────────────────────────
+
+  async chatSession(userId: string, messages: { role: string; content: string }[]): Promise<{ message: string; ready: boolean; data?: any }> {
+    const systemPrompt = `Eres un experto en Meta Ads que ayuda a crear campañas publicitarias de forma conversacional. Tu objetivo es recopilar los datos necesarios y crear la campaña perfecta.
+
+DATOS REQUERIDOS (debes conseguir todos):
+- productName: nombre del producto o servicio
+- landingPage: URL completa de la landing page (con https://)
+- country: país → RD (Rep. Dominicana), GT (Guatemala), EC (Ecuador), CR (Costa Rica), CO (Colombia), MX (México), US (Estados Unidos), ES (España), PE (Perú), CL (Chile), AR (Argentina)
+- dailyBudget: presupuesto diario en USD (número)
+- campaignType: VENTAS (llevar a comprar), TRAFICO (visitas al sitio), LEADS (capturar datos), MENSAJES (WhatsApp/Messenger), RECONOCIMIENTO (awareness de marca)
+- budgetType: ABO (usuario controla budget por conjunto) o CBO (Meta optimiza automáticamente)
+- adSetsCount: número de conjuntos de anuncios (1 a 4)
+
+DATOS OPCIONALES:
+- priceBefore: precio original antes del descuento
+- priceAfter: precio actual/con descuento
+- excludeCities: ciudades a excluir (array de strings)
+- startTime: "now" para ya, o una fecha específica
+
+REGLAS:
+1. Si el usuario da toda o mucha información en un solo mensaje, extráela toda y confirma con el JSON listo
+2. Haz máximo 2-3 preguntas por turno, agrupando temas relacionados
+3. Cuando tengas TODOS los datos requeridos, responde ÚNICAMENTE con este JSON (sin texto adicional):
+{"ready":true,"data":{"productName":"...","landingPage":"...","country":"RD","dailyBudget":20,"campaignType":"VENTAS","budgetType":"ABO","adSetsCount":1,"priceBefore":"","priceAfter":"","excludeCities":[],"startTime":"now"}}
+4. Si faltan datos, responde en español conversacional, directo y amigable
+5. Para campaignType: si dicen "ventas" → VENTAS, "tráfico/visitas" → TRAFICO, "leads/contactos" → LEADS, "mensajes/whatsapp" → MENSAJES, "reconocimiento/branding" → RECONOCIMIENTO
+6. Para budgetType: si dicen "controlar" o "testear" → ABO, si dicen "meta decide" o "automático" → CBO. Si no especifican y el presupuesto es bajo (<$20) recomienda ABO
+7. NO inventes datos. Si algo no está claro, pregunta
+8. Sé conciso. No expliques demasiado, ve al grano`;
+
+    const response = await this.anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 600,
+      system: systemPrompt,
+      messages: messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    });
+
+    const text = response.content[0].type === 'text' ? response.content[0].text.trim() : '';
+
+    try {
+      const cleaned = text.replace(/```json?\n?/g, '').replace(/```\n?/g, '').trim();
+      if (cleaned.startsWith('{') && cleaned.includes('"ready":true')) {
+        const parsed = JSON.parse(cleaned);
+        if (parsed.ready && parsed.data) {
+          return {
+            message: '¡Perfecto! 🎯 Tengo todo lo que necesito. Ahora sube tus imágenes o videos para crear la campaña.',
+            ready: true,
+            data: parsed.data,
+          };
+        }
+      }
+    } catch {}
+
+    return { message: text, ready: false };
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
