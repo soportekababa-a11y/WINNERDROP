@@ -4,10 +4,10 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 type ReqUser = { id: string; plan: string; selectedCountry: string | null; planExpiresAt: Date | null };
 
-function effectiveCountry(user: ReqUser, requested?: string): string | undefined {
+function effectiveCountry(user: ReqUser, requested?: string, platform?: string): string | undefined {
   if (user.plan === 'free') throw new ForbiddenException('PLAN_REQUIRED');
   if (user.planExpiresAt && new Date(user.planExpiresAt) < new Date()) throw new ForbiddenException('PLAN_EXPIRED');
-  if (user.plan === 'basic') return user.selectedCountry ?? requested;
+  if (user.plan === 'basic' && platform !== 'dropi') return user.selectedCountry ?? requested;
   return requested;
 }
 
@@ -18,12 +18,12 @@ export class ProductsController {
 
   @Get('categories')
   getCategories(@Request() req: any, @Query('country') country?: string, @Query('platform') platform?: string) {
-    return this.productsService.getCategories(effectiveCountry(req.user, country), platform);
+    return this.productsService.getCategories(effectiveCountry(req.user, country, platform), platform);
   }
 
   @Get('providers')
   getProviders(@Request() req: any, @Query('country') country?: string, @Query('platform') platform?: string) {
-    return this.productsService.getProviders(effectiveCountry(req.user, country), platform);
+    return this.productsService.getProviders(effectiveCountry(req.user, country, platform), platform);
   }
 
   @Get()
@@ -54,7 +54,7 @@ export class ProductsController {
     @Query('country') country?: string,
     @Query('platform') platform?: string,
   ) {
-    const c = effectiveCountry(req.user, country);
+    const c = effectiveCountry(req.user, country, platform);
     return this.productsService.getProductsWithDailyGrid(
       limit ? parseInt(limit) : 40,
       (sort as 'today' | 'total' | 'growth' | 'winners' | 'yesterday') ?? 'yesterday',
@@ -71,7 +71,7 @@ export class ProductsController {
 
   @Get('dashboard')
   getDashboardStats(@Request() req: any, @Query('country') country?: string, @Query('platform') platform?: string) {
-    return this.productsService.getDashboardStats(effectiveCountry(req.user, country), platform);
+    return this.productsService.getDashboardStats(effectiveCountry(req.user, country, platform), platform);
   }
 
   @Get(':id/daily')
