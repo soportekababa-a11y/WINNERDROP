@@ -87,11 +87,17 @@ export class DropisService implements OnModuleDestroy {
     const password = passwordOverride ?? this.config.get<string>('DROPI_PASSWORD')!;
     const { code, loginUrl, apiBase, countryKey } = def;
 
-    const token = await this.login(loginUrl, email, password, code);
-    if (!token) { this.logger.error(`[Dropi:${code}] Login fallido`); return { saved: 0 }; }
-    this.logger.log(`[Dropi:${code}] Token OK — fetching products...`);
+    const loginResult = await this.loginKeepBrowser(loginUrl, email, password, code);
+    if (!loginResult) { this.logger.error(`[Dropi:${code}] Login fallido`); return { saved: 0 }; }
+    const { token, browser, page } = loginResult;
+    this.logger.log(`[Dropi:${code}] Token OK — fetching products via browser session...`);
 
-    const products = await this.fetchAll(apiBase, token, countryKey, code);
+    let products: DropiRaw[] = [];
+    try {
+      products = await this.fetchAllViaBrowser(page, apiBase, token, countryKey, code);
+    } finally {
+      await browser.close().catch(() => {});
+    }
     this.logger.log(`[Dropi:${code}] ${products.length} productos`);
 
     let saved = 0;
@@ -121,14 +127,13 @@ export class DropisService implements OnModuleDestroy {
     return { saved };
   }
 
-  private async login(loginUrl: string, email: string, password: string, code: string): Promise<string | null> {
+  private async loginKeepBrowser(loginUrl: string, email: string, password: string, code: string): Promise<{ browser: Browser; page: any; token: string } | null> {
     let browser: Browser | null = null;
     let token: string | null = null;
     try {
       browser = await chromium.launch({ headless: true, executablePath: this.chromiumPath() });
       const page = await browser.newPage();
 
-      // Capture token from any auth-related response
       page.on('response', async resp => {
         if (token) return;
         const url = resp.url();
@@ -151,7 +156,6 @@ export class DropisService implements OnModuleDestroy {
       await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(2000);
 
-      // Try multiple selector patterns for different Dropi versions
       const emailSel = ['#email', 'input[type="email"]', 'input[name="email"]', 'input[placeholder*="email" i]'];
       const passSel  = ['#password', 'input[type="password"]', 'input[name="password"]'];
       const btnSel   = ['button.primary', 'button[type="submit"]', 'button:has-text("Iniciar")', 'button:has-text("Ingresar")', 'button:has-text("Login")'];
@@ -160,17 +164,16 @@ export class DropisService implements OnModuleDestroy {
       for (const sel of emailSel) {
         try { await page.fill(sel, email, { timeout: 3000 }); filled = true; break; } catch {}
       }
-      if (!filled) { this.logger.error(`[Dropi:${code}] No se encontró campo email`); return null; }
+      if (!filled) { this.logger.error(`[Dropi:${code}] No se encontró campo email`); await browser.close().catch(() => {}); return null; }
       for (const sel of passSel) {
         try { await page.fill(sel, password, { timeout: 3000 }); break; } catch {}
       }
       for (const sel of btnSel) {
         try { await page.click(sel, { timeout: 3000 }); break; } catch {}
       }
-      // Wait up to 6s for token — if page closes early but we have token, that's OK
       await page.waitForTimeout(6000).catch(() => {});
 
-      // Fallback: read token from localStorage if page still alive
+      // Fallback: localStorage
       if (!token) {
         try {
           const ls = await page.evaluate(() => {
@@ -186,18 +189,88 @@ export class DropisService implements OnModuleDestroy {
         } catch {}
       }
 
-      if (!token) this.logger.warn(`[Dropi:${code}] Sin token — verifica credenciales`);
-      return token;
+      if (!token) {
+        this.logger.warn(`[Dropi:${code}] Sin token`);
+        await browser.close().catch(() => {});
+        return null;
+      }
+      return { browser, page, token };
     } catch (err: any) {
-      if (token) {
-        this.logger.warn(`[Dropi:${code}] Error post-login ignorado (token ya obtenido): ${err?.message}`);
-        return token;
+      if (token && browser) {
+        this.logger.warn(`[Dropi:${code}] Error post-login ignorado: ${err?.message}`);
+        const page = await browser.newPage().catch(() => null);
+        if (page) return { browser, page, token };
       }
       this.logger.error(`[Dropi:${code}] Login error`, err);
-      return null;
-    } finally {
       await browser?.close().catch(() => {});
+      return null;
     }
+  }
+
+  private async fetchAllViaBrowser(page: any, apiBase: string, token: string, countryKey: string, code: string): Promise<DropiRaw[]> {
+    const all: DropiRaw[] = [];
+    let start = 0;
+
+    while (true) {
+      // Make request from browser context — session cookies are included automatically
+      const result = await page.evaluate(async ({ apiBase, token, countryKey, start, pageSize }: any) => {
+        try {
+          const r = await fetch(`${apiBase}/api/products/v4/index`, {
+            method: 'POST',
+            headers: {
+              'x-authorization': `Bearer ${token}`,
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              pageSize, startData: start,
+              privated_product: false, userVerified: false, favorite: false,
+              with_collection: true, get_stock: true, no_count: true,
+              search_type: 'simple', country: countryKey,
+            }),
+          });
+          const d = await r.json();
+          return { status: r.status, data: d };
+        } catch (e: any) {
+          return { status: 0, error: e?.message };
+        }
+      }, { apiBase, token, countryKey, start, pageSize: PAGE_SIZE });
+
+      if (start === 0) {
+        this.logger.log(`[Dropi:${code}] HTTP ${result.status} | objects: ${result.data?.objects?.length ?? 'undefined'} | msg: ${result.data?.message ?? result.error ?? ''}`);
+      }
+
+      if (result.status !== 200 || !result.data?.objects) break;
+      const items: any[] = result.data.objects;
+      if (!items.length) break;
+
+      if (start === 0 && items.length > 0) {
+        this.logger.log(`[Dropi:${code}] SAMPLE: ${JSON.stringify(items[0]).slice(0, 300)}`);
+      }
+
+      for (const item of items) {
+        const imageUrl = item.gallery?.[0]?.urlS3 ? `${CDN}${item.gallery[0].urlS3}` : '';
+        const rawStock = item.warehouse_product?.[0]?.stock ?? 0;
+        const stock    = rawStock > 100_000_000 ? 0 : rawStock;
+        all.push({
+          dropiId: `dropi_${item.id}`,
+          name: item.name ?? '',
+          imageUrl,
+          provider: item.user?.name ?? '',
+          category: item.categories?.[0]?.name ?? '',
+          subcategory: item.categories?.[1]?.name ?? '',
+          price: item.suggested_price ?? 0,
+          cost: item.sale_price ?? 0,
+          stock,
+        });
+      }
+
+      this.logger.log(`[Dropi:${code}] Acumulado: ${all.length} (start=${start})`);
+      if (items.length < PAGE_SIZE) break;
+      start += PAGE_SIZE;
+    }
+
+    return all;
   }
 
   private chromiumPath(): string | undefined {
@@ -214,84 +287,6 @@ export class DropisService implements OnModuleDestroy {
     }
   }
 
-  private async fetchAll(apiBase: string, token: string, countryKey: string, code: string): Promise<DropiRaw[]> {
-    const all: DropiRaw[] = [];
-    let start = 0;
-
-    // Try different country key formats
-    const countryVariants = [countryKey, countryKey.toLowerCase(), countryKey.toUpperCase(), 'CR', 'DO', 'RD'];
-    let workingKey = countryKey;
-
-    while (true) {
-      const key = start === 0 ? workingKey : workingKey;
-      const rawResp = await fetch(`${apiBase}/api/products/v4/index`, {
-        method: 'POST',
-        headers: {
-          'x-authorization': `Bearer ${token}`,
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          pageSize: PAGE_SIZE, startData: start,
-          privated_product: false, userVerified: false, favorite: false,
-          with_collection: true, get_stock: true, no_count: true,
-          search_type: 'simple', country: key,
-        }),
-      });
-      const resp = await rawResp.json() as any;
-
-      // On first page and 403, try to find working countryKey
-      if (start === 0 && rawResp.status === 403) {
-        this.logger.log(`[Dropi:${code}] 403 con key="${key}" — probando variantes`);
-        for (const variant of countryVariants) {
-          if (variant === key) continue;
-          const r2 = await fetch(`${apiBase}/api/products/v4/index`, {
-            method: 'POST',
-            headers: { 'x-authorization': `Bearer ${token}`, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pageSize: 1, startData: 0, get_stock: true, country: variant }),
-          });
-          const d2 = await r2.json() as any;
-          this.logger.log(`[Dropi:${code}] variant="${variant}" → HTTP ${r2.status} | objects: ${d2.objects?.length ?? 'null'} | msg: ${d2.message ?? ''}`);
-          if (r2.status === 200 && d2.objects) { workingKey = variant; break; }
-        }
-      }
-
-      if (start === 0) {
-        this.logger.log(`[Dropi:${code}] HTTP ${rawResp.status} | RESP_KEYS: ${Object.keys(resp).join(', ')} | objects: ${resp.objects?.length ?? 'undefined'} | msg: ${resp.message ?? ''} | status: ${resp.status}`);
-      }
-
-      const items: any[] = resp.objects ?? [];
-      if (!items.length) break;
-
-      if (start === 0 && items.length > 0) {
-        this.logger.log(`[Dropi:${code}] SAMPLE_ITEM_KEYS: ${Object.keys(items[0]).join(', ')}`);
-        this.logger.log(`[Dropi:${code}] SAMPLE_ITEM: ${JSON.stringify(items[0]).slice(0, 500)}`);
-      }
-
-      for (const item of items) {
-        const imageUrl = item.gallery?.[0]?.urlS3 ? `${CDN}${item.gallery[0].urlS3}` : '';
-        const rawStock = item.warehouse_product?.[0]?.stock ?? 0;
-        const stock    = rawStock > 100_000_000 ? 0 : rawStock; // skip "unlimited" virtual stock
-        all.push({
-          dropiId: `dropi_${item.id}`,
-          name: item.name ?? '',
-          imageUrl,
-          provider: item.user?.name ?? '',
-          category: item.categories?.[0]?.name ?? '',
-          subcategory: item.categories?.[1]?.name ?? '',
-          price: item.suggested_price ?? 0,
-          cost: item.sale_price ?? 0,
-          stock,
-        });
-      }
-
-      this.logger.log(`[Dropi:${code}] Fetched ${all.length} (start=${start})`);
-      if (items.length < PAGE_SIZE) break;
-      start += PAGE_SIZE;
-    }
-
-    return all;
-  }
 
   private async upsert(raw: DropiRaw, country: string): Promise<{ id: string; salesYesterday: number } | null> {
     const today = businessDay();
