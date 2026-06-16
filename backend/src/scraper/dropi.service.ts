@@ -209,6 +209,7 @@ export class DropisService implements OnModuleDestroy {
   private async fetchAllViaBrowser(page: any, apiBase: string, token: string, countryKey: string, code: string): Promise<DropiRaw[]> {
     const all: DropiRaw[] = [];
     const seenIds = new Set<number>();
+    const seenUserIds = new Set<number>();
     let start = 0;
     let emptyConsecutive = 0;
 
@@ -248,11 +249,15 @@ export class DropisService implements OnModuleDestroy {
           seenIds.add(item.id);
           const imageUrl = item.gallery?.[0]?.urlS3 ? `${CDN}${item.gallery[0].urlS3}` : '';
           const rawStock = item.warehouse_product?.[0]?.stock ?? 0;
+          if (item.user?.id && !seenUserIds.has(item.user.id)) {
+            seenUserIds.add(item.user.id);
+            this.logger.log(`[Dropi:${code}] USER id=${item.user.id} name="${item.user.name}" store_name="${item.user.store_name ?? ''}"`);
+          }
           all.push({
             dropiId: `dropi_${item.id}`,
             name: item.name ?? '',
             imageUrl,
-            provider: item.user?.name ?? '',
+            provider: item.user?.store_name || item.user?.name || '',
             category: item.categories?.[0]?.name ?? '',
             subcategory: item.categories?.[1]?.name ?? '',
             price: item.suggested_price ?? 0,
