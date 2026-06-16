@@ -356,8 +356,14 @@ export default function MetaAdsPage() {
     try {
       const res = await apiFetch('/meta-ads/campaigns', { method: 'POST', body: fd });
       clearInterval(iv);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message ?? 'Error creando campaña');
+      const text = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`Respuesta inválida del servidor: ${text.slice(0, 300)}`);
+      }
+      if (!res.ok) throw new Error(data.message ?? JSON.stringify(data));
       setResult(data);
       setStep('done');
     } catch (e: any) {
