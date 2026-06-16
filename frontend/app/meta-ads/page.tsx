@@ -5,11 +5,9 @@ import { useRouter } from 'next/navigation';
 import { getToken } from '@/lib/auth';
 import { Sidebar } from '@/components/sidebar';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-
 function apiFetch(path: string, options?: RequestInit) {
   const token = getToken();
-  return fetch(`${API}${path}`, {
+  return fetch(`/api/proxy${path}`, {
     ...options,
     headers: { Authorization: `Bearer ${token}`, ...(options?.headers ?? {}) },
   });
