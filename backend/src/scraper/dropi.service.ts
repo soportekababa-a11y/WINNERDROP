@@ -171,7 +171,15 @@ export class DropisService implements OnModuleDestroy {
       for (const sel of btnSel) {
         try { await page.click(sel, { timeout: 3000 }); break; } catch {}
       }
-      await page.waitForTimeout(6000).catch(() => {});
+
+      // Wait for SPA to navigate away from login page (dashboard/home)
+      try {
+        await page.waitForURL(url => !url.includes('/auth') && !url.includes('/login'), { timeout: 15000 });
+        this.logger.log(`[Dropi:${code}] Post-login URL: ${page.url()}`);
+      } catch {
+        // If waitForURL times out, wait a bit and check if we have token
+        await page.waitForTimeout(5000).catch(() => {});
+      }
 
       // Fallback: localStorage
       if (!token) {
@@ -183,9 +191,16 @@ export class DropisService implements OnModuleDestroy {
               if (key.toLowerCase().includes('token') || key.toLowerCase().includes('auth')) return val;
               try { const j = JSON.parse(val); if (j?.token) return j.token; if (j?.access_token) return j.access_token; } catch {}
             }
+            // Also check sessionStorage
+            for (let i = 0; i < sessionStorage.length; i++) {
+              const key = sessionStorage.key(i) ?? '';
+              const val = sessionStorage.getItem(key) ?? '';
+              if (key.toLowerCase().includes('token') || key.toLowerCase().includes('auth')) return val;
+              try { const j = JSON.parse(val); if (j?.token) return j.token; if (j?.access_token) return j.access_token; } catch {}
+            }
             return null;
           });
-          if (ls) { token = ls; this.logger.log(`[Dropi:${code}] Token desde localStorage`); }
+          if (ls) { token = ls; this.logger.log(`[Dropi:${code}] Token desde storage`); }
         } catch {}
       }
 
@@ -194,14 +209,10 @@ export class DropisService implements OnModuleDestroy {
         await browser.close().catch(() => {});
         return null;
       }
+      // Page is stable at dashboard — return it for evaluate() calls
       return { browser, page, token };
     } catch (err: any) {
-      if (token && browser) {
-        this.logger.warn(`[Dropi:${code}] Error post-login ignorado: ${err?.message}`);
-        const page = await browser.newPage().catch(() => null);
-        if (page) return { browser, page, token };
-      }
-      this.logger.error(`[Dropi:${code}] Login error`, err);
+      this.logger.error(`[Dropi:${code}] Login error: ${err?.message}`);
       await browser?.close().catch(() => {});
       return null;
     }
