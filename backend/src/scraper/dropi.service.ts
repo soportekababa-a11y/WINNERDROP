@@ -218,7 +218,12 @@ export class DropisService implements OnModuleDestroy {
     const all: DropiRaw[] = [];
     let start = 0;
 
+    // Try different country key formats
+    const countryVariants = [countryKey, countryKey.toLowerCase(), countryKey.toUpperCase(), 'CR', 'DO', 'RD'];
+    let workingKey = countryKey;
+
     while (true) {
+      const key = start === 0 ? workingKey : workingKey;
       const rawResp = await fetch(`${apiBase}/api/products/v4/index`, {
         method: 'POST',
         headers: {
@@ -230,10 +235,26 @@ export class DropisService implements OnModuleDestroy {
           pageSize: PAGE_SIZE, startData: start,
           privated_product: false, userVerified: false, favorite: false,
           with_collection: true, get_stock: true, no_count: true,
-          search_type: 'simple', country: countryKey,
+          search_type: 'simple', country: key,
         }),
       });
       const resp = await rawResp.json() as any;
+
+      // On first page and 403, try to find working countryKey
+      if (start === 0 && rawResp.status === 403) {
+        this.logger.log(`[Dropi:${code}] 403 con key="${key}" — probando variantes`);
+        for (const variant of countryVariants) {
+          if (variant === key) continue;
+          const r2 = await fetch(`${apiBase}/api/products/v4/index`, {
+            method: 'POST',
+            headers: { 'x-authorization': `Bearer ${token}`, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pageSize: 1, startData: 0, get_stock: true, country: variant }),
+          });
+          const d2 = await r2.json() as any;
+          this.logger.log(`[Dropi:${code}] variant="${variant}" → HTTP ${r2.status} | objects: ${d2.objects?.length ?? 'null'} | msg: ${d2.message ?? ''}`);
+          if (r2.status === 200 && d2.objects) { workingKey = variant; break; }
+        }
+      }
 
       if (start === 0) {
         this.logger.log(`[Dropi:${code}] HTTP ${rawResp.status} | RESP_KEYS: ${Object.keys(resp).join(', ')} | objects: ${resp.objects?.length ?? 'undefined'} | msg: ${resp.message ?? ''} | status: ${resp.status}`);
