@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -8,6 +8,7 @@ import { Snapshot } from '../snapshots/snapshot.entity';
 
 const CDN = 'https://d3sk39qh2f4j46.cloudfront.net/';
 const PAGE_SIZE = 100;
+const CYCLE_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 function businessDay(): string {
   const now = new Date();
@@ -18,6 +19,7 @@ function businessDay(): string {
 
 export const DROPI_COUNTRIES = [
   { code: 'CR', loginUrl: 'https://app.dropi.cr/auth/login', apiBase: 'https://api.dropi.cr', countryKey: 'COSTARICA' },
+  { code: 'CO', loginUrl: 'https://app.dropi.co/auth/login', apiBase: 'https://api.dropi.co', countryKey: 'COLOMBIA' },
 ];
 
 interface DropiRaw {
@@ -33,8 +35,10 @@ interface DropiRaw {
 }
 
 @Injectable()
-export class DropisService {
+export class DropisService implements OnModuleDestroy {
   private readonly logger = new Logger(DropisService.name);
+  private running = false;
+  private lastStats = { total: 0, durationMs: 0, finishedAt: null as Date | null };
 
   constructor(
     private config: ConfigService,
@@ -42,9 +46,45 @@ export class DropisService {
     @InjectRepository(Snapshot) private snapshotRepo: Repository<Snapshot>,
   ) {}
 
-  async scrapeCountry(def: typeof DROPI_COUNTRIES[0]): Promise<{ saved: number }> {
-    const email    = this.config.get<string>('DROPI_EMAIL')!;
-    const password = this.config.get<string>('DROPI_PASSWORD')!;
+  async onModuleDestroy() { this.running = false; }
+
+  getStats() { return { running: this.running, ...this.lastStats }; }
+
+  start() {
+    if (this.running) return;
+    this.running = true;
+    this.logger.log('Dropi loop iniciado');
+    this.loop();
+  }
+
+  private async loop() {
+    while (this.running) {
+      const t = Date.now();
+      let total = 0;
+      const email = this.config.get<string>('DROPI_EMAIL')!;
+      const password = this.config.get<string>('DROPI_PASSWORD')!;
+      if (!email || !password) {
+        this.logger.error('DROPI_EMAIL / DROPI_PASSWORD no configurados — omitiendo ciclo');
+        await new Promise(r => setTimeout(r, CYCLE_INTERVAL_MS));
+        continue;
+      }
+      for (const def of DROPI_COUNTRIES) {
+        try {
+          const { saved } = await this.scrapeCountry(def, email, password);
+          total += saved;
+        } catch (err) {
+          this.logger.error(`[Dropi:${def.code}] Error en ciclo`, err);
+        }
+      }
+      this.lastStats = { total, durationMs: Date.now() - t, finishedAt: new Date() };
+      this.logger.log(`Dropi ciclo completo — ${total} productos en ${Math.round((Date.now() - t) / 1000)}s. Próximo en 2h.`);
+      await new Promise(r => setTimeout(r, CYCLE_INTERVAL_MS));
+    }
+  }
+
+  async scrapeCountry(def: typeof DROPI_COUNTRIES[0], emailOverride?: string, passwordOverride?: string): Promise<{ saved: number }> {
+    const email    = emailOverride    ?? this.config.get<string>('DROPI_EMAIL')!;
+    const password = passwordOverride ?? this.config.get<string>('DROPI_PASSWORD')!;
     const { code, loginUrl, apiBase, countryKey } = def;
 
     const token = await this.login(loginUrl, email, password, code);

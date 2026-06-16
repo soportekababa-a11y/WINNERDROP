@@ -11,6 +11,6 @@ import { ProductsModule } from '../products/products.module';
   imports: [TypeOrmModule.forFeature([Product, Snapshot]), ProductsModule],
   providers: [ScraperService, DropisService],
   controllers: [ScraperController],
-  exports: [ScraperService],
+  exports: [ScraperService, DropisService],
 })
 export class ScraperModule {}
