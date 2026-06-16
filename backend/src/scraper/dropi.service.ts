@@ -19,7 +19,7 @@ function businessDay(): string {
 
 export const DROPI_COUNTRIES = [
   { code: 'CR', loginUrl: 'https://app.dropi.cr/auth/login', apiBase: 'https://api.dropi.cr', countryKey: 'COSTARICA' },
-  { code: 'CO', loginUrl: 'https://app.dropi.co/auth/login', apiBase: 'https://api.dropi.co', countryKey: 'COLOMBIA' },
+  // CO desactivado — credenciales no válidas para esa plataforma
 ];
 
 interface DropiRaw {
@@ -167,9 +167,10 @@ export class DropisService implements OnModuleDestroy {
       for (const sel of btnSel) {
         try { await page.click(sel, { timeout: 3000 }); break; } catch {}
       }
-      await page.waitForTimeout(6000);
+      // Wait up to 6s for token — if page closes early but we have token, that's OK
+      await page.waitForTimeout(6000).catch(() => {});
 
-      // Fallback: read token from localStorage
+      // Fallback: read token from localStorage if page still alive
       if (!token) {
         try {
           const ls = await page.evaluate(() => {
@@ -185,9 +186,13 @@ export class DropisService implements OnModuleDestroy {
         } catch {}
       }
 
-      if (!token) this.logger.warn(`[Dropi:${code}] Login completado pero sin token — verifica credenciales`);
+      if (!token) this.logger.warn(`[Dropi:${code}] Sin token — verifica credenciales`);
       return token;
-    } catch (err) {
+    } catch (err: any) {
+      if (token) {
+        this.logger.warn(`[Dropi:${code}] Error post-login ignorado (token ya obtenido): ${err?.message}`);
+        return token;
+      }
       this.logger.error(`[Dropi:${code}] Login error`, err);
       return null;
     } finally {
