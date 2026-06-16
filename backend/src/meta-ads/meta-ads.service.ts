@@ -182,6 +182,7 @@ export class MetaAdsService {
       instagramAccountId?: string;
       strategy?: string;
       audienceHint?: string;
+      productDescription?: string;
       audienceAdSets?: Array<{ name: string; isBroad: boolean; interests: Array<{ id: string; name: string }> }>;
       copys?: Array<{ primaryText: string; headline: string; description: string; callToAction: string }>;
     },
@@ -206,6 +207,7 @@ export class MetaAdsService {
         campaignType: dto.campaignType,
         strategy: dto.strategy,
         audienceHint: dto.audienceHint,
+        productDescription: dto.productDescription,
       });
       dto.audienceAdSets = suggested.adSets;
     }
@@ -219,6 +221,7 @@ export class MetaAdsService {
         priceBefore: dto.priceBefore,
         priceAfter: dto.priceAfter,
         campaignType: dto.campaignType,
+        productDescription: dto.productDescription,
         adCount: files.length,
       });
       dto.copys = generated.ads.map((ad: any) => ad.option1 ?? {
@@ -401,9 +404,24 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       } catch { optimizationGoal = 'LANDING_PAGE_VIEWS'; promotedObject = undefined; }
     }
 
+    // Campaign name: ProductName - StrategyType - Date - $Budget - BudgetType
+    const strategyNameMap: Record<string, string> = {
+      creative_test: 'Test Creativos', audience_test: 'Test Audiencias',
+      scale_cbo: 'Escala CBO', asc_plus: 'ASC+', traffic: 'Tráfico',
+      leads: 'Leads', messages: 'Mensajes', awareness: 'Awareness', full_test: 'Test Completo',
+    };
+    const now = new Date();
+    const dateStr = `${now.getDate().toString().padStart(2,'0')}${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][now.getMonth()]}`;
+    const strategyLabel = strategyNameMap[dto.strategy ?? ''] ?? dto.campaignType;
+    const campaignName = `${dto.productName} - ${strategyLabel} - ${dateStr} - $${dto.dailyBudget} ${isCBO ? 'CBO' : 'ABO'}`;
+
+    // ABO: split daily budget between ad sets
+    const adSetsCount = dto.audienceAdSets?.length || dto.adSetsCount || 1;
+    const perSetBudgetCents = isCBO ? 0 : Math.round((dto.dailyBudget / adSetsCount) * 100);
+
     // 1. Create campaign — CBO: budget lives here, not on ad sets
     const campaignBody: any = {
-      name: `${dto.productName} - ${dto.country}`,
+      name: campaignName,
       objective,
       status: 'PAUSED',
       special_ad_categories: [],
@@ -571,8 +589,8 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
         start_time: startTime,
         status: 'PAUSED',
       };
-      // CBO: budget is on the campaign, not the ad set
-      if (!isCBO) adSetBody.daily_budget = Math.round(dto.dailyBudget * 100);
+      // ABO: budget divided equally between ad sets
+      if (!isCBO) adSetBody.daily_budget = perSetBudgetCents;
       if (promotedObject) adSetBody.promoted_object = promotedObject;
 
       this.logger.log(`[Meta] AdSet body: ${JSON.stringify(adSetBody)}`);
@@ -932,7 +950,28 @@ Responde SOLO JSON:
     return null;
   }
 
-  async suggestAudience(userId: string, dto: { productName: string; country: string; budgetType: string; adSetsCount: number; productResearch?: string; campaignType: string; audienceHint?: string; strategy?: string }): Promise<{ adSets: any[] }> {
+  async suggestProductNames(productName: string, country: string, campaignType: string): Promise<{ names: string[] }> {
+    const countryNames: Record<string, string> = { RD: 'República Dominicana', MX: 'México', CO: 'Colombia', GT: 'Guatemala', EC: 'Ecuador', CR: 'Costa Rica', PE: 'Perú', CL: 'Chile', AR: 'Argentina', US: 'Estados Unidos', ES: 'España' };
+    const countryName = countryNames[country] ?? country;
+    try {
+      const resp = await this.anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: `Eres un experto en branding y marketing para ${countryName}.
+El cliente vende: "${productName}"
+Objetivo de campaña: ${campaignType}
+
+Da exactamente 4 nombres de producto cortos, atractivos y comerciales para el mercado de ${countryName}.
+Que suenen naturales, no traducciones literales. Pueden ser en español o inglés si es más efectivo.
+SOLO JSON: {"names":["Nombre 1","Nombre 2","Nombre 3","Nombre 4"]}` }],
+      });
+      const text = resp.content[0].type === 'text' ? resp.content[0].text : '{}';
+      const parsed = JSON.parse(text.replace(/```json?\n?/g, '').replace(/```\n?/g, '').trim());
+      return { names: parsed.names ?? [] };
+    } catch { return { names: [] }; }
+  }
+
+  async suggestAudience(userId: string, dto: { productName: string; country: string; budgetType: string; adSetsCount: number; productResearch?: string; productDescription?: string; campaignType: string; audienceHint?: string; strategy?: string }): Promise<{ adSets: any[] }> {
     const conn = await this.getConnection(userId);
     const token = conn.accessToken;
     const countryNames: Record<string, string> = { RD: 'República Dominicana', GT: 'Guatemala', EC: 'Ecuador', CR: 'Costa Rica', CO: 'Colombia', MX: 'México', US: 'Estados Unidos', ES: 'España', PE: 'Perú', CL: 'Chile', AR: 'Argentina' };
@@ -953,6 +992,7 @@ Product: ${dto.productName}
 Country: ${country}
 Structure: ${dto.budgetType}
 Ad sets needed: ${dto.adSetsCount}
+${dto.productDescription ? `Product description: ${dto.productDescription}` : ''}
 ${dto.productResearch ? `Product info: ${dto.productResearch}` : ''}
 ${dto.audienceHint ? `Client audience notes: ${dto.audienceHint}` : ''}
 
@@ -985,9 +1025,11 @@ Reply ONLY as JSON: {"adSets":[{"name":"set name","isBroad":false,"interestNames
     } catch { return { adSets: [{ name: 'Audiencia Amplia', isBroad: true, interests: [], rationale: 'Broad targeting recomendado' }] }; }
   }
 
-  async generateCopy(userId: string, dto: { productName: string; country: string; landingPage: string; priceBefore?: string; priceAfter?: string; campaignType: string; adCount: number; productResearch?: string; angle?: string }): Promise<{ ads: any[] }> {
+  async generateCopy(userId: string, dto: { productName: string; country: string; landingPage: string; priceBefore?: string; priceAfter?: string; campaignType: string; adCount: number; productResearch?: string; productDescription?: string; angle?: string }): Promise<{ ads: any[] }> {
     const countryNames: Record<string, string> = { RD: 'República Dominicana', GT: 'Guatemala', EC: 'Ecuador', CR: 'Costa Rica', CO: 'Colombia', MX: 'México', US: 'Estados Unidos', ES: 'España', PE: 'Perú', CL: 'Chile', AR: 'Argentina' };
+    const currencyMap: Record<string, string> = { RD: 'RD$', MX: 'MX$', CO: 'COP $', GT: 'Q', EC: '$', CR: '₡', PE: 'S/', CL: 'CL$', AR: 'AR$', US: '$', ES: '€' };
     const country = countryNames[dto.country] ?? dto.country;
+    const currency = currencyMap[dto.country] ?? '$';
     const ctaMap: Record<string, string> = { VENTAS: 'SHOP_NOW', TRAFICO: 'LEARN_MORE', LEADS: 'SIGN_UP', MENSAJES: 'CONTACT_US', RECONOCIMIENTO: 'LEARN_MORE' };
     const cta = ctaMap[dto.campaignType] ?? 'SHOP_NOW';
     try {
@@ -997,11 +1039,22 @@ Reply ONLY as JSON: {"adSets":[{"name":"set name","isBroad":false,"interestNames
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }] as any,
         messages: [{ role: 'user', content: `Genera copies para ${dto.adCount} anuncio(s) en ${country}.
 Producto: ${dto.productName}
-${dto.priceBefore ? `Precio: ~~$${dto.priceBefore}~~ → $${dto.priceAfter}` : dto.priceAfter ? `Precio: $${dto.priceAfter}` : ''}
-${dto.productResearch ? `Info: ${dto.productResearch}` : ''}
-${dto.angle ? `Ángulo: ${dto.angle}` : ''}
+${dto.productDescription ? `Descripción: ${dto.productDescription}` : ''}
+${dto.priceBefore ? `Precio: ~~${currency}${dto.priceBefore}~~ → ${currency}${dto.priceAfter}` : dto.priceAfter ? `Precio: ${currency}${dto.priceAfter}` : ''}
+${dto.productResearch ? `Info adicional: ${dto.productResearch}` : ''}
 Objetivo: ${dto.campaignType}  Landing: ${dto.landingPage}
-Para cada anuncio: 2 opciones con ángulos MUY diferentes. Usa jerga natural de ${country}.
+
+Analiza el producto y elige AUTOMÁTICAMENTE los mejores ángulos de venta para superar a la competencia en ${country}.
+Ángulos posibles: urgencia real, transformación (de X a Y), prueba social, miedo a perder, exclusividad, dolor+solución, precio.
+Para cada anuncio usa un ángulo DIFERENTE y MUY distinto al anterior.
+Usa jerga natural de ${country}, no español neutro.
+
+REGLAS CRÍTICAS:
+- primaryText: máximo 125 caracteres
+- headline: máximo 40 caracteres
+- description: máximo 30 caracteres
+- Cada opción debe tener ángulo completamente diferente
+
 Responde SOLO JSON:
 {"ads":[{"option1":{"primaryText":"max 125 chars","headline":"max 40 chars","description":"max 30 chars","callToAction":"${cta}"},"option2":{"primaryText":"diferente max 125 chars","headline":"diferente max 40 chars","description":"max 30 chars","callToAction":"${cta}"}}]}
 Exactamente ${dto.adCount} elemento(s) en el array ads.` }],

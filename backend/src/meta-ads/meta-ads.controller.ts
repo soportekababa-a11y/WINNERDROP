@@ -50,6 +50,11 @@ export class MetaAdsController {
   @UseGuards(JwtAuthGuard) @Get('instagram')
   getInstagram(@Req() req: any) { return this.svc.getInstagramAccounts(req.user.id); }
 
+  @UseGuards(JwtAuthGuard) @Post('suggest-names')
+  suggestNames(@Req() req: any, @Body() body: { productName: string; country: string; campaignType: string }) {
+    return this.svc.suggestProductNames(body.productName, body.country, body.campaignType);
+  }
+
   @UseGuards(JwtAuthGuard) @Post('research-product')
   researchProduct(@Req() req: any, @Body() body: any) {
     return this.svc.researchProduct(req.user.id, body);
@@ -109,6 +114,7 @@ export class MetaAdsController {
       instagramAccountId: body.instagramAccountId || undefined,
       strategy: body.strategy || undefined,
       audienceHint: body.audienceHint || undefined,
+      productDescription: body.productDescription || undefined,
       audienceAdSets: body.audienceAdSets ? JSON.parse(body.audienceAdSets) : [],
       copys: body.copys ? JSON.parse(body.copys) : [],
     }, files);

@@ -171,8 +171,13 @@ interface ConnStatus {
   credits: number;
 }
 
+const CURRENCY: Record<string, string> = {
+  RD: 'RD$', MX: 'MX$', CO: 'COP', GT: 'Q', EC: '$', CR: '₡', PE: 'S/', CL: 'CL$', AR: 'AR$', US: '$', ES: '€',
+};
+
 interface FormState {
   productName: string;
+  productDescription: string;
   landingPage: string;
   country: string;
   dailyBudget: string;
@@ -181,6 +186,7 @@ interface FormState {
   excludeCities: string;
   adSetsCount: string;
   audienceHint: string;
+  startDateTime: string;
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -197,10 +203,14 @@ export default function MetaAdsPage() {
   const [creatingMsg, setCreatingMsg] = useState('');
   const [accounts, setAccounts] = useState<any[]>([]);
   const [pages, setPages] = useState<any[]>([]);
+  const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
+  const [loadingNames, setLoadingNames] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [form, setForm] = useState<FormState>({
     productName: '',
+    productDescription: '',
     landingPage: 'https://',
     country: 'RD',
     dailyBudget: '',
@@ -209,6 +219,7 @@ export default function MetaAdsPage() {
     excludeCities: '',
     adSetsCount: '2',
     audienceHint: '',
+    startDateTime: '',
   });
 
   const strategy = STRATEGIES.find(s => s.id === selectedStrategy);
@@ -310,8 +321,32 @@ export default function MetaAdsPage() {
     addFiles(e.dataTransfer.files);
   }, []);
 
-  const upd = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+  const upd = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setForm(f => ({ ...f, [field]: e.target.value }));
+    if (field === 'productName') {
+      const val = e.target.value.trim();
+      if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
+      if (val.length >= 3) {
+        nameDebounceRef.current = setTimeout(() => fetchNameSuggestions(val), 800);
+      } else {
+        setNameSuggestions([]);
+      }
+    }
+  };
+
+  const fetchNameSuggestions = async (name: string) => {
+    if (!strategy) return;
+    setLoadingNames(true);
+    try {
+      const res = await apiFetch('/meta-ads/suggest-names', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productName: name, country: form.country, campaignType: strategy.campaignType }),
+      });
+      const data = await res.json();
+      setNameSuggestions(data.names ?? []);
+    } catch { setNameSuggestions([]); }
+    setLoadingNames(false);
+  };
 
   const createCampaign = async () => {
     if (!strategy) return;
@@ -343,12 +378,13 @@ export default function MetaAdsPage() {
     fd.append('budgetType', strategy.budgetType);
     fd.append('adSetsCount', strategy.fixedAdSets ? String(strategy.fixedAdSets) : form.adSetsCount);
     fd.append('strategy', strategy.id);
-    fd.append('startTime', 'now');
+    fd.append('startTime', form.startDateTime || 'now');
     if (form.priceBefore) fd.append('priceBefore', form.priceBefore);
     if (form.priceAfter) fd.append('priceAfter', form.priceAfter);
     const cities = form.excludeCities.split(',').map(c => c.trim()).filter(Boolean);
     if (cities.length) fd.append('excludeCities', JSON.stringify(cities));
     if (form.audienceHint.trim()) fd.append('audienceHint', form.audienceHint.trim());
+    if (form.productDescription.trim()) fd.append('productDescription', form.productDescription.trim());
     fd.append('audienceAdSets', JSON.stringify([]));
     fd.append('copys', JSON.stringify([]));
     files.forEach(f => fd.append('files', f));
@@ -378,7 +414,8 @@ export default function MetaAdsPage() {
     setFiles([]);
     setResult(null);
     setSelectedStrategy(null);
-    setForm(f => ({ ...f, productName: '', landingPage: 'https://', priceBefore: '', priceAfter: '', audienceHint: '', excludeCities: '' }));
+    setNameSuggestions([]);
+    setForm(f => ({ ...f, productName: '', productDescription: '', landingPage: 'https://', priceBefore: '', priceAfter: '', audienceHint: '', excludeCities: '', startDateTime: '' }));
   };
 
   // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -555,18 +592,37 @@ export default function MetaAdsPage() {
                 <div className="sm:col-span-2">
                   <label className={labelCls}>Nombre del producto *</label>
                   <input className={fieldCls} value={form.productName} onChange={upd('productName')} placeholder="ej. Faja Reductora Premium" />
+                  {/* AI name suggestions */}
+                  {loadingNames && <p className="text-zinc-600 text-xs mt-1">Buscando nombres…</p>}
+                  {nameSuggestions.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <span className="text-zinc-600 text-xs self-center">Ideas:</span>
+                      {nameSuggestions.map((n, i) => (
+                        <button key={i} type="button" onClick={() => { setForm(f => ({ ...f, productName: n })); setNameSuggestions([]); }}
+                          className="text-xs bg-violet-600/20 hover:bg-violet-600/40 text-violet-300 border border-violet-600/30 px-2.5 py-1 rounded-full transition-colors">
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Descripción del producto *</label>
+                  <textarea className={`${fieldCls} resize-none`} rows={3} value={form.productDescription} onChange={upd('productDescription')}
+                    placeholder="ej. Faja reductora de cintura para mujeres, reduce hasta 3 tallas, tela transpirable, ajustable. Ideal para uso diario o ejercicio." />
+                  <p className="text-zinc-600 text-xs mt-1">La IA usa esto para elegir el mejor ángulo de venta y generar audiencias precisas</p>
                 </div>
                 <div className="sm:col-span-2">
                   <label className={labelCls}>URL de la landing page *</label>
                   <input className={fieldCls} value={form.landingPage} onChange={upd('landingPage')} type="url" placeholder="https://tutienda.com/producto" />
                 </div>
                 <div>
-                  <label className={labelCls}>Precio antes (opcional)</label>
-                  <input className={fieldCls} value={form.priceBefore} onChange={upd('priceBefore')} type="number" placeholder="ej. 59.99" />
+                  <label className={labelCls}>Precio antes ({CURRENCY[form.country] ?? '$'}) (opcional)</label>
+                  <input className={fieldCls} value={form.priceBefore} onChange={upd('priceBefore')} type="number" placeholder="ej. 2500" />
                 </div>
                 <div>
-                  <label className={labelCls}>Precio actual (opcional)</label>
-                  <input className={fieldCls} value={form.priceAfter} onChange={upd('priceAfter')} type="number" placeholder="ej. 39.99" />
+                  <label className={labelCls}>Precio actual ({CURRENCY[form.country] ?? '$'}) (opcional)</label>
+                  <input className={fieldCls} value={form.priceAfter} onChange={upd('priceAfter')} type="number" placeholder="ej. 1500" />
                 </div>
               </div>
             </div>
@@ -604,6 +660,11 @@ export default function MetaAdsPage() {
                   <label className={labelCls}>Excluir ciudades (separadas por coma)</label>
                   <input className={fieldCls} value={form.excludeCities} onChange={upd('excludeCities')} placeholder="ej. Santiago, Valparaíso" />
                 </div>
+                <div>
+                  <label className={labelCls}>Fecha y hora de inicio</label>
+                  <input className={`${fieldCls} [color-scheme:dark]`} type="datetime-local" value={form.startDateTime} onChange={upd('startDateTime')} />
+                  <p className="text-zinc-600 text-xs mt-1">Vacío = empezar ahora</p>
+                </div>
               </div>
 
               {strategy.audienceType !== 'broad' && (
@@ -618,7 +679,9 @@ export default function MetaAdsPage() {
               <div className="mt-4 bg-zinc-800/60 rounded-xl p-3 text-xs text-zinc-400">
                 {strategy.budgetType === 'CBO'
                   ? '💡 CBO — El presupuesto va en la campaña. Meta decide cuánto gastar en cada conjunto según lo que convierte.'
-                  : `💡 ABO — El presupuesto va en cada conjunto.${perSet ? ` ≈ $${perSet}/día por conjunto.` : ''}`}
+                  : perSet
+                    ? `💡 ABO — $${form.dailyBudget} total ÷ ${form.adSetsCount} conjuntos = $${perSet}/día por conjunto.`
+                    : '💡 ABO — El presupuesto se divide equitativamente entre todos los conjuntos.'}
               </div>
             </div>
 
