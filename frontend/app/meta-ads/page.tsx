@@ -128,6 +128,20 @@ const STRATEGIES = [
     minCreatives: 2,
     audienceType: 'broad',
   },
+  {
+    id: 'full_test',
+    icon: '⚡',
+    name: 'Test Completo',
+    badge: '🎯 Máximo info',
+    tagline: 'Varios creativos × varias audiencias al mismo tiempo',
+    description: 'Elige cuántos conjuntos y sube los creativos que quieras. Cada conjunto recibe TODOS los creativos — máxima información en un solo vuelo.',
+    when: 'Quieres testear todo a la vez con el mayor aprendizaje',
+    campaignType: 'VENTAS',
+    budgetType: 'ABO',
+    fixedAdSets: null,
+    minCreatives: 2,
+    audienceType: 'interests',
+  },
 ] as const;
 
 type StrategyId = typeof STRATEGIES[number]['id'];
@@ -249,6 +263,21 @@ export default function MetaAdsPage() {
     const iv = setInterval(async () => {
       if (popup?.closed) { clearInterval(iv); await checkStatus(); }
     }, 1000);
+  };
+
+  const disconnectMeta = async () => {
+    await apiFetch('/meta-ads/disconnect', { method: 'DELETE' });
+    setConnStatus(null);
+    setAccounts([]);
+    setPages([]);
+    setStep('connect');
+  };
+
+  const changeAccount = async () => {
+    setAccounts([]);
+    setPages([]);
+    setStep('setup');
+    loadSetup();
   };
 
   const selectAccount = async (id: string, name: string) => {
@@ -377,7 +406,14 @@ export default function MetaAdsPage() {
     // SETUP
     if (step === 'setup') return (
       <div className="max-w-xl">
-        <h1 className="text-xl font-bold text-white mb-6">Configura tu cuenta</h1>
+        <div className="flex items-center gap-3 mb-6">
+          {connStatus?.connected && (
+            <button onClick={() => setStep('strategy')} className="text-zinc-500 hover:text-zinc-300 text-sm transition-colors">← Volver</button>
+          )}
+          <h1 className="text-xl font-bold text-white">
+            {connStatus?.adAccountId ? 'Selecciona una página' : 'Selecciona una cuenta publicitaria'}
+          </h1>
+        </div>
         {!connStatus?.adAccountId ? (
           <div>
             <h2 className="text-sm font-semibold text-zinc-300 mb-3">Cuenta publicitaria</h2>
@@ -412,16 +448,28 @@ export default function MetaAdsPage() {
     // STRATEGY SELECTION
     if (step === 'strategy') return (
       <div>
-        <div className="flex items-center justify-between mb-7">
+        <div className="flex items-start justify-between mb-7 gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white">Nueva Campaña</h1>
             <p className="text-zinc-400 text-sm mt-1">Elige la estrategia según tu objetivo</p>
           </div>
-          <div className="text-right hidden sm:block">
-            <div className="text-xs text-zinc-500">{connStatus?.adAccountName}</div>
-            <div className="flex items-center gap-1 mt-1 justify-end">
-              <span className="text-yellow-400">⚡</span>
-              <span className="text-sm font-medium text-white">{connStatus?.credits ?? 0} créditos</span>
+          <div className="flex-shrink-0 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-right">
+            <div className="text-xs text-zinc-500 mb-0.5">Cuenta publicitaria</div>
+            <div className="text-sm text-white font-medium">{connStatus?.adAccountName ?? '—'}</div>
+            <div className="flex items-center gap-3 mt-2 justify-end">
+              <div className="flex items-center gap-1">
+                <span className="text-yellow-400 text-xs">⚡</span>
+                <span className="text-sm font-medium text-white">{connStatus?.credits ?? 0}</span>
+                <span className="text-zinc-500 text-xs">créditos</span>
+              </div>
+              <span className="text-zinc-700">·</span>
+              <button onClick={changeAccount} className="text-xs text-violet-400 hover:text-violet-300 transition-colors">
+                Cambiar cuenta
+              </button>
+              <span className="text-zinc-700">·</span>
+              <button onClick={disconnectMeta} className="text-xs text-zinc-500 hover:text-red-400 transition-colors">
+                Desconectar
+              </button>
             </div>
           </div>
         </div>
@@ -533,11 +581,16 @@ export default function MetaAdsPage() {
                 </div>
                 {showAdSets && (
                   <div>
-                    <label className={labelCls}>Conjuntos de anuncios</label>
+                    <label className={labelCls}>
+                      Conjuntos de anuncios
+                      {strategy.id === 'full_test' && <span className="ml-1 text-violet-400">(cada uno recibe todos los creativos)</span>}
+                    </label>
                     <select className={fieldCls} value={form.adSetsCount} onChange={upd('adSetsCount')}>
                       <option value="2">2 conjuntos</option>
                       <option value="3">3 conjuntos</option>
                       <option value="4">4 conjuntos</option>
+                      <option value="5">5 conjuntos</option>
+                      <option value="6">6 conjuntos</option>
                     </select>
                   </div>
                 )}
@@ -566,9 +619,29 @@ export default function MetaAdsPage() {
             {/* Creatives */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
               <h2 className="text-white font-semibold text-sm mb-1">Creativos *</h2>
-              <p className="text-zinc-500 text-xs mb-4">
-                Se crearán {files.length || 0} anuncio{files.length !== 1 ? 's' : ''} en {strategy.fixedAdSets ?? form.adSetsCount} conjunto{(strategy.fixedAdSets ?? parseInt(form.adSetsCount)) !== 1 ? 's' : ''} — total {files.length * (strategy.fixedAdSets ?? parseInt(form.adSetsCount))} anuncios en Meta
-              </p>
+              {(() => {
+                const sets = strategy.fixedAdSets ?? parseInt(form.adSetsCount);
+                const total = files.length * sets;
+                return (
+                  <div className="mb-4">
+                    {strategy.id === 'full_test' && files.length > 0 ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-violet-400 text-xs font-semibold">
+                          {files.length} creativo{files.length !== 1 ? 's' : ''} × {sets} conjuntos
+                        </span>
+                        <span className="text-zinc-600 text-xs">=</span>
+                        <span className="text-white text-xs font-bold">{total} anuncios en Meta</span>
+                      </div>
+                    ) : (
+                      <p className="text-zinc-500 text-xs">
+                        {files.length > 0
+                          ? `${files.length} creativo${files.length !== 1 ? 's' : ''} en ${sets} conjunto${sets !== 1 ? 's' : ''} — ${total} anuncio${total !== 1 ? 's' : ''} en Meta`
+                          : 'Sube imágenes o videos — se crearán anuncios en cada conjunto'}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div
                 onDragOver={e => { e.preventDefault(); setDragging(true); }}
