@@ -213,8 +213,18 @@ export class DropisService implements OnModuleDestroy {
     let lastCount = 0;
     let staleTicks = 0;
 
+    // Open a fresh page in the same browser context for catalog
+    const browser = page.context().browser();
+    const catalogPage = await browser.newPage();
+
+    await catalogPage.route('**', (route: any) => {
+      const rt = route.request().resourceType();
+      if (['image', 'media', 'font', 'stylesheet'].includes(rt)) route.abort().catch(() => {});
+      else route.continue().catch(() => {});
+    });
+
     // Intercept all products API responses from the network
-    page.on('response', async (resp: any) => {
+    catalogPage.on('response', async (resp: any) => {
       try {
         if (!resp.url().includes('/api/products')) return;
         const ct = resp.headers()['content-type'] ?? '';
@@ -222,49 +232,64 @@ export class DropisService implements OnModuleDestroy {
         const d = await resp.json().catch(() => null);
         if (!d?.objects?.length) return;
         for (const item of d.objects) {
-          if (!seenIds.has(item.id)) {
-            seenIds.add(item.id);
-            collected.push(item);
-          }
+          if (!seenIds.has(item.id)) { seenIds.add(item.id); collected.push(item); }
         }
-        this.logger.log(`[Dropi:${code}] Interceptado: ${collected.length} únicos (resp: ${d.objects.length})`);
+        this.logger.log(`[Dropi:${code}] Interceptado: ${collected.length} únicos (+${d.objects.length})`);
       } catch {}
     });
 
-    // Navigate to catalog — trigger initial load
-    const catalogUrl = apiBase.replace('api.', 'app.') + '/dashboard/products';
-    this.logger.log(`[Dropi:${code}] Navegando catálogo: ${catalogUrl}`);
-    try {
-      await page.goto(catalogUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    } catch {
-      // Some pages don't fire domcontentloaded cleanly — continue anyway
+    // Try multiple catalog URL patterns
+    const appBase = apiBase.replace('api.', 'app.');
+    const catalogUrls = [
+      `${appBase}/dashboard/products`,
+      `${appBase}/products`,
+      `${appBase}/catalog`,
+      `${appBase}/dashboard`,
+      `${appBase}/dashboard/catalog`,
+    ];
+
+    let navigated = false;
+    for (const url of catalogUrls) {
+      try {
+        this.logger.log(`[Dropi:${code}] Probando URL: ${url}`);
+        await catalogPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+        await catalogPage.waitForTimeout(3000);
+        if (!catalogPage.url().includes('/auth/') && !catalogPage.url().includes('/login')) {
+          this.logger.log(`[Dropi:${code}] Catálogo cargado en: ${catalogPage.url()}`);
+          navigated = true;
+          break;
+        }
+      } catch {}
     }
-    await page.waitForTimeout(4000);
+
+    if (!navigated) {
+      this.logger.warn(`[Dropi:${code}] No se pudo navegar al catálogo — usando API directa`);
+    } else {
+      await catalogPage.waitForTimeout(3000);
+    }
 
     // Auto-scroll to trigger infinite scroll / "load more" pagination
-    for (let i = 0; i < 60; i++) {
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await page.waitForTimeout(1500);
+    if (navigated) {
+      for (let i = 0; i < 80; i++) {
+        await catalogPage.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => {});
+        await catalogPage.waitForTimeout(1500);
 
-      // Click any "load more" / "mostrar más" button if present
-      try {
-        const btn = page.locator('button:has-text("mostrar"), button:has-text("Mostrar"), button:has-text("Ver más"), button:has-text("Load more"), button:has-text("Cargar")');
-        if (await btn.count() > 0) await btn.first().click({ timeout: 2000 }).catch(() => {});
-      } catch {}
+        try {
+          const btn = catalogPage.locator('button:has-text("mostrar"), button:has-text("Mostrar"), button:has-text("Ver más"), button:has-text("Load more"), button:has-text("Cargar más")');
+          if (await btn.count() > 0) await btn.first().click({ timeout: 2000 }).catch(() => {});
+        } catch {}
 
-      // Stop if no new products in last 3 ticks (~4.5s)
-      if (collected.length === lastCount) {
-        staleTicks++;
-        if (staleTicks >= 3) break;
-      } else {
-        staleTicks = 0;
-        lastCount = collected.length;
+        if (collected.length === lastCount) {
+          staleTicks++;
+          if (staleTicks >= 4) break;
+        } else { staleTicks = 0; lastCount = collected.length; }
       }
+      this.logger.log(`[Dropi:${code}] Scroll completo — ${collected.length} productos únicos`);
     }
 
-    this.logger.log(`[Dropi:${code}] Scroll completo — ${collected.length} productos únicos`);
+    await catalogPage.close().catch(() => {});
 
-    // Fallback: if catalog nav failed (0 items), use direct API via browser fetch
+    // Fallback: if scroll got nothing, use direct API via browser fetch (original page)
     if (collected.length === 0) {
       this.logger.warn(`[Dropi:${code}] Sin productos por scroll — fallback a API paginada`);
       let start = 0;
