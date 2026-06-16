@@ -541,6 +541,9 @@ export class ScraperService implements OnModuleDestroy {
     raw: RawProduct,
     country: string,
   ): Promise<{ id: string; salesYesterday: number } | null> {
+    const stock     = raw.stock     > 100_000_000 ? 0 : raw.stock;
+    const salesAccum = raw.salesAccum > 100_000_000 ? 0 : raw.salesAccum;
+
     let product = await this.productRepo.findOne({ where: { effiId: raw.effiId, country } });
 
     const today = businessDay();
@@ -556,9 +559,9 @@ export class ScraperService implements OnModuleDestroy {
         subcategory: raw.subcategory,
         price: raw.price,
         cost: raw.cost,
-        stock: raw.stock,
-        totalSalesAccum: raw.salesAccum,
-        salesBaseline: raw.salesAccum,
+        stock: stock,
+        totalSalesAccum: salesAccum,
+        salesBaseline: salesAccum,
         salesBaselineDate: today,
         salesToday: 0,
         salesYesterday: 0,
@@ -574,10 +577,9 @@ export class ScraperService implements OnModuleDestroy {
         const todayDate = new Date(today + 'T12:00:00');
         const dayGap = Math.round((todayDate.getTime() - lastDate.getTime()) / 86_400_000);
         if (dayGap === 1) {
-          pendingYesterday = { id: product.id, salesYesterday: Math.max(0, raw.salesAccum - product.salesBaseline) };
+          pendingYesterday = { id: product.id, salesYesterday: Math.max(0, salesAccum - product.salesBaseline) };
         }
-        // salesYesterday NOT written here — applied in bulk at end of cycle
-        product.salesBaseline = raw.salesAccum;
+        product.salesBaseline = salesAccum;
         product.salesBaselineDate = today;
       }
 
@@ -586,9 +588,9 @@ export class ScraperService implements OnModuleDestroy {
       product.provider = raw.provider;
       product.price = raw.price;
       product.cost = raw.cost;
-      product.stock = raw.stock;
-      product.salesToday = Math.max(0, raw.salesAccum - product.salesBaseline);
-      product.totalSalesAccum = raw.salesAccum;
+      product.stock = stock;
+      product.salesToday = Math.max(0, salesAccum - product.salesBaseline);
+      product.totalSalesAccum = salesAccum;
       product.isActive = true;
       await this.productRepo.save(product);
     }
@@ -596,9 +598,9 @@ export class ScraperService implements OnModuleDestroy {
     await this.snapshotRepo.save(
       this.snapshotRepo.create({
         productId: product.id,
-        salesAccum: raw.salesAccum,
+        salesAccum: salesAccum,
         price: raw.price,
-        stock: raw.stock,
+        stock: stock,
       }),
     );
 
