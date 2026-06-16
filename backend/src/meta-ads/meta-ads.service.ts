@@ -558,6 +558,9 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
         targeting.excluded_geo_locations = { cities: resolvedCityKeys };
       }
 
+      // advantage_audience must be inside targeting object per Meta API spec
+      targeting.targeting_automation = { advantage_audience: adSetDef.isBroad ? 1 : 0 };
+
       const adSetBody: any = {
         name: adSetDef.name,
         campaign_id: campaignId,
@@ -565,7 +568,6 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
         optimization_goal: optimizationGoal,
         bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
         targeting,
-        targeting_automation: { advantage_audience: adSetDef.isBroad ? 1 : 0 },
         start_time: startTime,
         status: 'PAUSED',
       };
