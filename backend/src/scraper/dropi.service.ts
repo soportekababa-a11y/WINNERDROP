@@ -214,19 +214,24 @@ export class DropisService implements OnModuleDestroy {
     let start = 0;
 
     while (true) {
-      const resp = await fetch(`${apiBase}/api/products/v4/index`, {
+      const rawResp = await fetch(`${apiBase}/api/products/v4/index`, {
         method: 'POST',
-        headers: { 'x-authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: {
+          'x-authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           pageSize: PAGE_SIZE, startData: start,
           privated_product: false, userVerified: false, favorite: false,
           with_collection: true, get_stock: true, no_count: true,
           search_type: 'simple', country: countryKey,
         }),
-      }).then(r => r.json()) as any;
+      });
+      const resp = await rawResp.json() as any;
 
       if (start === 0) {
-        this.logger.log(`[Dropi:${code}] RESP_KEYS: ${Object.keys(resp).join(', ')} | objects: ${resp.objects?.length ?? 'undefined'} | status: ${resp.status}`);
+        this.logger.log(`[Dropi:${code}] HTTP ${rawResp.status} | RESP_KEYS: ${Object.keys(resp).join(', ')} | objects: ${resp.objects?.length ?? 'undefined'} | msg: ${resp.message ?? ''} | status: ${resp.status}`);
       }
 
       const items: any[] = resp.objects ?? [];
