@@ -565,6 +565,7 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
         optimization_goal: optimizationGoal,
         bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
         targeting,
+        targeting_automation: { advantage_audience: adSetDef.isBroad ? 1 : 0 },
         start_time: startTime,
         status: 'PAUSED',
       };
