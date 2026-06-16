@@ -413,8 +413,10 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       campaignBody.daily_budget = Math.round(dto.dailyBudget * 100);
     }
 
+    this.logger.log(`[Meta] Campaign body: ${JSON.stringify(campaignBody)}`);
     const campaignRes = await this.metaPost(`/${adAccountId}/campaigns`, campaignBody, token);
-    if (campaignRes.error) throw new BadRequestException(`Meta: ${campaignRes.error.message}`);
+    this.logger.log(`[Meta] Campaign res: ${JSON.stringify(campaignRes)}`);
+    if (campaignRes.error) throw new BadRequestException(`Meta campaign: ${JSON.stringify(campaignRes.error)}`);
     const campaignId = campaignRes.id;
 
     const startTime = dto.startTime === 'now' ? Math.floor(Date.now() / 1000) : Math.floor(new Date(dto.startTime).getTime() / 1000);
@@ -566,10 +568,12 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
       if (!isCBO) adSetBody.daily_budget = Math.round(dto.dailyBudget * 100);
       if (promotedObject) adSetBody.promoted_object = promotedObject;
 
+      this.logger.log(`[Meta] AdSet body: ${JSON.stringify(adSetBody)}`);
       const adSetRes = await this.metaPost(`/${adAccountId}/adsets`, adSetBody, token);
+      this.logger.log(`[Meta] AdSet res: ${JSON.stringify(adSetRes)}`);
       if (adSetRes.error) {
-        this.logger.error(`[Meta] AdSet error: ${JSON.stringify(adSetRes.error)}`);
-        throw new BadRequestException(`Meta ad set: ${adSetRes.error.message}`);
+        this.logger.error(`[Meta] AdSet error FULL: ${JSON.stringify(adSetRes.error)}`);
+        throw new BadRequestException(`Meta ad set: ${JSON.stringify(adSetRes.error)}`);
       }
       adSetIds.push(adSetRes.id);
 
