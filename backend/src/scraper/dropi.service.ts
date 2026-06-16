@@ -208,134 +208,72 @@ export class DropisService implements OnModuleDestroy {
   }
 
   private async fetchAllViaBrowser(page: any, apiBase: string, token: string, countryKey: string, code: string): Promise<DropiRaw[]> {
-    const collected: any[] = [];
-    const seenIds = new Set<number>();
-    let lastCount = 0;
-    let staleTicks = 0;
-
-    // Open a fresh page in the same browser context for catalog
-    const browser = page.context().browser();
-    const catalogPage = await browser.newPage();
-
-    await catalogPage.route('**', (route: any) => {
-      const rt = route.request().resourceType();
-      if (['image', 'media', 'font', 'stylesheet'].includes(rt)) route.abort().catch(() => {});
-      else route.continue().catch(() => {});
-    });
-
-    // Intercept all products API responses from the network
-    catalogPage.on('response', async (resp: any) => {
-      try {
-        if (!resp.url().includes('/api/products')) return;
-        const ct = resp.headers()['content-type'] ?? '';
-        if (!ct.includes('json')) return;
-        const d = await resp.json().catch(() => null);
-        if (!d?.objects?.length) return;
-        for (const item of d.objects) {
-          if (!seenIds.has(item.id)) { seenIds.add(item.id); collected.push(item); }
-        }
-        this.logger.log(`[Dropi:${code}] Interceptado: ${collected.length} únicos (+${d.objects.length})`);
-      } catch {}
-    });
-
-    // Try multiple catalog URL patterns
-    const appBase = apiBase.replace('api.', 'app.');
-    const catalogUrls = [
-      `${appBase}/dashboard/products`,
-      `${appBase}/products`,
-      `${appBase}/catalog`,
-      `${appBase}/dashboard`,
-      `${appBase}/dashboard/catalog`,
-    ];
-
-    let navigated = false;
-    for (const url of catalogUrls) {
-      try {
-        this.logger.log(`[Dropi:${code}] Probando URL: ${url}`);
-        await catalogPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-        await catalogPage.waitForTimeout(3000);
-        if (!catalogPage.url().includes('/auth/') && !catalogPage.url().includes('/login')) {
-          this.logger.log(`[Dropi:${code}] Catálogo cargado en: ${catalogPage.url()}`);
-          navigated = true;
-          break;
-        }
-      } catch {}
-    }
-
-    if (!navigated) {
-      this.logger.warn(`[Dropi:${code}] No se pudo navegar al catálogo — usando API directa`);
-    } else {
-      await catalogPage.waitForTimeout(3000);
-    }
-
-    // Auto-scroll to trigger infinite scroll / "load more" pagination
-    if (navigated) {
-      for (let i = 0; i < 80; i++) {
-        await catalogPage.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => {});
-        await catalogPage.waitForTimeout(1500);
-
-        try {
-          const btn = catalogPage.locator('button:has-text("mostrar"), button:has-text("Mostrar"), button:has-text("Ver más"), button:has-text("Load more"), button:has-text("Cargar más")');
-          if (await btn.count() > 0) await btn.first().click({ timeout: 2000 }).catch(() => {});
-        } catch {}
-
-        if (collected.length === lastCount) {
-          staleTicks++;
-          if (staleTicks >= 4) break;
-        } else { staleTicks = 0; lastCount = collected.length; }
-      }
-      this.logger.log(`[Dropi:${code}] Scroll completo — ${collected.length} productos únicos`);
-    }
-
-    await catalogPage.close().catch(() => {});
-
-    // Fallback: if scroll got nothing, use direct API via browser fetch (original page)
-    if (collected.length === 0) {
-      this.logger.warn(`[Dropi:${code}] Sin productos por scroll — fallback a API paginada`);
-      let start = 0;
-      while (true) {
-        const result = await page.evaluate(async ({ apiBase, token, countryKey, start, pageSize }: any) => {
-          try {
-            const r = await fetch(`${apiBase}/api/products/v4/index`, {
-              method: 'POST',
-              headers: { 'x-authorization': `Bearer ${token}`, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pageSize, startData: start, get_stock: true, with_collection: true, country: countryKey }),
-            });
-            const d = await r.json();
-            return { status: r.status, data: d };
-          } catch (e: any) { return { status: 0, error: e?.message }; }
-        }, { apiBase, token, countryKey, start, pageSize: PAGE_SIZE });
-
-        this.logger.log(`[Dropi:${code}] API fallback start=${start} → HTTP ${result.status} | items: ${result.data?.objects?.length ?? 0}`);
-        if (result.status !== 200 || !result.data?.objects?.length) break;
-        for (const item of result.data.objects) {
-          if (!seenIds.has(item.id)) { seenIds.add(item.id); collected.push(item); }
-        }
-        if (result.data.objects.length < PAGE_SIZE) break;
-        start += PAGE_SIZE;
-      }
-    }
-
-    // Parse collected raw items
     const all: DropiRaw[] = [];
-    for (const item of collected) {
-      const imageUrl = item.gallery?.[0]?.urlS3 ? `${CDN}${item.gallery[0].urlS3}` : '';
-      const rawStock = item.warehouse_product?.[0]?.stock ?? 0;
-      all.push({
-        dropiId: `dropi_${item.id}`,
-        name: item.name ?? '',
-        imageUrl,
-        provider: item.user?.name ?? '',
-        category: item.categories?.[0]?.name ?? '',
-        subcategory: item.categories?.[1]?.name ?? '',
-        price: item.suggested_price ?? 0,
-        cost: item.sale_price ?? 0,
-        stock: rawStock > 100_000_000 ? 0 : rawStock,
-      });
+    const seenIds = new Set<number>();
+    let start = 0;
+    let emptyConsecutive = 0;
+
+    while (true) {
+      const result = await page.evaluate(async ({ apiBase, token, countryKey, start, pageSize }: any) => {
+        try {
+          const r = await fetch(`${apiBase}/api/products/v4/index`, {
+            method: 'POST',
+            headers: {
+              'x-authorization': `Bearer ${token}`,
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              pageSize, startData: start,
+              privated_product: false, userVerified: false, favorite: false,
+              with_collection: true, get_stock: true, no_count: true,
+              search_type: 'simple', country: countryKey,
+            }),
+          });
+          const d = await r.json();
+          return { status: r.status, data: d };
+        } catch (e: any) { return { status: 0, error: String(e) }; }
+      }, { apiBase, token, countryKey, start, pageSize: PAGE_SIZE });
+
+      const items: any[] = result.data?.objects ?? [];
+      this.logger.log(`[Dropi:${code}] start=${start} → HTTP ${result.status} | items: ${items.length} | total acumulado: ${all.length}`);
+
+      if (result.status !== 200) break;
+
+      let newThisPage = 0;
+      for (const item of items) {
+        if (!seenIds.has(item.id)) {
+          seenIds.add(item.id);
+          const imageUrl = item.gallery?.[0]?.urlS3 ? `${CDN}${item.gallery[0].urlS3}` : '';
+          const rawStock = item.warehouse_product?.[0]?.stock ?? 0;
+          all.push({
+            dropiId: `dropi_${item.id}`,
+            name: item.name ?? '',
+            imageUrl,
+            provider: item.user?.name ?? '',
+            category: item.categories?.[0]?.name ?? '',
+            subcategory: item.categories?.[1]?.name ?? '',
+            price: item.suggested_price ?? 0,
+            cost: item.sale_price ?? 0,
+            stock: rawStock > 100_000_000 ? 0 : rawStock,
+          });
+          newThisPage++;
+        }
+      }
+
+      // Break only when API returns truly empty — not on partial pages
+      if (items.length === 0 || newThisPage === 0) {
+        emptyConsecutive++;
+        if (emptyConsecutive >= 2) break;
+      } else {
+        emptyConsecutive = 0;
+      }
+
+      start += PAGE_SIZE;
     }
 
     if (all.length > 0) {
-      this.logger.log(`[Dropi:${code}] SAMPLE: ${JSON.stringify(collected[0]).slice(0, 300)}`);
+      this.logger.log(`[Dropi:${code}] SAMPLE: ${JSON.stringify({ id: all[0].dropiId, name: all[0].name, stock: all[0].stock })}`);
     }
     return all;
   }
