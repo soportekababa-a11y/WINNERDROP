@@ -411,6 +411,9 @@ Usa jerga natural de ${countryName}. Los intereses deben ser IDs reales de Meta.
     if (isCBO) {
       campaignBody.campaign_budget_optimization = true;
       campaignBody.daily_budget = Math.round(dto.dailyBudget * 100);
+    } else {
+      // Required by Meta API when NOT using campaign budget optimization
+      campaignBody.is_adset_budget_sharing_enabled = false;
     }
 
     this.logger.log(`[Meta] Campaign body: ${JSON.stringify(campaignBody)}`);
