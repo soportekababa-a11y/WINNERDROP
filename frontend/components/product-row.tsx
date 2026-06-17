@@ -50,7 +50,7 @@ export function ProductRow({ product: p, rank }: ProductRowProps) {
       {/* Image */}
       <div className="w-11 h-11 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden relative border border-gray-200">
         {p.imageUrl ? (
-          <Image src={p.imageUrl} alt={p.name} fill className="object-cover" unoptimized />
+          <Image src={encodeURI(p.imageUrl)} alt={p.name} fill className="object-cover" unoptimized />
         ) : (
           <div className="w-full h-full bg-gray-100 rounded-lg" />
         )}

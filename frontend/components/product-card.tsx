@@ -48,7 +48,7 @@ export function ProductCard({ product: p, rank }: Props) {
       <div className="relative w-full aspect-[4/3] overflow-hidden" style={{ background: '#0a0a12' }}>
         {p.imageUrl ? (
           <Image
-            src={p.imageUrl}
+            src={encodeURI(p.imageUrl)}
             alt={p.name}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-110"
