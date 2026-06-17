@@ -458,7 +458,7 @@ export class ScraperService implements OnModuleDestroy {
 
     const totalText = await page.locator('text=/\\d+ Artículos/').textContent().catch(() => '');
     const totalMatch = (totalText ?? '').match(/([\d,]+)\s+Artículos/);
-    const totalProducts = totalMatch ? parseInt(totalMatch[1].replace(',', '')) : 3000;
+    const totalProducts = totalMatch ? parseInt(totalMatch[1].replace(/,/g, '')) : 3000;
     const totalPagesCount = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
     this.logger.log(`[${country}] Total productos: ${totalProducts} | Total páginas: ${totalPagesCount}`);
 
@@ -468,7 +468,15 @@ export class ScraperService implements OnModuleDestroy {
       const url = pageNum === 1 ? EFFI_CATALOG_URL : `${EFFI_CATALOG_URL}?page=${pageNum}`;
 
       if (pageNum > 1) {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        try {
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        } catch (err: any) {
+          if (err?.message?.includes('ERR_ABORTED') || err?.message?.includes('net::ERR')) {
+            this.logger.warn(`[${country}] Página ${pageNum} abortada por servidor — fin de catálogo`);
+            break;
+          }
+          throw err;
+        }
         await page.waitForTimeout(1000);
       }
 

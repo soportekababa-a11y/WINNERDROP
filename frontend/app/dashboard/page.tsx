@@ -26,6 +26,7 @@ const EFFI_COUNTRIES: { value: CountryFilter; label: string }[] = [
 
 const DROPI_COUNTRIES: { value: CountryFilter; label: string }[] = [
   { value: 'CR', label: '🇨🇷 Costa Rica' },
+  { value: 'GT', label: '🇬🇹 Guatemala' },
 ];
 
 const COUNTRIES_BY_PLATFORM: Record<PlatformFilter, { value: CountryFilter; label: string }[]> = {
@@ -91,7 +92,6 @@ export default function Dashboard() {
     setCategory('');
     setProvider('');
     if (typeof window !== 'undefined') sessionStorage.setItem('ms_platform', v);
-    // Dropi only has CR — auto-select it
     if (v === 'dropi') {
       setCountry('CR');
       if (typeof window !== 'undefined') sessionStorage.setItem('ms_country', 'CR');
