@@ -36,8 +36,8 @@ export class ScraperController {
 
   @Post('dropi/run')
   async dropiRun() {
-    const result = await this.dropisService.scrapeOnce();
-    return { message: 'Dropi completado', ...result };
+    await this.dropisService.runAll();
+    return { message: 'Dropi runAll completado' };
   }
 
   @Get('dropi/stats')
