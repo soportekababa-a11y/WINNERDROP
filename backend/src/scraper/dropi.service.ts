@@ -239,6 +239,7 @@ export class DropisService implements OnModuleDestroy {
       this.logger.log(`[Dropi:${code}] start=${start} → HTTP ${result.status} | items: ${items.length} | total acumulado: ${all.length}`);
       if (start === 0 && items.length > 0) {
         this.logger.log(`[Dropi:${code}] RAW_USER_FIELDS: ${JSON.stringify(items[0].user)}`);
+        this.logger.log(`[Dropi:${code}] RAW_GALLERY_FIELDS: ${JSON.stringify(items[0].gallery?.[0])}`);
       }
 
       if (result.status !== 200) break;
