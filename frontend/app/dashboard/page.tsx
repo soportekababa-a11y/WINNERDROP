@@ -237,7 +237,7 @@ export default function Dashboard() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">País</label>
-                {isBasic || platform === 'dropi' ? (
+                {isBasic && platform !== 'dropi' ? (
                   <div className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium"
                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#e2e8f0' }}>
                     <span>{COUNTRIES_BY_PLATFORM[platform].find(c => c.value === country)?.label ?? country}</span>
