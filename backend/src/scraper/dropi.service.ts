@@ -17,8 +17,8 @@ function businessDay(): string {
 }
 
 export const DROPI_COUNTRIES = [
-  { code: 'CR', loginUrl: 'https://app.dropi.cr/auth/login', apiBase: 'https://api.dropi.cr', countryKey: 'COSTARICA' },
-  // CO desactivado — credenciales no válidas para esa plataforma
+  { code: 'CR', loginUrl: 'https://app.dropi.cr/auth/login', apiBase: 'https://api.dropi.cr', countryKey: 'COSTARICA', emailEnv: 'DROPI_CR_EMAIL', passwordEnv: 'DROPI_CR_PASSWORD' },
+  { code: 'GT', loginUrl: 'https://app.dropi.gt/auth/login', apiBase: 'https://api.dropi.gt', countryKey: 'GUATEMALA',  emailEnv: 'DROPI_GT_EMAIL', passwordEnv: 'DROPI_GT_PASSWORD' },
 ];
 
 interface DropiRaw {
@@ -50,15 +50,15 @@ export class DropisService implements OnModuleDestroy {
   getStats() { return { running: this.running, ...this.lastStats }; }
 
   async runAll(): Promise<void> {
-    const email    = this.config.get<string>('DROPI_EMAIL')!;
-    const password = this.config.get<string>('DROPI_PASSWORD')!;
-    if (!email || !password) {
-      this.logger.error('DROPI_EMAIL / DROPI_PASSWORD no configurados — omitiendo Dropi');
-      return;
-    }
     const t = Date.now();
     let total = 0;
     for (const def of DROPI_COUNTRIES) {
+      const email    = this.config.get<string>(def.emailEnv);
+      const password = this.config.get<string>(def.passwordEnv);
+      if (!email || !password) {
+        this.logger.warn(`[Dropi:${def.code}] Sin credenciales (${def.emailEnv}) — omitiendo`);
+        continue;
+      }
       try {
         const { saved } = await this.scrapeCountry(def, email, password);
         total += saved;
@@ -71,8 +71,8 @@ export class DropisService implements OnModuleDestroy {
   }
 
   async scrapeCountry(def: typeof DROPI_COUNTRIES[0], emailOverride?: string, passwordOverride?: string): Promise<{ saved: number }> {
-    const email    = emailOverride    ?? this.config.get<string>('DROPI_EMAIL')!;
-    const password = passwordOverride ?? this.config.get<string>('DROPI_PASSWORD')!;
+    const email    = emailOverride    ?? this.config.get<string>(def.emailEnv)!;
+    const password = passwordOverride ?? this.config.get<string>(def.passwordEnv)!;
     const { code, loginUrl, apiBase, countryKey } = def;
 
     const loginResult = await this.loginKeepBrowser(loginUrl, email, password, code);
