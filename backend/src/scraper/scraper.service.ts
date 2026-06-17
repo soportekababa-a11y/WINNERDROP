@@ -395,7 +395,7 @@ export class ScraperService implements OnModuleDestroy {
               .createQueryBuilder()
               .update()
               .set({ isActive: false })
-              .where('"effiId" NOT IN (:...ids) AND "isActive" = true AND country = :country', { ids, country: code })
+              .where('"effiId" NOT IN (:...ids) AND "isActive" = true AND country = :country AND platform = :platform', { ids, country: code, platform: 'effi' })
               .execute()
               .catch(err => this.logger.error(`[${code}] Error desactivando productos viejos`, err));
           }
