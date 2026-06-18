@@ -8,8 +8,9 @@ import { Snapshot } from '../snapshots/snapshot.entity';
 
 const PAGE_SIZE = 100;
 const DROPI_CDNS = [
-  'https://d3sk39qh2f4j46.cloudfront.net/',
-  'https://d2ob47cxeawi8a.cloudfront.net/',
+  'https://d3sk39qh2f4j46.cloudfront.net/',  // CR
+  'https://d2ob47cxeawi8a.cloudfront.net/',  // GT
+  'https://d39ru7awumhhs2.cloudfront.net/',  // EC
 ];
 
 function businessDay(): string {
