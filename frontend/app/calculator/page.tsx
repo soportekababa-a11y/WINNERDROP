@@ -7,30 +7,40 @@ import { Sidebar } from "@/components/sidebar";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, Star, Plus, Trash2 } from "lucide-react";
 
-// Regla fija para todos los países (en moneda local de cada uno)
-const SHIPPING   = 480;
-const AD_COST    = 500;
-const FIXED_COST = SHIPPING + AD_COST; // 980
-const PROFIT_MIN = 550;
+// RD base: envío=480, publicidad=500, ganancia=550
+// Convertido a moneda local de cada país (1 USD ≈ 59 RD$)
+const COUNTRY_CONFIG: Record<string, {
+  currency: string; flag: string; name: string;
+  shipping: number; adCost: number; profitMin: number;
+  markups: number[]; profitOk: number;
+}> = {
+  RD: { currency: 'RD$',  flag: '🇩🇴', name: 'República Dominicana',
+        shipping: 480,    adCost: 500,    profitMin: 550,
+        markups:  [980,   1530,   2030,   2780,   3780],   profitOk: 1100 },
+  GT: { currency: 'Q',    flag: '🇬🇹', name: 'Guatemala',
+        shipping: 63,     adCost: 65,     profitMin: 72,
+        markups:  [128,   200,    270,    370,    500],     profitOk: 144  },
+  EC: { currency: '$',    flag: '🇪🇨', name: 'Ecuador',
+        shipping: 8,      adCost: 9,      profitMin: 9.5,
+        markups:  [17,    26.5,   36,     49,     66],      profitOk: 19   },
+  CR: { currency: '₡',    flag: '🇨🇷', name: 'Costa Rica',
+        shipping: 4200,   adCost: 4400,   profitMin: 4800,
+        markups:  [8600,  13400,  17800,  24300,  33000],   profitOk: 9600 },
+  CO: { currency: 'COP$', flag: '🇨🇴', name: 'Colombia',
+        shipping: 33000,  adCost: 35000,  profitMin: 38000,
+        markups:  [68000, 106000, 141000, 193000, 262000],  profitOk: 76000 },
+};
 
-// Markups sobre el costo del producto → ganancias: 0, 550, 1050, 1800, 2800
-const MARKUPS = [980, 1530, 2030, 2780, 3780];
+const COUNTRIES = Object.entries(COUNTRY_CONFIG).map(([code, c]) => ({ code, flag: c.flag, name: c.name, currency: c.currency }));
 
-const COUNTRIES = [
-  { code: 'RD', flag: '🇩🇴', name: 'República Dominicana', currency: 'RD$', active: true  },
-  { code: 'GT', flag: '🇬🇹', name: 'Guatemala',            currency: 'Q',   active: true  },
-  { code: 'EC', flag: '🇪🇨', name: 'Ecuador',              currency: '$',   active: true  },
-  { code: 'CR', flag: '🇨🇷', name: 'Costa Rica',           currency: '₡',   active: true  },
-  { code: 'CO', flag: '🇨🇴', name: 'Colombia',             currency: 'COP$',active: true  },
-];
-
-function markupOptions(totalCost: number) {
+function markupOptions(totalCost: number, cfg: typeof COUNTRY_CONFIG[string]) {
+  const fixed = cfg.shipping + cfg.adCost;
   const labels = ['Precio mínimo', 'Precio bajo', 'Precio sugerido', 'Margen alto', 'Precio premium'];
   const risks  = ['high', 'medium', 'low', 'low', 'low'];
   const tags   = [null, null, 'recomendado', null, null];
-  return MARKUPS.map((markup, i) => ({
+  return cfg.markups.map((markup, i) => ({
     label: labels[i], markup, risk: risks[i], tag: tags[i],
-    price: totalCost + markup, profit: markup - FIXED_COST,
+    price: totalCost + markup, profit: markup - fixed,
   }));
 }
 
@@ -52,11 +62,11 @@ export default function CalculatorPage() {
   const hasResult = totalCost > 0;
   const isCombo = costs.length > 1;
 
-  const countryData = COUNTRIES.find(c => c.code === country) ?? COUNTRIES[0];
-  const currency = countryData.currency;
-  const options = markupOptions(totalCost);
+  const cfg = COUNTRY_CONFIG[country ?? 'RD'];
+  const fixed = cfg.shipping + cfg.adCost;
+  const options = markupOptions(totalCost, cfg);
   const glass = { background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)' };
-  const fmt = (n: number) => currency + n.toLocaleString();
+  const fmt = (n: number) => cfg.currency + n.toLocaleString();
 
   return (
     <div className="min-h-screen bg-[#020209] flex">
@@ -93,7 +103,7 @@ export default function CalculatorPage() {
                 </button>
                 <span className="text-gray-800">/</span>
                 <span className="text-sm font-semibold text-gray-500">
-                  {countryData.flag} {countryData.name}
+                  {cfg.flag} {cfg.name}
                 </span>
               </div>
 
@@ -163,19 +173,19 @@ export default function CalculatorPage() {
                   <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-3">Costos fijos estimados</p>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Envío</span>
-                    <span className="text-gray-400 font-medium">{fmt(SHIPPING)}</span>
+                    <span className="text-gray-400 font-medium">{fmt(cfg.shipping)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Publicidad</span>
-                    <span className="text-gray-400 font-medium">{fmt(AD_COST)}</span>
+                    <span className="text-gray-400 font-medium">{fmt(cfg.adCost)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Ganancia mínima</span>
-                    <span className="text-gray-400 font-medium">{fmt(PROFIT_MIN)}</span>
+                    <span className="text-gray-400 font-medium">{fmt(cfg.profitMin)}</span>
                   </div>
                   <div className="pt-2 flex justify-between text-sm font-semibold" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                     <span className="text-gray-500">Total fijo</span>
-                    <span className="text-gray-300">{fmt(FIXED_COST)}</span>
+                    <span className="text-gray-300">{fmt(fixed)}</span>
                   </div>
                 </div>
               </div>
@@ -217,7 +227,7 @@ export default function CalculatorPage() {
                             </div>
                             <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-600 mt-2">
                               <span>Costo: <span className="text-gray-400 font-medium">{fmt(totalCost)}</span></span>
-                              <span>Fijos: <span className="text-gray-400 font-medium">{fmt(FIXED_COST)}</span></span>
+                              <span>Fijos: <span className="text-gray-400 font-medium">{fmt(fixed)}</span></span>
                             </div>
                           </div>
                           <div className="text-right shrink-0">
@@ -226,7 +236,7 @@ export default function CalculatorPage() {
                               {fmt(opt.price)}
                             </p>
                             <p className="text-xs font-semibold mt-0.5"
-                              style={{ color: opt.profit >= PROFIT_MIN * 2 ? '#34d399' : opt.profit >= PROFIT_MIN ? '#fbbf24' : '#f87171' }}>
+                              style={{ color: opt.profit >= cfg.profitOk ? '#34d399' : opt.profit >= cfg.profitMin ? '#fbbf24' : '#f87171' }}>
                               {fmt(opt.profit)} ganancia
                             </p>
                           </div>
@@ -238,7 +248,7 @@ export default function CalculatorPage() {
                   <div className="rounded-xl px-4 py-3 text-xs space-y-1"
                     style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}>
                     <p className="font-semibold" style={{ color: '#fbbf24' }}>Sobre los costos de envío</p>
-                    <p style={{ color: 'rgba(245,158,11,0.6)' }}>Envío {fmt(SHIPPING)} · Publicidad {fmt(AD_COST)} · Ganancia mínima {fmt(PROFIT_MIN)}</p>
+                    <p style={{ color: 'rgba(245,158,11,0.6)' }}>Envío {fmt(cfg.shipping)} · Publicidad {fmt(cfg.adCost)} · Ganancia mínima {fmt(cfg.profitMin)}</p>
                   </div>
                 </div>
               )}
