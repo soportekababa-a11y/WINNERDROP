@@ -240,6 +240,19 @@ export class DropisService implements OnModuleDestroy {
       if (start === 0 && items.length > 0) {
         this.logger.log(`[Dropi:${code}] RAW_USER_FIELDS: ${JSON.stringify(items[0].user)}`);
         this.logger.log(`[Dropi:${code}] RAW_GALLERY_FIELDS: ${JSON.stringify(items[0].gallery?.[0])}`);
+        // Test if browser session can access a GT image directly
+        if (code !== 'CR') {
+          const testUrl = items[0].gallery?.[0]?.urlS3 ? `https://d3sk39qh2f4j46.cloudfront.net/${items[0].gallery[0].urlS3}` : '';
+          if (testUrl) {
+            const imgTest = await page.evaluate(async (url: string) => {
+              try { const r = await fetch(url); return { status: r.status }; } catch (e: any) { return { status: 0, err: e.message }; }
+            }, testUrl).catch(() => ({ status: -1 }));
+            this.logger.log(`[Dropi:${code}] IMG_ACCESS_TEST url="${testUrl}" status=${imgTest.status}`);
+            // Log CloudFront cookies if any
+            const cookies = await page.context().cookies('https://d3sk39qh2f4j46.cloudfront.net').catch(() => []);
+            this.logger.log(`[Dropi:${code}] CF_COOKIES: ${JSON.stringify(cookies.map((c: any) => c.name))}`);
+          }
+        }
       }
 
       if (result.status !== 200) break;
