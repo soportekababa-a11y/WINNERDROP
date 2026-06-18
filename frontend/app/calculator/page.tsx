@@ -7,30 +7,30 @@ import { Sidebar } from "@/components/sidebar";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, Star, Plus, Trash2 } from "lucide-react";
 
+// Regla fija para todos los países (en moneda local de cada uno)
+const SHIPPING   = 480;
+const AD_COST    = 500;
+const FIXED_COST = SHIPPING + AD_COST; // 980
+const PROFIT_MIN = 550;
+
+// Markups sobre el costo del producto → ganancias: 0, 550, 1050, 1800, 2800
+const MARKUPS = [980, 1530, 2030, 2780, 3780];
+
 const COUNTRIES = [
-  { code: 'RD', flag: '🇩🇴', name: 'República Dominicana', active: true },
-  { code: 'GT', flag: '🇬🇹', name: 'Guatemala',            active: true },
-  { code: 'EC', flag: '🇪🇨', name: 'Ecuador',              active: true },
-  { code: 'CO', flag: '🇨🇴', name: 'Colombia',             active: true  },
-  { code: 'MX', flag: '🇲🇽', name: 'México',               active: false },
+  { code: 'RD', flag: '🇩🇴', name: 'República Dominicana', currency: 'RD$', active: true  },
+  { code: 'GT', flag: '🇬🇹', name: 'Guatemala',            currency: 'Q',   active: true  },
+  { code: 'EC', flag: '🇪🇨', name: 'Ecuador',              currency: '$',   active: true  },
+  { code: 'CR', flag: '🇨🇷', name: 'Costa Rica',           currency: '₡',   active: true  },
+  { code: 'CO', flag: '🇨🇴', name: 'Colombia',             currency: 'COP$',active: true  },
 ];
 
-const COUNTRY_CONFIG: Record<string, { currency: string; shippingLabel: string; shippingRange: string; shippingAvg: number; adCost: number; markups: number[]; profitLow: number; profitOk: number }> = {
-  RD: { currency: 'RD$', shippingLabel: 'Envío zona RD', shippingRange: 'RD$350 – RD$500', shippingAvg: 425, adCost: 500, markups: [1100, 1300, 1450, 1700, 2100], profitLow: 300,  profitOk: 500  },
-  GT: { currency: 'Q',   shippingLabel: 'Envío zona GT', shippingRange: 'Q55 – Q80',       shippingAvg: 65,  adCost: 80,  markups: [170,  200,  225,  265,  325],  profitLow: 50,   profitOk: 80   },
-  EC: { currency: '$',   shippingLabel: 'Envío zona EC', shippingRange: '$3 – $6',          shippingAvg: 4,     adCost: 5,     markups: [12,    15,    18,    22,    28],    profitLow: 5,     profitOk: 10    },
-  CO: { currency: 'COP$', shippingLabel: 'Envío zona CO', shippingRange: 'COP$10k – COP$18k', shippingAvg: 14000, adCost: 8000,  markups: [45000, 55000, 65000, 80000, 100000], profitLow: 15000, profitOk: 25000 },
-};
-
-function markupOptions(totalCost: number, countryCode: string) {
-  const cfg = COUNTRY_CONFIG[countryCode] ?? COUNTRY_CONFIG['RD'];
-  const fixed = cfg.shippingAvg + cfg.adCost;
+function markupOptions(totalCost: number) {
   const labels = ['Precio mínimo', 'Precio bajo', 'Precio sugerido', 'Margen alto', 'Precio premium'];
   const risks  = ['high', 'medium', 'low', 'low', 'low'];
   const tags   = [null, null, 'recomendado', null, null];
-  return cfg.markups.map((markup, i) => ({
+  return MARKUPS.map((markup, i) => ({
     label: labels[i], markup, risk: risks[i], tag: tags[i],
-    price: totalCost + markup, profit: markup - fixed,
+    price: totalCost + markup, profit: markup - FIXED_COST,
   }));
 }
 
@@ -52,10 +52,11 @@ export default function CalculatorPage() {
   const hasResult = totalCost > 0;
   const isCombo = costs.length > 1;
 
-  const cfg = country ? (COUNTRY_CONFIG[country] ?? COUNTRY_CONFIG['RD']) : COUNTRY_CONFIG['RD'];
-  const FIXED = cfg.shippingAvg + cfg.adCost;
-  const options = markupOptions(totalCost, country ?? 'RD');
+  const countryData = COUNTRIES.find(c => c.code === country) ?? COUNTRIES[0];
+  const currency = countryData.currency;
+  const options = markupOptions(totalCost);
   const glass = { background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.07)' };
+  const fmt = (n: number) => currency + n.toLocaleString();
 
   return (
     <div className="min-h-screen bg-[#020209] flex">
@@ -69,16 +70,16 @@ export default function CalculatorPage() {
                 <h1 className="text-2xl font-bold text-white tracking-tight">Calculadora de Rentabilidad</h1>
                 <p className="text-gray-600 mt-1 text-sm">Elige tu mercado para continuar</p>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {COUNTRIES.map(c => (
-                  <button key={c.code} onClick={() => c.active && setCountry(c.code)} disabled={!c.active}
-                    className={cn("relative flex flex-col items-center gap-3 p-5 rounded-2xl transition-all duration-300", !c.active && "opacity-35 cursor-not-allowed")}
-                    style={c.active ? { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' } : { background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)' }}
-                    onMouseEnter={e => c.active && ((e.currentTarget.style.border = '1px solid rgba(139,92,246,0.4)'), (e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.1)'), (e.currentTarget.style.transform = 'translateY(-2px)'))}
-                    onMouseLeave={e => c.active && ((e.currentTarget.style.border = '1px solid rgba(255,255,255,0.07)'), (e.currentTarget.style.boxShadow = 'none'), (e.currentTarget.style.transform = 'translateY(0)'))}>
+                  <button key={c.code} onClick={() => setCountry(c.code)}
+                    className="relative flex flex-col items-center gap-3 p-5 rounded-2xl transition-all duration-300"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
+                    onMouseEnter={e => { e.currentTarget.style.border = '1px solid rgba(139,92,246,0.4)'; e.currentTarget.style.boxShadow = '0 0 30px rgba(139,92,246,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.border = '1px solid rgba(255,255,255,0.07)'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}>
                     <span className="text-3xl">{c.flag}</span>
                     <span className="text-xs font-semibold text-gray-300 text-center leading-snug">{c.name}</span>
-                    {!c.active && <span className="text-[10px] text-gray-700">Próximamente</span>}
+                    <span className="text-[10px] text-gray-600 font-mono">{c.currency}</span>
                   </button>
                 ))}
               </div>
@@ -92,14 +93,14 @@ export default function CalculatorPage() {
                 </button>
                 <span className="text-gray-800">/</span>
                 <span className="text-sm font-semibold text-gray-500">
-                  {COUNTRIES.find(c => c.code === country)?.flag} {COUNTRIES.find(c => c.code === country)?.name}
+                  {countryData.flag} {countryData.name}
                 </span>
               </div>
 
               <div>
                 <h1 className="text-2xl font-bold text-white tracking-tight">Calculadora de Rentabilidad</h1>
                 <p className="text-gray-600 mt-1 text-sm">
-                  {isCombo ? `Combo de ${costs.length} productos · ${COUNTRIES.find(c => c.code === country)?.name}` : `Producto individual · ${COUNTRIES.find(c => c.code === country)?.name}`}
+                  {isCombo ? `Combo de ${costs.length} productos · ${countryData.name}` : `Producto individual · ${countryData.name}`}
                 </p>
               </div>
 
@@ -114,7 +115,7 @@ export default function CalculatorPage() {
                       </p>
                       <div className="relative flex items-center gap-2">
                         <div className="relative flex-1">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 text-sm font-semibold pointer-events-none">{cfg.currency}</span>
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 text-sm font-semibold pointer-events-none">{currency}</span>
                           <input
                             type="number"
                             min={0}
@@ -153,7 +154,7 @@ export default function CalculatorPage() {
                     <span className="text-sm font-semibold text-violet-300">Costo total del combo</span>
                     <span className="text-lg font-bold bg-clip-text text-transparent"
                       style={{ backgroundImage: 'linear-gradient(135deg, #c4b5fd, #8b5cf6)' }}>
-                      {cfg.currency}{totalCost.toLocaleString()}
+                      {fmt(totalCost)}
                     </span>
                   </div>
                 )}
@@ -161,16 +162,20 @@ export default function CalculatorPage() {
                 <div className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.04)' }}>
                   <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mb-3">Costos fijos estimados</p>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">{cfg.shippingLabel}</span>
-                    <span className="text-gray-400 font-medium">{cfg.shippingRange}</span>
+                    <span className="text-gray-600">Envío</span>
+                    <span className="text-gray-400 font-medium">{fmt(SHIPPING)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Publicidad estimada</span>
-                    <span className="text-gray-400 font-medium">{cfg.currency}{cfg.adCost}</span>
+                    <span className="text-gray-600">Publicidad</span>
+                    <span className="text-gray-400 font-medium">{fmt(AD_COST)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Ganancia mínima</span>
+                    <span className="text-gray-400 font-medium">{fmt(PROFIT_MIN)}</span>
                   </div>
                   <div className="pt-2 flex justify-between text-sm font-semibold" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                     <span className="text-gray-500">Total fijo</span>
-                    <span className="text-gray-300">~{cfg.currency}{FIXED.toLocaleString()}</span>
+                    <span className="text-gray-300">{fmt(FIXED_COST)}</span>
                   </div>
                 </div>
               </div>
@@ -211,18 +216,18 @@ export default function CalculatorPage() {
                               )}
                             </div>
                             <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-600 mt-2">
-                              <span>Costo: <span className="text-gray-400 font-medium">{cfg.currency}{totalCost.toLocaleString()}</span></span>
-                              <span>Fijos: <span className="text-gray-400 font-medium">~{cfg.currency}{FIXED.toLocaleString()}</span></span>
+                              <span>Costo: <span className="text-gray-400 font-medium">{fmt(totalCost)}</span></span>
+                              <span>Fijos: <span className="text-gray-400 font-medium">{fmt(FIXED_COST)}</span></span>
                             </div>
                           </div>
                           <div className="text-right shrink-0">
                             <p className={cn("text-2xl font-bold", isRec ? "bg-clip-text text-transparent" : "text-white")}
                               style={isRec ? { backgroundImage: 'linear-gradient(135deg, #c4b5fd, #8b5cf6)' } : {}}>
-                              {cfg.currency}{opt.price.toLocaleString()}
+                              {fmt(opt.price)}
                             </p>
                             <p className="text-xs font-semibold mt-0.5"
-                              style={{ color: opt.profit >= cfg.profitOk ? '#34d399' : opt.profit >= cfg.profitLow ? '#fbbf24' : '#f87171' }}>
-                              ~{cfg.currency}{opt.profit.toLocaleString()} ganancia
+                              style={{ color: opt.profit >= PROFIT_MIN * 2 ? '#34d399' : opt.profit >= PROFIT_MIN ? '#fbbf24' : '#f87171' }}>
+                              {fmt(opt.profit)} ganancia
                             </p>
                           </div>
                         </div>
@@ -233,7 +238,7 @@ export default function CalculatorPage() {
                   <div className="rounded-xl px-4 py-3 text-xs space-y-1"
                     style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}>
                     <p className="font-semibold" style={{ color: '#fbbf24' }}>Sobre los costos de envío</p>
-                    <p style={{ color: 'rgba(245,158,11,0.6)' }}>Varía según zona. Se usa {cfg.currency}{cfg.shippingAvg} como promedio.</p>
+                    <p style={{ color: 'rgba(245,158,11,0.6)' }}>Envío {fmt(SHIPPING)} · Publicidad {fmt(AD_COST)} · Ganancia mínima {fmt(PROFIT_MIN)}</p>
                   </div>
                 </div>
               )}
