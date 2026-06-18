@@ -7,7 +7,8 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '**.effi.com.co' },
       { protocol: 'https', hostname: 's3.amazonaws.com' },
       { protocol: 'https', hostname: '**.amazonaws.com' },
-      { protocol: 'https', hostname: '**.cloudfront.net' },
+      { protocol: 'https', hostname: 'd3sk39qh2f4j46.cloudfront.net' },
+      { protocol: 'https', hostname: 'd2ob47cxeawi8a.cloudfront.net' },
     ],
   },
 };

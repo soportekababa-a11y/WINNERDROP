@@ -6,7 +6,6 @@ import { chromium, Browser } from 'playwright';
 import { Product } from '../products/product.entity';
 import { Snapshot } from '../snapshots/snapshot.entity';
 
-const CDN = 'https://d3sk39qh2f4j46.cloudfront.net/';
 const PAGE_SIZE = 100;
 
 function businessDay(): string {
@@ -17,8 +16,8 @@ function businessDay(): string {
 }
 
 export const DROPI_COUNTRIES = [
-  { code: 'CR', loginUrl: 'https://app.dropi.cr/auth/login', apiBase: 'https://api.dropi.cr', countryKey: 'COSTARICA', emailEnv: 'DROPI_CR_EMAIL', passwordEnv: 'DROPI_CR_PASSWORD' },
-  { code: 'GT', loginUrl: 'https://app.dropi.gt/auth/login', apiBase: 'https://api.dropi.gt', countryKey: 'GUATEMALA',  emailEnv: 'DROPI_GT_EMAIL', passwordEnv: 'DROPI_GT_PASSWORD' },
+  { code: 'CR', loginUrl: 'https://app.dropi.cr/auth/login', apiBase: 'https://api.dropi.cr', countryKey: 'COSTARICA', emailEnv: 'DROPI_CR_EMAIL', passwordEnv: 'DROPI_CR_PASSWORD', cdn: 'https://d3sk39qh2f4j46.cloudfront.net/' },
+  { code: 'GT', loginUrl: 'https://app.dropi.gt/auth/login', apiBase: 'https://api.dropi.gt', countryKey: 'GUATEMALA',  emailEnv: 'DROPI_GT_EMAIL', passwordEnv: 'DROPI_GT_PASSWORD', cdn: 'https://d2ob47cxeawi8a.cloudfront.net/' },
 ];
 
 interface DropiRaw {
@@ -82,7 +81,7 @@ export class DropisService implements OnModuleDestroy {
 
     let products: DropiRaw[] = [];
     try {
-      products = await this.fetchAllViaBrowser(page, apiBase, token, countryKey, code);
+      products = await this.fetchAllViaBrowser(page, apiBase, token, countryKey, code, def.cdn);
     } finally {
       await browser.close().catch(() => {});
     }
@@ -206,7 +205,7 @@ export class DropisService implements OnModuleDestroy {
     }
   }
 
-  private async fetchAllViaBrowser(page: any, apiBase: string, token: string, countryKey: string, code: string): Promise<DropiRaw[]> {
+  private async fetchAllViaBrowser(page: any, apiBase: string, token: string, countryKey: string, code: string, cdn: string): Promise<DropiRaw[]> {
     const all: DropiRaw[] = [];
     const seenIds = new Set<number>();
     const seenUserIds = new Set<number>();
@@ -239,20 +238,6 @@ export class DropisService implements OnModuleDestroy {
       this.logger.log(`[Dropi:${code}] start=${start} → HTTP ${result.status} | items: ${items.length} | total acumulado: ${all.length}`);
       if (start === 0 && items.length > 0) {
         this.logger.log(`[Dropi:${code}] RAW_USER_FIELDS: ${JSON.stringify(items[0].user)}`);
-        this.logger.log(`[Dropi:${code}] RAW_GALLERY_FIELDS: ${JSON.stringify(items[0].gallery?.[0])}`);
-        // Test if browser session can access a GT image directly
-        if (code !== 'CR') {
-          const testUrl = items[0].gallery?.[0]?.urlS3 ? `https://d3sk39qh2f4j46.cloudfront.net/${items[0].gallery[0].urlS3}` : '';
-          if (testUrl) {
-            const imgTest = await page.evaluate(async (url: string) => {
-              try { const r = await fetch(url); return { status: r.status }; } catch (e: any) { return { status: 0, err: e.message }; }
-            }, testUrl).catch(() => ({ status: -1 }));
-            this.logger.log(`[Dropi:${code}] IMG_ACCESS_TEST url="${testUrl}" status=${imgTest.status}`);
-            // Log CloudFront cookies if any
-            const cookies = await page.context().cookies('https://d3sk39qh2f4j46.cloudfront.net').catch(() => []);
-            this.logger.log(`[Dropi:${code}] CF_COOKIES: ${JSON.stringify(cookies.map((c: any) => c.name))}`);
-          }
-        }
       }
 
       if (result.status !== 200) break;
@@ -261,7 +246,7 @@ export class DropisService implements OnModuleDestroy {
       for (const item of items) {
         if (!seenIds.has(item.id)) {
           seenIds.add(item.id);
-          const imageUrl = item.gallery?.[0]?.urlS3 ? `${CDN}${item.gallery[0].urlS3}` : '';
+          const imageUrl = item.gallery?.[0]?.urlS3 ? `${cdn}${item.gallery[0].urlS3}` : '';
           const rawStock = item.warehouse_product?.[0]?.stock ?? 0;
           if (item.user?.id && !seenUserIds.has(item.user.id)) {
             seenUserIds.add(item.user.id);
