@@ -9,29 +9,31 @@ import { ChevronLeft, Star, Plus, Trash2 } from "lucide-react";
 
 // RD base: envío=480, publicidad=500, ganancia=550
 // Convertido a moneda local de cada país (1 USD ≈ 59 RD$)
+// Ganancias objetivo (en RD$): 0, 350, 550 (rec), 680, 775
+// Cada país escala proporcionalmente a sus costos fijos convertidos
 const COUNTRY_CONFIG: Record<string, {
   currency: string; flag: string; name: string;
   shipping: number; adCost: number; profitMin: number;
   markups: number[]; profitOk: number;
 }> = {
   RD: { currency: 'RD$',  flag: '🇩🇴', name: 'República Dominicana',
-        shipping: 480,    adCost: 500,    profitMin: 550,
-        markups:  [980,   1530,   2030,   2780,   3780],   profitOk: 1100 },
-  GT: { currency: 'Q',    flag: '🇬🇹', name: 'Guatemala',
-        shipping: 63,     adCost: 65,     profitMin: 72,
-        markups:  [128,   200,    270,    370,    500],     profitOk: 144  },
-  EC: { currency: '$',    flag: '🇪🇨', name: 'Ecuador',
-        shipping: 8,      adCost: 9,      profitMin: 9.5,
-        markups:  [17,    26.5,   36,     49,     66],      profitOk: 19   },
-  CR: { currency: '₡',    flag: '🇨🇷', name: 'Costa Rica',
-        shipping: 4200,   adCost: 4400,   profitMin: 4800,
-        markups:  [8600,  13400,  17800,  24300,  33000],   profitOk: 9600 },
-  CO: { currency: 'COP$', flag: '🇨🇴', name: 'Colombia',
-        shipping: 33000,  adCost: 35000,  profitMin: 38000,
-        markups:  [68000, 106000, 141000, 193000, 262000],  profitOk: 76000 },
-  CL: { currency: 'CLP$', flag: '🇨🇱', name: 'Chile',
-        shipping: 7800,   adCost: 8100,   profitMin: 8900,
-        markups:  [15900, 24800,  33000,  45000,  61000],   profitOk: 17800 },
+        shipping: 480,   adCost: 500,   profitMin: 550,
+        markups:  [980,  1330,  1530,  1660,  1755],  profitOk: 680  },
+  GT: { currency: 'Q',   flag: '🇬🇹', name: 'Guatemala',
+        shipping: 63,    adCost: 65,    profitMin: 72,
+        markups:  [128,  174,   200,   217,   229],   profitOk: 89   },
+  EC: { currency: '$',   flag: '🇪🇨', name: 'Ecuador',
+        shipping: 8,     adCost: 9,     profitMin: 9.5,
+        markups:  [17,   23,    26.5,  29,    30.5],  profitOk: 12   },
+  CR: { currency: '₡',   flag: '🇨🇷', name: 'Costa Rica',
+        shipping: 4200,  adCost: 4400,  profitMin: 4800,
+        markups:  [8600, 11700, 13400, 14600, 15400], profitOk: 6000 },
+  CO: { currency: 'COP$',flag: '🇨🇴', name: 'Colombia',
+        shipping: 33000, adCost: 35000, profitMin: 38000,
+        markups:  [68000,92000, 106000,115000,122000], profitOk: 47000 },
+  CL: { currency: 'CLP$',flag: '🇨🇱', name: 'Chile',
+        shipping: 7800,  adCost: 8100,  profitMin: 8900,
+        markups:  [15900,21600, 24800, 27000, 28500], profitOk: 11000 },
 };
 
 const COUNTRIES = Object.entries(COUNTRY_CONFIG).map(([code, c]) => ({ code, flag: c.flag, name: c.name, currency: c.currency }));
