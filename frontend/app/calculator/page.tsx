@@ -125,7 +125,7 @@ export default function CalculatorPage() {
                       </p>
                       <div className="relative flex items-center gap-2">
                         <div className="relative flex-1">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 text-sm font-semibold pointer-events-none">{currency}</span>
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 text-sm font-semibold pointer-events-none">{cfg.currency}</span>
                           <input
                             type="number"
                             min={0}
