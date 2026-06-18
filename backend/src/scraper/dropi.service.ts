@@ -7,6 +7,10 @@ import { Product } from '../products/product.entity';
 import { Snapshot } from '../snapshots/snapshot.entity';
 
 const PAGE_SIZE = 100;
+const DROPI_CDNS = [
+  'https://d3sk39qh2f4j46.cloudfront.net/',
+  'https://d2ob47cxeawi8a.cloudfront.net/',
+];
 
 function businessDay(): string {
   const now = new Date();
@@ -16,8 +20,9 @@ function businessDay(): string {
 }
 
 export const DROPI_COUNTRIES = [
-  { code: 'CR', loginUrl: 'https://app.dropi.cr/auth/login', apiBase: 'https://api.dropi.cr', countryKey: 'COSTARICA', emailEnv: 'DROPI_CR_EMAIL', passwordEnv: 'DROPI_CR_PASSWORD', cdn: 'https://d3sk39qh2f4j46.cloudfront.net/' },
-  { code: 'GT', loginUrl: 'https://app.dropi.gt/auth/login', apiBase: 'https://api.dropi.gt', countryKey: 'GUATEMALA',  emailEnv: 'DROPI_GT_EMAIL', passwordEnv: 'DROPI_GT_PASSWORD', cdn: 'https://d2ob47cxeawi8a.cloudfront.net/' },
+  { code: 'CR', loginUrl: 'https://app.dropi.cr/auth/login', apiBase: 'https://api.dropi.cr', countryKey: 'COSTARICA', emailEnv: 'DROPI_CR_EMAIL', passwordEnv: 'DROPI_CR_PASSWORD' },
+  { code: 'GT', loginUrl: 'https://app.dropi.gt/auth/login', apiBase: 'https://api.dropi.gt', countryKey: 'GUATEMALA',  emailEnv: 'DROPI_GT_EMAIL', passwordEnv: 'DROPI_GT_PASSWORD' },
+  { code: 'EC', loginUrl: 'https://app.dropi.ec/auth/login', apiBase: 'https://api.dropi.ec', countryKey: 'ECUADOR',    emailEnv: 'DROPI_EC_EMAIL', passwordEnv: 'DROPI_EC_PASSWORD' },
 ];
 
 interface DropiRaw {
@@ -81,7 +86,7 @@ export class DropisService implements OnModuleDestroy {
 
     let products: DropiRaw[] = [];
     try {
-      products = await this.fetchAllViaBrowser(page, apiBase, token, countryKey, code, def.cdn);
+      products = await this.fetchAllViaBrowser(page, apiBase, token, countryKey, code);
     } finally {
       await browser.close().catch(() => {});
     }
@@ -205,12 +210,24 @@ export class DropisService implements OnModuleDestroy {
     }
   }
 
-  private async fetchAllViaBrowser(page: any, apiBase: string, token: string, countryKey: string, code: string, cdn: string): Promise<DropiRaw[]> {
+  private async detectCdn(firstUrlS3: string): Promise<string> {
+    for (const cdn of DROPI_CDNS) {
+      try {
+        const r = await fetch(encodeURI(`${cdn}${firstUrlS3}`), { method: 'HEAD' });
+        if (r.ok) { this.logger.log(`CDN detected: ${cdn}`); return cdn; }
+      } catch {}
+    }
+    this.logger.warn(`No CDN returned 200 for ${firstUrlS3}, defaulting to first`);
+    return DROPI_CDNS[0];
+  }
+
+  private async fetchAllViaBrowser(page: any, apiBase: string, token: string, countryKey: string, code: string): Promise<DropiRaw[]> {
     const all: DropiRaw[] = [];
     const seenIds = new Set<number>();
     const seenUserIds = new Set<number>();
     let start = 0;
     let emptyConsecutive = 0;
+    let cdn: string | null = null;
 
     while (true) {
       const result = await page.evaluate(async ({ apiBase, token, countryKey, start, pageSize }: any) => {
@@ -238,6 +255,11 @@ export class DropisService implements OnModuleDestroy {
       this.logger.log(`[Dropi:${code}] start=${start} → HTTP ${result.status} | items: ${items.length} | total acumulado: ${all.length}`);
       if (start === 0 && items.length > 0) {
         this.logger.log(`[Dropi:${code}] RAW_USER_FIELDS: ${JSON.stringify(items[0].user)}`);
+        if (!cdn && items[0].gallery?.[0]?.urlS3) {
+          cdn = await this.detectCdn(items[0].gallery[0].urlS3);
+          this.logger.log(`[Dropi:${code}] Using CDN: ${cdn}`);
+        }
+        if (!cdn) cdn = DROPI_CDNS[0];
       }
 
       if (result.status !== 200) break;
@@ -246,7 +268,8 @@ export class DropisService implements OnModuleDestroy {
       for (const item of items) {
         if (!seenIds.has(item.id)) {
           seenIds.add(item.id);
-          const imageUrl = item.gallery?.[0]?.urlS3 ? `${cdn}${item.gallery[0].urlS3}` : '';
+          const activeCdn = cdn ?? DROPI_CDNS[0];
+          const imageUrl = item.gallery?.[0]?.urlS3 ? `${activeCdn}${item.gallery[0].urlS3}` : '';
           const rawStock = item.warehouse_product?.[0]?.stock ?? 0;
           if (item.user?.id && !seenUserIds.has(item.user.id)) {
             seenUserIds.add(item.user.id);

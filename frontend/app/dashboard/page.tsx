@@ -27,6 +27,7 @@ const EFFI_COUNTRIES: { value: CountryFilter; label: string }[] = [
 const DROPI_COUNTRIES: { value: CountryFilter; label: string }[] = [
   { value: 'CR', label: '🇨🇷 Costa Rica' },
   { value: 'GT', label: '🇬🇹 Guatemala' },
+  { value: 'EC', label: '🇪🇨 Ecuador' },
 ];
 
 const COUNTRIES_BY_PLATFORM: Record<PlatformFilter, { value: CountryFilter; label: string }[]> = {
