@@ -110,7 +110,7 @@ export default function CalculatorPage() {
               <div>
                 <h1 className="text-2xl font-bold text-white tracking-tight">Calculadora de Rentabilidad</h1>
                 <p className="text-gray-600 mt-1 text-sm">
-                  {isCombo ? `Combo de ${costs.length} productos · ${countryData.name}` : `Producto individual · ${countryData.name}`}
+                  {isCombo ? `Combo de ${costs.length} productos · ${cfg.name}` : `Producto individual · ${cfg.name}`}
                 </p>
               </div>
 
