@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Calculator, LayoutDashboard, LogOut, MessageCircle, Settings, Zap, Clock, Globe } from 'lucide-react';
+import { Calculator, LayoutDashboard, LogOut, Settings, Zap, Clock, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getUser, clearAuth, PlanType } from '@/lib/auth';
 import { MomentumIcon, MomentumWordmark } from '@/components/momentum-logo';
@@ -23,7 +23,6 @@ const PLAN_BADGE: Record<PlanType, { label: string; color: string; bg: string }>
 const NAV = [
   { href: '/dashboard', label: 'Winner', icon: LayoutDashboard, desc: 'Dashboard' },
   { href: '/calculator', label: 'Rentabilidad', icon: Calculator, desc: 'Calculadora' },
-  { href: '/autoconfirm', label: 'AutoConfirm', icon: MessageCircle, desc: 'Bot WhatsApp' },
   { href: '/meta-ads', label: 'Meta Ads IA', icon: Globe, desc: 'Crear campañas' },
 ];
 
