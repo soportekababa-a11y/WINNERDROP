@@ -24,6 +24,7 @@ export const DROPI_COUNTRIES = [
   { code: 'CR', loginUrl: 'https://app.dropi.cr/auth/login', apiBase: 'https://api.dropi.cr', countryKey: 'COSTARICA', emailEnv: 'DROPI_CR_EMAIL', passwordEnv: 'DROPI_CR_PASSWORD' },
   { code: 'GT', loginUrl: 'https://app.dropi.gt/auth/login', apiBase: 'https://api.dropi.gt', countryKey: 'GUATEMALA',  emailEnv: 'DROPI_GT_EMAIL', passwordEnv: 'DROPI_GT_PASSWORD' },
   { code: 'EC', loginUrl: 'https://app.dropi.ec/auth/login', apiBase: 'https://api.dropi.ec', countryKey: 'ECUADOR',    emailEnv: 'DROPI_EC_EMAIL', passwordEnv: 'DROPI_EC_PASSWORD' },
+  { code: 'CL', loginUrl: 'https://app.dropi.cl/auth/login', apiBase: 'https://api.dropi.cl', countryKey: 'CHILE',      emailEnv: 'DROPI_CL_EMAIL', passwordEnv: 'DROPI_CL_PASSWORD' },
 ];
 
 interface DropiRaw {

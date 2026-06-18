@@ -91,7 +91,7 @@ export function ProductRow({ product: p, rank }: ProductRowProps) {
 
       {/* Price + margin */}
       <div className="w-24 text-right flex-shrink-0 hidden md:block">
-        <p className="text-sm text-gray-700 font-medium">{p.country === 'GT' ? 'Q' : p.country === 'EC' ? '$' : 'RD$'}{p.price.toLocaleString()}</p>
+        <p className="text-sm text-gray-700 font-medium">{{ GT: 'Q', EC: '$', CR: '₡', CL: 'CLP$', CO: 'COP$' }[p.country] ?? 'RD$'}{p.price.toLocaleString()}</p>
         {margin !== null && (
           <p className={cn("text-xs", margin >= 40 ? "text-emerald-600" : "text-gray-400")}>
             {margin}% margen

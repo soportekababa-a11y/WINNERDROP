@@ -12,7 +12,7 @@ import { Sidebar } from "@/components/sidebar";
 
 const PAGE_SIZE = 40;
 type ProductoFilter = 'todos' | 'hoy' | 'ayer' | 'winners';
-type CountryFilter = '' | 'RD' | 'GT' | 'EC' | 'CR' | 'CO';
+type CountryFilter = '' | 'RD' | 'GT' | 'EC' | 'CR' | 'CO' | 'CL';
 type PlatformFilter = 'effi' | 'dropi';
 
 const EFFI_COUNTRIES: { value: CountryFilter; label: string }[] = [
@@ -28,6 +28,7 @@ const DROPI_COUNTRIES: { value: CountryFilter; label: string }[] = [
   { value: 'CR', label: '🇨🇷 Costa Rica' },
   { value: 'GT', label: '🇬🇹 Guatemala' },
   { value: 'EC', label: '🇪🇨 Ecuador' },
+  { value: 'CL', label: '🇨🇱 Chile' },
 ];
 
 const COUNTRIES_BY_PLATFORM: Record<PlatformFilter, { value: CountryFilter; label: string }[]> = {

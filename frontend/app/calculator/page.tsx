@@ -29,6 +29,9 @@ const COUNTRY_CONFIG: Record<string, {
   CO: { currency: 'COP$', flag: '🇨🇴', name: 'Colombia',
         shipping: 33000,  adCost: 35000,  profitMin: 38000,
         markups:  [68000, 106000, 141000, 193000, 262000],  profitOk: 76000 },
+  CL: { currency: 'CLP$', flag: '🇨🇱', name: 'Chile',
+        shipping: 7800,   adCost: 8100,   profitMin: 8900,
+        markups:  [15900, 24800,  33000,  45000,  61000],   profitOk: 17800 },
 };
 
 const COUNTRIES = Object.entries(COUNTRY_CONFIG).map(([code, c]) => ({ code, flag: c.flag, name: c.name, currency: c.currency }));
