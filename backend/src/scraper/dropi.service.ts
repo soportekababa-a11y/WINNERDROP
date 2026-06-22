@@ -118,6 +118,24 @@ export class DropisService implements OnModuleDestroy {
       );
     }
 
+    // Deactivate products no longer in Dropi catalog for this country
+    if (products.length > 0) {
+      const scrapedIds = products.map(p => p.dropiId);
+      const deactivated = await this.productRepo
+        .createQueryBuilder()
+        .update(Product)
+        .set({ isActive: false })
+        .where('country = :country AND platform = :platform AND "effiId" NOT IN (:...ids)', {
+          country: code,
+          platform: 'dropi',
+          ids: scrapedIds,
+        })
+        .execute();
+      if (deactivated.affected) {
+        this.logger.log(`[Dropi:${code}] ${deactivated.affected} productos desactivados (no en catálogo actual)`);
+      }
+    }
+
     this.logger.log(`[Dropi:${code}] ${saved}/${products.length} guardados`);
     return { saved };
   }
