@@ -110,10 +110,13 @@ export class ProductsService {
       d.setDate(d.getDate() - i);
       const dateStr = d.toLocaleDateString('en-CA', { timeZone: tz });
       let sales = salesMap.get(dateStr) ?? 0;
-      // Denormalized fields are always more accurate than snapshot math
+      // Denormalized fields are always more accurate than snapshot math.
+      // Guard: only override when salesBaselineDate === todayStr, meaning
+      // the business day and calendar day agree (avoids the midnight→3AM window
+      // where businessDay() is still yesterday but calendar already flipped).
       if (dateStr === todayStr && product?.salesBaselineDate === todayStr) {
         sales = product.salesToday ?? sales;
-      } else if (dateStr === yesterdayStr && product && (product.salesYesterday ?? 0) > 0) {
+      } else if (dateStr === yesterdayStr && product?.salesBaselineDate === todayStr && (product.salesYesterday ?? 0) > 0) {
         sales = product.salesYesterday;
       }
       result.push({ date: dateStr, sales });
