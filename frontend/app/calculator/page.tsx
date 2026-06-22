@@ -61,7 +61,7 @@ function computeRecPrice(totalCost: number, cfg: typeof COUNTRY_CONFIG[string]):
 function markupOptions(totalCost: number, cfg: typeof COUNTRY_CONFIG[string]) {
   const fixed = cfg.shipping + cfg.adCost;
   const labels = ['Precio mínimo', 'Precio bajo', 'Precio sugerido', 'Margen alto', 'Precio premium'];
-  const risks  = ['medium', 'medium', 'low', 'low', 'low'];
+  const risks  = ['high', 'medium', 'low', 'low', 'low'];
   const tags   = [null, null, 'recomendado', null, null];
   return cfg.markups.map((markup, i) => {
     const price = i === 2 ? computeRecPrice(totalCost, cfg) : attractivePrice(totalCost + markup);
@@ -245,7 +245,7 @@ export default function CalculatorPage() {
                   </p>
                   {options.map((opt, i) => {
                     const isRec = opt.tag === 'recomendado';
-                    const profitColor = opt.profit >= cfg.profitOk ? '#4ade80' : opt.profit >= cfg.profitMin ? '#fbbf24' : '#f87171';
+                    const profitColor = opt.risk === 'high' ? '#f87171' : opt.risk === 'medium' ? '#fbbf24' : '#4ade80';
                     return (
                       <div key={i} className="rounded-2xl p-5 transition-all duration-300 relative overflow-hidden group cursor-default"
                         style={isRec ? {
