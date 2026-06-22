@@ -11,25 +11,32 @@ const COUNTRY_CONFIG: Record<string, {
   currency: string; flag: string; name: string;
   shipping: number; adCost: number; profitMin: number;
   markups: number[]; profitOk: number;
+  recProfit: [number, number];
 }> = {
   RD: { currency: 'RD$',  flag: '🇩🇴', name: 'República Dominicana',
         shipping: 480,   adCost: 500,   profitMin: 550,
-        markups:  [1160, 1368, 1530, 1660, 1755], profitOk: 680  },
+        markups:  [1160, 1368, 1530, 1660, 1755], profitOk: 680,
+        recProfit: [500, 600]  },
   GT: { currency: 'Q',   flag: '🇬🇹', name: 'Guatemala',
         shipping: 63,    adCost: 65,    profitMin: 72,
-        markups:  [152,  179,  200,  217,  229],  profitOk: 89   },
+        markups:  [152,  179,  200,  217,  229],  profitOk: 89,
+        recProfit: [65, 79]    },
   EC: { currency: '$',   flag: '🇪🇨', name: 'Ecuador',
         shipping: 8,     adCost: 9,     profitMin: 9.5,
-        markups:  [20,   24,   26.5, 29,   30.5], profitOk: 12   },
+        markups:  [20,   24,   26.5, 29,   30.5], profitOk: 12,
+        recProfit: [8.6, 10.4] },
   CR: { currency: '₡',   flag: '🇨🇷', name: 'Costa Rica',
         shipping: 4200,  adCost: 4400,  profitMin: 4800,
-        markups:  [10200,12000,13400,14600,15400], profitOk: 6000 },
+        markups:  [10200,12000,13400,14600,15400], profitOk: 6000,
+        recProfit: [4400, 5200] },
   CO: { currency: 'COP$',flag: '🇨🇴', name: 'Colombia',
         shipping: 33000, adCost: 35000, profitMin: 38000,
-        markups:  [80500,95000,106000,115000,122000], profitOk: 47000 },
+        markups:  [80500,95000,106000,115000,122000], profitOk: 47000,
+        recProfit: [35000, 41000] },
   CL: { currency: 'CLP$',flag: '🇨🇱', name: 'Chile',
         shipping: 7800,  adCost: 8100,  profitMin: 8900,
-        markups:  [18800,22200,24800,27000,28500], profitOk: 11000 },
+        markups:  [18800,22200,24800,27000,28500], profitOk: 11000,
+        recProfit: [8100, 9700] },
 };
 
 const COUNTRIES = Object.entries(COUNTRY_CONFIG).map(([code, c]) => ({ code, flag: c.flag, name: c.name, currency: c.currency }));
@@ -40,13 +47,24 @@ function attractivePrice(raw: number): number {
   return r % (unit * 2) === 0 ? r - 1 : r;
 }
 
+// Floor from maxPrice so attractive rounding never pushes profit above recProfit[1]
+function computeRecPrice(totalCost: number, cfg: typeof COUNTRY_CONFIG[string]): number {
+  const fixed = cfg.shipping + cfg.adCost;
+  const [pMin, pMax] = cfg.recProfit;
+  const maxPrice = totalCost + fixed + pMax;
+  const unit = maxPrice < 100 ? 1 : maxPrice < 1000 ? 10 : maxPrice < 10000 ? 100 : 500;
+  const candidate = Math.floor(maxPrice / unit) * unit - 1;
+  const minPrice = totalCost + fixed + pMin;
+  return candidate >= minPrice ? candidate : Math.floor(maxPrice);
+}
+
 function markupOptions(totalCost: number, cfg: typeof COUNTRY_CONFIG[string]) {
   const fixed = cfg.shipping + cfg.adCost;
   const labels = ['Precio mínimo', 'Precio bajo', 'Precio sugerido', 'Margen alto', 'Precio premium'];
   const risks  = ['medium', 'medium', 'low', 'low', 'low'];
   const tags   = [null, null, 'recomendado', null, null];
   return cfg.markups.map((markup, i) => {
-    const price = attractivePrice(totalCost + markup);
+    const price = i === 2 ? computeRecPrice(totalCost, cfg) : attractivePrice(totalCost + markup);
     return { label: labels[i], markup, risk: risks[i], tag: tags[i], price, profit: price - totalCost - fixed };
   });
 }
