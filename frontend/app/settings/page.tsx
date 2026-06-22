@@ -58,12 +58,12 @@ export default function SettingsPage() {
     }
   };
 
-  const glass = { background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.06)' };
-  const selectedStyle = { background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.4)', color: '#a78bfa' };
-  const normalStyle = { background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', color: '#6b7280' };
+  const glass = { background: 'rgba(40,0,80,0.08)', backdropFilter: 'blur(16px)', border: '1px solid rgba(150,0,220,0.12)' };
+  const selectedStyle = { background: 'rgba(217,70,239,0.12)', border: '1px solid rgba(217,70,239,0.4)', color: '#e879f9' };
+  const normalStyle = { background: 'rgba(40,0,70,0.15)', border: '1px solid rgba(150,0,220,0.1)', color: 'rgba(180,130,220,0.5)' };
 
   return (
-    <div className="min-h-screen bg-[#020209] flex">
+    <div className="min-h-screen flex">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <main className="max-w-lg mx-auto w-full px-6 py-12 space-y-8">
@@ -108,7 +108,7 @@ export default function SettingsPage() {
 
             <button onClick={handleSave} disabled={!country || loading}
               className="w-full py-3 rounded-xl text-sm font-semibold transition-all duration-200 disabled:opacity-40"
-              style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)', color: 'white', boxShadow: '0 0 24px rgba(139,92,246,0.3)' }}>
+              style={{ background: 'linear-gradient(135deg, #c026d3, #9333ea)', color: 'white', boxShadow: '0 0 24px rgba(192,38,211,0.4)' }}>
               {loading ? 'Guardando...' : saved ? '✓ Guardado' : 'Guardar'}
             </button>
           </div>

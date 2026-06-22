@@ -61,7 +61,7 @@ export default function PricingPage() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-[#020209] flex">
+    <div className="min-h-screen flex">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <main className="max-w-4xl mx-auto w-full px-6 py-12 space-y-10">

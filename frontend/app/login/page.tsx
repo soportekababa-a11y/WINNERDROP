@@ -30,34 +30,43 @@ export default function LoginPage() {
     }
   }
 
+  const inputStyle = {
+    background: 'rgba(40,0,70,0.4)',
+    border: '1px solid rgba(150,0,220,0.2)',
+  };
+
   return (
-    <div className="min-h-screen bg-[#020209] flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 relative">
 
       {/* Logo */}
       <div className="flex items-center gap-3 mb-10">
-        <div className="glow-logo" style={{ filter: 'drop-shadow(0 0 20px rgba(139,92,246,0.5))' }}>
+        <div style={{ filter: 'drop-shadow(0 0 24px rgba(217,70,239,0.6))' }}>
           <MomentumIcon size={48} />
         </div>
         <MomentumWordmark className="text-2xl" />
       </div>
 
       {/* Card */}
-      <div className="w-full max-w-sm rounded-2xl p-7"
+      <div className="w-full max-w-sm rounded-2xl p-7 relative overflow-hidden"
         style={{
-          background: 'rgba(255,255,255,0.025)',
-          backdropFilter: 'blur(24px)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 0 80px rgba(0,0,0,0.6), 0 0 40px rgba(139,92,246,0.05)',
+          background: 'rgba(30,0,60,0.6)',
+          backdropFilter: 'blur(32px)',
+          border: '1px solid rgba(180,0,255,0.15)',
+          boxShadow: '0 0 80px rgba(192,38,211,0.08), 0 0 160px rgba(0,0,0,0.6)',
         }}>
+
+        {/* Top glow line */}
+        <div className="absolute top-0 left-0 right-0 h-[1px]"
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(217,70,239,0.6), transparent)' }} />
 
         <div className="mb-7">
           <h1 className="text-xl font-bold text-white mb-1">Bienvenido</h1>
-          <p className="text-sm text-gray-500">Inicia sesión para continuar</p>
+          <p className="text-sm" style={{ color: 'rgba(180,130,220,0.55)' }}>Inicia sesión para continuar</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="relative">
-            <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
+            <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#a855f7' }} />
             <input
               type="email"
               placeholder="Email"
@@ -65,17 +74,14 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full pl-9 pr-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 transition-all duration-200 outline-none"
-              style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.07)',
-              }}
-              onFocus={e => { e.target.style.border = '1px solid rgba(139,92,246,0.5)'; e.target.style.boxShadow = '0 0 20px rgba(139,92,246,0.1)'; }}
-              onBlur={e => { e.target.style.border = '1px solid rgba(255,255,255,0.07)'; e.target.style.boxShadow = 'none'; }}
+              style={inputStyle}
+              onFocus={e => { e.target.style.border = '1px solid rgba(217,70,239,0.5)'; e.target.style.boxShadow = '0 0 20px rgba(217,70,239,0.12)'; }}
+              onBlur={e => { e.target.style.border = '1px solid rgba(150,0,220,0.2)'; e.target.style.boxShadow = 'none'; }}
             />
           </div>
 
           <div className="relative">
-            <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
+            <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#a855f7' }} />
             <input
               type="password"
               placeholder="Contraseña"
@@ -83,12 +89,9 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full pl-9 pr-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 transition-all duration-200 outline-none"
-              style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.07)',
-              }}
-              onFocus={e => { e.target.style.border = '1px solid rgba(139,92,246,0.5)'; e.target.style.boxShadow = '0 0 20px rgba(139,92,246,0.1)'; }}
-              onBlur={e => { e.target.style.border = '1px solid rgba(255,255,255,0.07)'; e.target.style.boxShadow = 'none'; }}
+              style={inputStyle}
+              onFocus={e => { e.target.style.border = '1px solid rgba(217,70,239,0.5)'; e.target.style.boxShadow = '0 0 20px rgba(217,70,239,0.12)'; }}
+              onBlur={e => { e.target.style.border = '1px solid rgba(150,0,220,0.2)'; e.target.style.boxShadow = 'none'; }}
             />
           </div>
 
@@ -103,13 +106,13 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl text-white text-sm font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2 active:scale-[0.98]"
+            className="w-full py-3 rounded-xl text-white text-sm font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2 active:scale-[0.98]"
             style={{
-              background: 'linear-gradient(135deg, #7c3aed, #a855f7)',
-              boxShadow: '0 0 24px rgba(139,92,246,0.35)',
+              background: 'linear-gradient(135deg, #c026d3, #9333ea)',
+              boxShadow: '0 0 30px rgba(192,38,211,0.4), 0 4px 20px rgba(0,0,0,0.4)',
             }}
-            onMouseEnter={e => { (e.target as HTMLElement).style.boxShadow = '0 0 40px rgba(139,92,246,0.55)'; }}
-            onMouseLeave={e => { (e.target as HTMLElement).style.boxShadow = '0 0 24px rgba(139,92,246,0.35)'; }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 50px rgba(192,38,211,0.6), 0 4px 20px rgba(0,0,0,0.4)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 30px rgba(192,38,211,0.4), 0 4px 20px rgba(0,0,0,0.4)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
           >
             {loading && <Loader2 size={15} className="animate-spin" />}
             {loading ? 'Entrando...' : 'Entrar'}

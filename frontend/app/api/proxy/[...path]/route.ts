@@ -33,11 +33,23 @@ async function handler(req: NextRequest, { params }: { params: Promise<{ path: s
     }
 
     const res = await fetch(url, { method: req.method, headers, body });
-    const data = await res.text();
+    const contentType = res.headers.get('Content-Type') ?? 'application/json';
 
+    // Stream binary responses (video, audio, octet-stream) without text corruption
+    if (contentType.startsWith('video/') || contentType.startsWith('audio/') || contentType === 'application/octet-stream') {
+      const buf = await res.arrayBuffer();
+      const responseHeaders: Record<string, string> = { 'Content-Type': contentType };
+      const cd = res.headers.get('Content-Disposition');
+      if (cd) responseHeaders['Content-Disposition'] = cd;
+      const cl = res.headers.get('Content-Length');
+      if (cl) responseHeaders['Content-Length'] = cl;
+      return new NextResponse(buf, { status: res.status, headers: responseHeaders });
+    }
+
+    const data = await res.text();
     return new NextResponse(data, {
       status: res.status,
-      headers: { 'Content-Type': res.headers.get('Content-Type') ?? 'application/json' },
+      headers: { 'Content-Type': contentType },
     });
   } catch (err: any) {
     return NextResponse.json(

@@ -17,6 +17,9 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { MetaAdsModule } from './meta-ads/meta-ads.module';
 import { MetaConnection } from './meta-ads/entities/meta-connection.entity';
 import { MetaCampaign } from './meta-ads/entities/meta-campaign.entity';
+import { AdsIntelligenceModule } from './ads-intelligence/ads-intelligence.module';
+import { AdIntelligenceCache } from './ads-intelligence/entities/ad-intelligence-cache.entity';
+
 
 @Module({
   imports: [
@@ -30,7 +33,7 @@ import { MetaCampaign } from './meta-ads/entities/meta-campaign.entity';
         username: config.get('DB_USERNAME', 'postgres'),
         password: config.get('DB_PASSWORD'),
         database: config.get('DB_DATABASE', 'winnerdrop'),
-        entities: [Product, Snapshot, User, ShopifyStore, OrderLog, MetaConnection, MetaCampaign],
+        entities: [Product, Snapshot, User, ShopifyStore, OrderLog, MetaConnection, MetaCampaign, AdIntelligenceCache],
         synchronize: true,
         logging: false,
       }),
@@ -43,6 +46,7 @@ import { MetaCampaign } from './meta-ads/entities/meta-campaign.entity';
     AutoconfirmModule,
     SubscriptionsModule,
     MetaAdsModule,
+    AdsIntelligenceModule,
   ],
 })
 export class AppModule implements OnModuleInit {

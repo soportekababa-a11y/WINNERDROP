@@ -58,13 +58,16 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const peakDay = history?.reduce((best, d) => d.sales > (best?.sales ?? 0) ? d : best, history[0]);
   const totalPeriod = history?.reduce((s, d) => s + d.sales, 0) ?? 0;
 
-  const glass = { background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.07)' };
+  const glass = { background: 'rgba(40,0,80,0.08)', backdropFilter: 'blur(20px)', border: '1px solid rgba(150,0,220,0.12)' };
 
   return (
-    <div className="min-h-screen bg-[#020209]">
-      <header className="sticky top-0 z-10 px-4 py-3.5" style={{ background: 'rgba(2,2,9,0.8)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+    <div className="min-h-screen" style={{ background: 'transparent' }}>
+      <header className="sticky top-0 z-10 px-4 py-3.5" style={{ background: 'rgba(4,0,14,0.85)', backdropFilter: 'blur(24px)', borderBottom: '1px solid rgba(150,0,220,0.08)' }}>
         <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <Link href="/dashboard" className="flex items-center gap-1.5 text-gray-600 hover:text-gray-300 transition-colors text-sm">
+          <Link href="/dashboard" className="flex items-center gap-1.5 transition-colors text-sm"
+            style={{ color: 'rgba(180,130,220,0.5)' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#d946ef')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(180,130,220,0.5)')}>
             <ArrowLeft size={14} />
             Dashboard
           </Link>
@@ -83,8 +86,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           <>
             {/* Hero */}
             <div className="flex gap-5 items-start">
-              <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl flex-shrink-0 overflow-hidden relative"
-                style={{ border: '1px solid rgba(139,92,246,0.2)', background: '#0a0a12', boxShadow: '0 0 30px rgba(139,92,246,0.08)' }}>
+              <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl flex-shrink-0 overflow-hidden relative scan-line-overlay"
+                style={{ border: '1px solid rgba(217,70,239,0.25)', background: 'rgba(40,0,80,0.3)', boxShadow: '0 0 30px rgba(192,38,211,0.1)' }}>
                 {product.imageUrl ? (
                   <Image src={product.imageUrl} alt={product.name} fill className="object-cover" unoptimized />
                 ) : (
@@ -95,17 +98,17 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                 <h1 className="text-xl md:text-2xl font-bold text-white leading-snug">{product.name}</h1>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {product.category && (
-                    <span className="px-2.5 py-0.5 rounded-lg text-xs font-medium" style={{ background: 'rgba(139,92,246,0.1)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.2)' }}>
+                    <span className="px-2.5 py-0.5 rounded-lg text-xs font-medium" style={{ background: 'rgba(217,70,239,0.1)', color: '#e879f9', border: '1px solid rgba(217,70,239,0.2)' }}>
                       {product.category}
                     </span>
                   )}
                   {product.subcategory && (
-                    <span className="px-2.5 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(255,255,255,0.04)', color: '#6b7280', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span className="px-2.5 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(34,211,238,0.06)', color: '#67e8f9', border: '1px solid rgba(34,211,238,0.15)' }}>
                       {product.subcategory}
                     </span>
                   )}
                   {product.provider && (
-                    <span className="px-2.5 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(255,255,255,0.04)', color: '#6b7280', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span className="px-2.5 py-0.5 rounded-lg text-xs" style={{ background: 'rgba(40,0,80,0.1)', color: 'rgba(180,130,220,0.6)', border: '1px solid rgba(150,0,220,0.12)' }}>
                       🏭 {product.provider}
                     </span>
                   )}
@@ -130,22 +133,24 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                 { icon: <BarChart2 size={16} />, label: "Ventas hoy", value: product.salesToday > 0 ? product.salesToday.toLocaleString() : '—', sub: product.salesYesterday > 0 ? `${product.salesYesterday} ayer` : undefined, hi: product.salesToday > 0 },
                 { icon: <Package size={16} />, label: "Stock", value: product.stock.toLocaleString(), sub: product.stock < 10 && product.stock > 0 ? '⚠ Stock bajo' : undefined, warn: product.stock < 10 && product.stock > 0 },
               ].map(s => (
-                <div key={s.label} className="rounded-2xl p-4 space-y-2 transition-all duration-300"
+                <div key={s.label} className="rounded-2xl p-4 space-y-2 transition-all duration-300 relative overflow-hidden"
                   style={{
-                    background: 'rgba(255,255,255,0.025)',
-                    backdropFilter: 'blur(12px)',
-                    border: s.hi ? '1px solid rgba(16,185,129,0.2)' : s.warn ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(255,255,255,0.06)',
+                    background: 'rgba(40,0,80,0.08)',
+                    backdropFilter: 'blur(16px)',
+                    border: s.hi ? '1px solid rgba(34,211,238,0.25)' : s.warn ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(150,0,220,0.12)',
+                    boxShadow: s.hi ? '0 0 20px rgba(34,211,238,0.08)' : 'none',
                   }}>
+                  <div className="absolute top-0 left-0 right-0 h-[1px]"
+                    style={{ background: `linear-gradient(90deg, transparent, ${s.hi ? 'rgba(34,211,238,0.4)' : s.warn ? 'rgba(239,68,68,0.3)' : 'rgba(217,70,239,0.3)'}, transparent)` }} />
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] text-gray-600 uppercase tracking-wider">{s.label}</p>
-                    <span style={{ color: s.hi ? '#34d399' : s.warn ? '#f87171' : '#4b5563', opacity: 0.7 }}>{s.icon}</span>
+                    <p className="text-[10px] uppercase tracking-wider" style={{ color: 'rgba(180,130,220,0.4)' }}>{s.label}</p>
+                    <span style={{ color: s.hi ? '#22d3ee' : s.warn ? '#f87171' : 'rgba(180,130,220,0.4)' }}>{s.icon}</span>
                   </div>
-                  <p className="text-2xl font-bold"
-                    style={s.hi ? { backgroundImage: 'linear-gradient(135deg, #6ee7b7, #10b981)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }
-                      : s.warn ? { color: '#f87171' } : { color: 'white' }}>
+                  <p className="text-2xl font-bold gradient-text-data"
+                    style={s.warn ? { backgroundImage: 'none', WebkitTextFillColor: '#f87171' } : {}}>
                     {s.value}
                   </p>
-                  {s.sub && <p className="text-xs" style={{ color: s.warn ? '#f87171' : '#4b5563' }}>{s.sub}</p>}
+                  {s.sub && <p className="text-xs" style={{ color: s.warn ? '#f87171' : 'rgba(150,220,240,0.4)' }}>{s.sub}</p>}
                 </div>
               ))}
             </div>
@@ -161,13 +166,13 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                       {peakDay && <> · Pico: <span className="font-semibold text-gray-400">{peakDay.sales}</span></>}
                     </span>
                   )}
-                  <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'rgba(40,0,80,0.1)', border: '1px solid rgba(150,0,220,0.12)' }}>
                     {DAY_OPTIONS.map(d => (
                       <button key={d} onClick={() => setChartDays(d)}
                         className="px-2.5 py-1 rounded-md text-xs font-semibold transition-all duration-200"
                         style={chartDays === d
-                          ? { background: 'linear-gradient(135deg, #7c3aed, #a855f7)', color: 'white', boxShadow: '0 0 12px rgba(139,92,246,0.4)' }
-                          : { color: '#4b5563' }}>
+                          ? { background: 'linear-gradient(135deg, #0891b2, #22d3ee)', color: 'white', boxShadow: '0 0 12px rgba(34,211,238,0.4)' }
+                          : { color: 'rgba(180,130,220,0.4)' }}>
                         {d}d
                       </button>
                     ))}
@@ -187,7 +192,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                   return (
                     <g transform={`translate(${x},${y})`}>
                       <text x={0} y={-18} textAnchor="middle" fill="#374151" fontSize={10}>{payload.value}</text>
-                      <text x={0} y={-5} textAnchor="middle" fill={sales > 0 ? '#a78bfa' : '#1f2937'} fontSize={9} fontWeight={sales > 0 ? 700 : 400}>{sales}</text>
+                      <text x={0} y={-5} textAnchor="middle" fill={sales > 0 ? '#22d3ee' : '#1f2937'} fontSize={9} fontWeight={sales > 0 ? 700 : 400}>{sales}</text>
                     </g>
                   );
                 };
@@ -196,20 +201,21 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                     <AreaChart data={chartData} margin={{ top: 36, right: 8, left: -28, bottom: 0 }}>
                       <defs>
                         <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.5} />
-                          <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.55} />
+                          <stop offset="70%" stopColor="#0891b2" stopOpacity={0.15} />
+                          <stop offset="100%" stopColor="#06b6d4" stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
                       <XAxis dataKey="label" orientation="top" tick={renderTick} tickLine={false} axisLine={false} interval={tickInterval} height={36} />
                       <YAxis tick={{ fill: '#374151', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} domain={[0, (dataMax: number) => Math.max(Math.ceil(dataMax * 1.35), 10)]} />
                       <Tooltip
-                        contentStyle={{ background: '#0d0d1a', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 12, fontSize: 12, boxShadow: '0 0 30px rgba(0,0,0,0.5)' }}
-                        labelStyle={{ color: '#6b7280', marginBottom: 4, fontWeight: 600 }}
-                        itemStyle={{ color: '#a78bfa' }}
+                        contentStyle={{ background: 'rgba(4,0,20,0.95)', border: '1px solid rgba(34,211,238,0.25)', borderRadius: 12, fontSize: 12, boxShadow: '0 0 30px rgba(0,0,0,0.6)' }}
+                        labelStyle={{ color: 'rgba(180,130,220,0.6)', marginBottom: 4, fontWeight: 600 }}
+                        itemStyle={{ color: '#22d3ee' }}
                         formatter={(v) => [Number(v ?? 0).toLocaleString(), 'Ventas']}
                       />
-                      <Area type="monotone" dataKey="sales" stroke="#7c3aed" strokeWidth={2.5} fill="url(#salesGrad)" dot={false} activeDot={{ r: 5, fill: '#a78bfa', stroke: '#0d0d1a', strokeWidth: 2 }} />
+                      <Area type="monotone" dataKey="sales" stroke="#22d3ee" strokeWidth={2.5} fill="url(#salesGrad)" dot={false} activeDot={{ r: 5, fill: '#67e8f9', stroke: 'rgba(4,0,14,0.9)', strokeWidth: 2, filter: 'drop-shadow(0 0 6px #22d3ee)' }} />
                     </AreaChart>
                   </ResponsiveContainer>
                 );

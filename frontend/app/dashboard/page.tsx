@@ -29,6 +29,7 @@ const DROPI_COUNTRIES: { value: CountryFilter; label: string }[] = [
   { value: 'GT', label: '🇬🇹 Guatemala' },
   { value: 'EC', label: '🇪🇨 Ecuador' },
   { value: 'CL', label: '🇨🇱 Chile' },
+  { value: 'CO', label: '🇨🇴 Colombia' },
 ];
 
 const COUNTRIES_BY_PLATFORM: Record<PlatformFilter, { value: CountryFilter; label: string }[]> = {
@@ -169,7 +170,7 @@ export default function Dashboard() {
   if (!authed) return null;
 
   if (planExpired) return (
-    <div className="min-h-screen bg-[#020209] flex">
+    <div className="min-h-screen flex" style={{ background: 'transparent' }}>
       <Sidebar />
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="max-w-md w-full text-center rounded-2xl p-10 space-y-5"
@@ -195,11 +196,11 @@ export default function Dashboard() {
 
   const isBasic = user?.plan === 'basic';
 
-  const glassPanel = { background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.06)' };
-  const selectStyle = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#e2e8f0' };
+  const glassPanel = { background: 'rgba(50,0,90,0.07)', backdropFilter: 'blur(20px)', border: '1px solid rgba(150,0,220,0.12)' };
+  const selectStyle = { background: 'rgba(60,0,100,0.08)', border: '1px solid rgba(150,0,220,0.15)', color: '#e2e8f0' };
 
   return (
-    <div className="min-h-screen bg-[#020209] flex">
+    <div className="min-h-screen flex" style={{ background: 'transparent' }}>
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -207,11 +208,15 @@ export default function Dashboard() {
 
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-                <Sparkles size={20} className="text-violet-400" />
-                Productos Ganadores
+              <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2.5">
+                <span className="relative">
+                  <Sparkles size={20} style={{ color: '#d946ef', filter: 'drop-shadow(0 0 8px rgba(217,70,239,0.7))' }} />
+                </span>
+                <span className="gradient-text">Productos Ganadores</span>
               </h1>
-              <p className="text-sm text-gray-600 mt-0.5">{country ? (COUNTRIES_BY_PLATFORM[platform].find(c => c.value === country)?.label ?? country) : 'Selecciona un país'} · {platform === 'dropi' ? 'Dropi' : 'Effi'} · actualización en tiempo real</p>
+              <p className="text-sm mt-0.5" style={{ color: 'rgba(180,130,220,0.5)' }}>
+                {country ? (COUNTRIES_BY_PLATFORM[platform].find(c => c.value === country)?.label ?? country) : 'Selecciona un país'} · {platform === 'dropi' ? 'Dropi' : 'Effi'} · actualización en tiempo real
+              </p>
             </div>
           </div>
 
@@ -221,7 +226,7 @@ export default function Dashboard() {
                 <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Plataforma</label>
                 {isBasic ? (
                   <div className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium"
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#e2e8f0' }}>
+                    style={{ background: 'rgba(60,0,100,0.08)', border: '1px solid rgba(150,0,220,0.15)', color: '#e2e8f0' }}>
                     <span>{platform === 'dropi' ? 'Dropi' : 'Effi'}</span>
                     <Lock size={11} className="text-gray-600" />
                   </div>
@@ -241,7 +246,7 @@ export default function Dashboard() {
                 <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">País</label>
                 {isBasic && platform !== 'dropi' ? (
                   <div className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium"
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#e2e8f0' }}>
+                    style={{ background: 'rgba(60,0,100,0.08)', border: '1px solid rgba(150,0,220,0.15)', color: '#e2e8f0' }}>
                     <span>{COUNTRIES_BY_PLATFORM[platform].find(c => c.value === country)?.label ?? country}</span>
                     <Lock size={11} className="text-gray-600" />
                   </div>
@@ -284,9 +289,9 @@ export default function Dashboard() {
               <div className="flex justify-end">
                 <button onClick={() => { setCategory(''); setProvider(''); setSearch(''); setSearchInput(''); }}
                   className="text-xs font-semibold transition-colors duration-200"
-                  style={{ color: '#a78bfa' }}
-                  onMouseEnter={e => (e.target as HTMLElement).style.color = '#c4b5fd'}
-                  onMouseLeave={e => (e.target as HTMLElement).style.color = '#a78bfa'}>
+                  style={{ color: '#d946ef' }}
+                  onMouseEnter={e => (e.target as HTMLElement).style.color = '#f0abfc'}
+                  onMouseLeave={e => (e.target as HTMLElement).style.color = '#d946ef'}>
                   Limpiar filtros ×
                 </button>
               </div>
@@ -323,9 +328,9 @@ export default function Dashboard() {
                     searchTimer.current = setTimeout(() => setSearch(v), 400);
                   }}
                   className="w-full pl-10 pr-10 py-3 rounded-2xl text-sm text-white placeholder-gray-600 transition-all duration-200 outline-none"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(16px)' }}
-                  onFocus={e => { e.target.style.border = '1px solid rgba(139,92,246,0.45)'; e.target.style.boxShadow = '0 0 24px rgba(139,92,246,0.1)'; }}
-                  onBlur={e => { e.target.style.border = '1px solid rgba(255,255,255,0.07)'; e.target.style.boxShadow = 'none'; }}
+                  style={{ background: 'rgba(50,0,90,0.08)', border: '1px solid rgba(150,0,220,0.15)', backdropFilter: 'blur(16px)' }}
+                  onFocus={e => { e.target.style.border = '1px solid rgba(217,70,239,0.45)'; e.target.style.boxShadow = '0 0 24px rgba(217,70,239,0.12)'; }}
+                  onBlur={e => { e.target.style.border = '1px solid rgba(150,0,220,0.15)'; e.target.style.boxShadow = 'none'; }}
                 />
                 {searchInput && (
                   <button onClick={() => { setSearchInput(''); setSearch(''); }}
@@ -347,7 +352,7 @@ export default function Dashboard() {
                   <div ref={sentinelRef} className="flex justify-center py-6">
                     {isFetchingNextPage && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Loader2 size={16} className="animate-spin text-violet-500" />
+                        <Loader2 size={16} className="animate-spin" style={{ color: '#d946ef' }} />
                         Cargando más...
                       </div>
                     )}
