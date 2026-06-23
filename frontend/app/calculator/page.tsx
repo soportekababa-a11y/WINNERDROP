@@ -10,32 +10,32 @@ import { ChevronLeft, Star, Plus, Trash2, Calculator } from "lucide-react";
 const COUNTRY_CONFIG: Record<string, {
   currency: string; flag: string; name: string;
   shipping: number; adCost: number; profitMin: number;
-  markups: number[]; profitOk: number;
+  profitTiers: number[];
   recProfit: [number, number];
 }> = {
   RD: { currency: 'RD$',  flag: '🇩🇴', name: 'República Dominicana',
-        shipping: 480,   adCost: 500,   profitMin: 550,
-        markups:  [1160, 1368, 1530, 1660, 1755], profitOk: 680,
-        recProfit: [500, 600]  },
+        shipping: 480,  adCost: 500,  profitMin: 500,
+        profitTiers: [300, 400, 550, 700, 900],
+        recProfit: [500, 600] },
   GT: { currency: 'Q',   flag: '🇬🇹', name: 'Guatemala',
-        shipping: 63,    adCost: 65,    profitMin: 72,
-        markups:  [152,  179,  200,  217,  229],  profitOk: 89,
-        recProfit: [65, 79]    },
+        shipping: 63,   adCost: 65,   profitMin: 65,
+        profitTiers: [40, 55, 72, 90, 110],
+        recProfit: [65, 79] },
   EC: { currency: '$',   flag: '🇪🇨', name: 'Ecuador',
-        shipping: 8,     adCost: 9,     profitMin: 9.5,
-        markups:  [20,   24,   26.5, 29,   30.5], profitOk: 12,
+        shipping: 8,    adCost: 9,    profitMin: 8.6,
+        profitTiers: [5, 7, 9.5, 12, 15],
         recProfit: [8.6, 10.4] },
   CR: { currency: '₡',   flag: '🇨🇷', name: 'Costa Rica',
-        shipping: 4200,  adCost: 4400,  profitMin: 4800,
-        markups:  [10200,12000,13400,14600,15400], profitOk: 6000,
+        shipping: 4200, adCost: 4400, profitMin: 4400,
+        profitTiers: [2500, 3500, 4800, 6000, 8000],
         recProfit: [4400, 5200] },
   CO: { currency: 'COP$',flag: '🇨🇴', name: 'Colombia',
-        shipping: 33000, adCost: 35000, profitMin: 38000,
-        markups:  [80500,95000,106000,115000,122000], profitOk: 47000,
+        shipping: 33000, adCost: 35000, profitMin: 35000,
+        profitTiers: [20000, 28000, 38000, 47000, 60000],
         recProfit: [35000, 41000] },
   CL: { currency: 'CLP$',flag: '🇨🇱', name: 'Chile',
-        shipping: 7800,  adCost: 8100,  profitMin: 8900,
-        markups:  [18800,22200,24800,27000,28500], profitOk: 11000,
+        shipping: 7800, adCost: 8100, profitMin: 8100,
+        profitTiers: [5000, 6500, 8900, 11000, 14000],
         recProfit: [8100, 9700] },
 };
 
@@ -58,14 +58,17 @@ function computeRecPrice(totalCost: number, cfg: typeof COUNTRY_CONFIG[string]):
   return candidate >= minPrice ? candidate : Math.floor(maxPrice);
 }
 
+// precio = costo_proveedor + envío + publicidad + ganancia
 function markupOptions(totalCost: number, cfg: typeof COUNTRY_CONFIG[string]) {
   const fixed = cfg.shipping + cfg.adCost;
   const labels = ['Precio mínimo', 'Precio bajo', 'Precio sugerido', 'Margen alto', 'Precio premium'];
   const risks  = ['high', 'medium', 'low', 'low', 'low'];
   const tags   = [null, null, 'recomendado', null, null];
-  return cfg.markups.map((markup, i) => {
-    const price = i === 2 ? computeRecPrice(totalCost, cfg) : attractivePrice(totalCost + markup);
-    return { label: labels[i], markup, risk: risks[i], tag: tags[i], price, profit: price - totalCost - fixed };
+  return cfg.profitTiers.map((targetProfit, i) => {
+    const price = i === 2
+      ? computeRecPrice(totalCost, cfg)
+      : attractivePrice(totalCost + fixed + targetProfit);
+    return { label: labels[i], risk: risks[i], tag: tags[i], price, profit: price - totalCost - fixed };
   });
 }
 
