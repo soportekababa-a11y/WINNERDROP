@@ -44,6 +44,7 @@ interface DropiRaw {
 export class DropisService implements OnModuleDestroy {
   private readonly logger = new Logger(DropisService.name);
   private running = false;
+  private loopRunning = false;
   private lastStats = { total: 0, durationMs: 0, finishedAt: null as Date | null };
 
   constructor(
@@ -52,9 +53,21 @@ export class DropisService implements OnModuleDestroy {
     @InjectRepository(Snapshot) private snapshotRepo: Repository<Snapshot>,
   ) {}
 
-  async onModuleDestroy() { this.running = false; }
+  async onModuleDestroy() { this.running = false; this.loopRunning = false; }
 
   getStats() { return { running: this.running, ...this.lastStats }; }
+
+  startLoop() {
+    if (this.loopRunning) return;
+    this.loopRunning = true;
+    this.loop().catch(err => this.logger.error('Dropi loop fatal', err));
+  }
+
+  private async loop() {
+    while (this.loopRunning) {
+      await this.runAll().catch(err => this.logger.error('Error en ciclo Dropi', err));
+    }
+  }
 
   async runAll(): Promise<void> {
     const t = Date.now();
