@@ -413,6 +413,10 @@ export class ScraperService implements OnModuleDestroy {
         } // end retry loop
       }
 
+      await this.dropisService.runAll().catch(err =>
+        this.logger.error('Error en ciclo Dropi', err)
+      );
+
       await this.cleanupOldSnapshots();
       await this.productsService.refreshDailyCache().catch(err =>
         this.logger.error('Error refrescando cache diario', err)

@@ -25,7 +25,7 @@ export const DROPI_COUNTRIES = [
   { code: 'GT', loginUrl: 'https://app.dropi.gt/auth/login', apiBase: 'https://api.dropi.gt', countryKey: 'GUATEMALA',  emailEnv: 'DROPI_GT_EMAIL', passwordEnv: 'DROPI_GT_PASSWORD' },
   { code: 'EC', loginUrl: 'https://app.dropi.ec/auth/login', apiBase: 'https://api.dropi.ec', countryKey: 'ECUADOR',    emailEnv: 'DROPI_EC_EMAIL', passwordEnv: 'DROPI_EC_PASSWORD' },
   { code: 'CL', loginUrl: 'https://app.dropi.cl/auth/login', apiBase: 'https://api.dropi.cl', countryKey: 'CHILE',      emailEnv: 'DROPI_CL_EMAIL', passwordEnv: 'DROPI_CL_PASSWORD' },
-  { code: 'CO', loginUrl: 'https://app.dropi.co/auth/login', apiBase: 'https://api.dropi.co', countryKey: 'COLOMBIA',   emailEnv: 'DROPI_CO_EMAIL', passwordEnv: 'DROPI_CO_PASSWORD' },
+  { code: 'CO', loginUrl: 'https://app.dropi.co/auth/login', apiBase: 'https://api.dropi.co', countryKey: 'COLOMBIA',   emailEnv: 'DROPI_CO_EMAIL', passwordEnv: 'DROPI_CO_PASSWORD', maxProducts: 50000 },
 ];
 
 interface DropiRaw {
@@ -53,21 +53,9 @@ export class DropisService implements OnModuleDestroy {
     @InjectRepository(Snapshot) private snapshotRepo: Repository<Snapshot>,
   ) {}
 
-  async onModuleDestroy() { this.running = false; this.loopRunning = false; }
+  async onModuleDestroy() { this.running = false; }
 
   getStats() { return { running: this.running, ...this.lastStats }; }
-
-  startLoop() {
-    if (this.loopRunning) return;
-    this.loopRunning = true;
-    this.loop().catch(err => this.logger.error('Dropi loop fatal', err));
-  }
-
-  private async loop() {
-    while (this.loopRunning) {
-      await this.runAll().catch(err => this.logger.error('Error en ciclo Dropi', err));
-    }
-  }
 
   async runAll(): Promise<void> {
     const t = Date.now();
@@ -102,7 +90,7 @@ export class DropisService implements OnModuleDestroy {
 
     let products: DropiRaw[] = [];
     try {
-      products = await this.fetchAllViaBrowser(page, apiBase, token, countryKey, code);
+      products = await this.fetchAllViaBrowser(page, apiBase, token, countryKey, code, def.maxProducts);
     } finally {
       await browser.close().catch(() => {});
     }
@@ -255,7 +243,7 @@ export class DropisService implements OnModuleDestroy {
     return DROPI_CDNS[0];
   }
 
-  private async fetchAllViaBrowser(page: any, apiBase: string, token: string, countryKey: string, code: string): Promise<DropiRaw[]> {
+  private async fetchAllViaBrowser(page: any, apiBase: string, token: string, countryKey: string, code: string, maxProducts?: number): Promise<DropiRaw[]> {
     const all: DropiRaw[] = [];
     const seenIds = new Set<number>();
     const seenUserIds = new Set<number>();
@@ -330,6 +318,11 @@ export class DropisService implements OnModuleDestroy {
         if (emptyConsecutive >= 2) break;
       } else {
         emptyConsecutive = 0;
+      }
+
+      if (maxProducts && all.length >= maxProducts) {
+        this.logger.log(`[Dropi:${code}] Límite ${maxProducts} productos alcanzado — deteniendo paginación`);
+        break;
       }
 
       start += PAGE_SIZE;

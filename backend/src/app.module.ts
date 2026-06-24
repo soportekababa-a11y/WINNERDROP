@@ -9,7 +9,6 @@ import { OrderLog } from './autoconfirm/entities/order-log.entity';
 import { ProductsModule } from './products/products.module';
 import { ScraperModule } from './scraper/scraper.module';
 import { ScraperService } from './scraper/scraper.service';
-import { DropisService } from './scraper/dropi.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CompetitorSpyModule } from './competitor-spy/competitor-spy.module';
@@ -51,13 +50,9 @@ import { AdIntelligenceCache } from './ads-intelligence/entities/ad-intelligence
   ],
 })
 export class AppModule implements OnModuleInit {
-  constructor(
-    private scraperService: ScraperService,
-    private dropisService: DropisService,
-  ) {}
+  constructor(private scraperService: ScraperService) {}
 
   onModuleInit() {
     this.scraperService.start();
-    this.dropisService.startLoop();
   }
 }
